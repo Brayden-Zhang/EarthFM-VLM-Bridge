@@ -1,19 +1,10 @@
 """Dataset module for helios."""
 
-import json
-import logging
 import math
-import os
-import warnings
-from collections import OrderedDict
-from copy import deepcopy
+from collections.abc import Sequence
 from pathlib import Path
-from random import sample
-from typing import NamedTuple, Optional
-from typing import OrderedDict as OrderedDictType
-from typing import Sequence, Tuple, Union, cast
+from typing import NamedTuple, cast
 
-import h5py
 import numpy as np
 import pandas as pd
 import rioxarray
@@ -21,12 +12,10 @@ import torch
 import xarray as xr
 from einops import rearrange
 from torch.utils.data import Dataset as PyTorchDataset
-from tqdm import tqdm
 
 
 class DatasetOutput(NamedTuple):
-    """
-    A named tuple for storing the output of a dataset.
+    """A named tuple for storing the output of a dataset.
 
     Args:
         space_time_x: The space-time input data.
@@ -35,6 +24,7 @@ class DatasetOutput(NamedTuple):
         static_x: The static input data.
         months: The months input data.
     """
+
     space_time_x: np.ndarray
     space_x: np.ndarray
     time_x: np.ndarray
@@ -67,8 +57,8 @@ def load_data_index(data_index_path: Path) -> pd.DataFrame:
 
 
 def to_cartesian(
-    lat: Union[float, np.ndarray, torch.Tensor], lon: Union[float, np.ndarray, torch.Tensor]
-) -> Union[np.ndarray, torch.Tensor]:
+    lat: float | np.ndarray | torch.Tensor, lon: float | np.ndarray | torch.Tensor
+) -> np.ndarray | torch.Tensor:
     """Convert latitude and longitude to Cartesian coordinates
 
     Args:
@@ -79,8 +69,12 @@ def to_cartesian(
         The Cartesian coordinates.
     """
     if isinstance(lat, float):
-        assert -90 <= lat <= 90, f"lat out of range ({lat}). Make sure you are in EPSG:4326"
-        assert -180 <= lon <= 180, f"lon out of range ({lon}). Make sure you are in EPSG:4326"
+        assert (
+            -90 <= lat <= 90
+        ), f"lat out of range ({lat}). Make sure you are in EPSG:4326"
+        assert (
+            -180 <= lon <= 180
+        ), f"lon out of range ({lon}). Make sure you are in EPSG:4326"
         assert isinstance(lon, float), f"Expected float got {type(lon)}"
         # transform to radians
         lat = lat * math.pi / 180
@@ -90,10 +84,18 @@ def to_cartesian(
         z = math.sin(lat)
         return np.array([x, y, z])
     elif isinstance(lon, np.ndarray):
-        assert -90 <= lat.min(), f"lat out of range ({lat.min()}). Make sure you are in EPSG:4326"
-        assert 90 >= lat.max(), f"lat out of range ({lat.max()}). Make sure you are in EPSG:4326"
-        assert -180 <= lon.min(), f"lon out of range ({lon.min()}). Make sure you are in EPSG:4326"
-        assert 180 >= lon.max(), f"lon out of range ({lon.max()}). Make sure you are in EPSG:4326"
+        assert (
+            -90 <= lat.min()
+        ), f"lat out of range ({lat.min()}). Make sure you are in EPSG:4326"
+        assert (
+            90 >= lat.max()
+        ), f"lat out of range ({lat.max()}). Make sure you are in EPSG:4326"
+        assert (
+            -180 <= lon.min()
+        ), f"lon out of range ({lon.min()}). Make sure you are in EPSG:4326"
+        assert (
+            180 >= lon.max()
+        ), f"lon out of range ({lon.max()}). Make sure you are in EPSG:4326"
         assert isinstance(lat, np.ndarray), f"Expected np.ndarray got {type(lat)}"
         # transform to radians
         lat = lat * math.pi / 180
@@ -103,10 +105,18 @@ def to_cartesian(
         z_np = np.sin(lat)
         return np.stack([x_np, y_np, z_np], axis=-1)
     elif isinstance(lon, torch.Tensor):
-        assert -90 <= lat.min(), f"lat out of range ({lat.min()}). Make sure you are in EPSG:4326"
-        assert 90 >= lat.max(), f"lat out of range ({lat.max()}). Make sure you are in EPSG:4326"
-        assert -180 <= lon.min(), f"lon out of range ({lon.min()}). Make sure you are in EPSG:4326"
-        assert 180 >= lon.max(), f"lon out of range ({lon.max()}). Make sure you are in EPSG:4326"
+        assert (
+            -90 <= lat.min()
+        ), f"lat out of range ({lat.min()}). Make sure you are in EPSG:4326"
+        assert (
+            90 >= lat.max()
+        ), f"lat out of range ({lat.max()}). Make sure you are in EPSG:4326"
+        assert (
+            -180 <= lon.min()
+        ), f"lon out of range ({lon.min()}). Make sure you are in EPSG:4326"
+        assert (
+            180 >= lon.max()
+        ), f"lon out of range ({lon.max()}). Make sure you are in EPSG:4326"
         assert isinstance(lat, torch.Tensor), f"Expected torch.Tensor got {type(lat)}"
         # transform to radians
         lat = lat * math.pi / 180
@@ -118,10 +128,11 @@ def to_cartesian(
     else:
         raise AssertionError(f"Unexpected input type {type(lon)}")
 
+
 # Perhaps a preprocessor module that does transforms on the loaded tif and or splits it out into the multiple arrays for model input
 
 
-#TODO: Adding a Dataset specific fingerprint is probably good for an evolving dataset
+# TODO: Adding a Dataset specific fingerprint is probably good for an evolving dataset
 class HeliosDataset(PyTorchDataset):
     """Helios dataset."""
 
@@ -157,9 +168,9 @@ class HeliosDataset(PyTorchDataset):
         # computed here
         static_bands_in_tif = len(EO_STATIC_BANDS) - len(LOCATION_BANDS)
 
-        num_timesteps = (values.shape[0] - len(SPACE_BANDS) - static_bands_in_tif) / len(
-            ALL_DYNAMIC_IN_TIME_BANDS
-        )
+        num_timesteps = (
+            values.shape[0] - len(SPACE_BANDS) - static_bands_in_tif
+        ) / len(ALL_DYNAMIC_IN_TIME_BANDS)
         assert num_timesteps % 1 == 0, f"{tif_path} has incorrect number of channels"
         dynamic_in_time_x = rearrange(
             values[: -(len(SPACE_BANDS) + static_bands_in_tif)],
@@ -186,8 +197,12 @@ class HeliosDataset(PyTorchDataset):
 
         static_x = values[-static_bands_in_tif:]
         # add DW_STATIC and WC_STATIC
-        dw_bands = space_x[:, :, [i for i, v in enumerate(SPACE_BANDS) if v in DW_BANDS]]
-        wc_bands = space_x[:, :, [i for i, v in enumerate(SPACE_BANDS) if v in WC_BANDS]]
+        dw_bands = space_x[
+            :, :, [i for i, v in enumerate(SPACE_BANDS) if v in DW_BANDS]
+        ]
+        wc_bands = space_x[
+            :, :, [i for i, v in enumerate(SPACE_BANDS) if v in WC_BANDS]
+        ]
         static_x = np.concatenate(
             [
                 np.nanmean(static_x, axis=(1, 2)),
