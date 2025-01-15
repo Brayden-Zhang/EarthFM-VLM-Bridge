@@ -31,6 +31,15 @@ S2_BANDS = [
     "B12",
 ]
 
+# Quick and dirty interface for data source variation types
+DATA_SOURCE_VARIATION_TYPES = Literal[
+    "space_time_varying", "time_varying_only", "space_varying_only", "static_only"
+]
+
+DATA_SOURCE_TO_VARIATION_TYPE = {
+    "sentinel2": "space_time_varying",
+}
+
 
 class ArrayWithMetadata(NamedTuple):
     """A named tuple for storing the output of the dataset to the model (a single sample)."""
@@ -45,8 +54,16 @@ class DatasetOutput(NamedTuple):
     The output is a dictionary of data sources with the array and metadata.
     """
 
-    sentinel2: ArrayWithMetadata
-    sample_metadata: dict
+    sentinel2: ArrayWithMetadata | None
+    sample_metadata: dict  # Eventually this probably should be a named tuple
+
+    def get_data_sources(self) -> list[str]:
+        """Get the data sources."""
+        return [
+            key
+            for key in self._asdict().keys()
+            if key != "sample_metadata" and key is not None
+        ]
 
 
 # TODO: Adding a Dataset specific fingerprint is probably good for an evolving dataset
@@ -62,15 +79,6 @@ LOAD_DATA_SOURCE_METADATA_FUNCTIONS = {
         "freq": load_sentinel2_frequency_metadata,
         "monthly": load_sentinel2_monthly_metadata,
     },
-}
-
-# Quick and dirty interface for data source variation types
-DATA_SOURCE_VARIATION_TYPES = Literal[
-    "space_time_varying", "time_varying_only", "space_varying_only", "static_only"
-]
-
-DATA_SOURCE_TO_VARIATION_TYPE = {
-    "sentinel2": "space_time_varying",
 }
 
 
@@ -175,7 +183,9 @@ class HeliosDataset(PyTorchDataset):
             freq_index = index - len(self.monthly_example_ids)
             return self.freq_example_ids[freq_index], "freq"
 
-    def _tif_to_array(self, tif_path: UPath | str, data_source: str) -> np.ndarray:
+    def _tif_to_array(
+        self, tif_path: UPath | str, data_source: str
+    ) -> tuple[np.ndarray, float]:
         """Convert a tif file to an array.
 
         Args:
@@ -206,16 +216,16 @@ class HeliosDataset(PyTorchDataset):
                 num_timesteps % 1 == 0
             ), f"{tif_path} has incorrect number of channels {space_bands} \
                 {values.shape[0]=} {len(space_bands)=}"
-            dynamic_in_time_x = rearrange(
+            space_time_x = rearrange(
                 values, "(t c) h w -> h w t c", c=len(space_bands), t=int(num_timesteps)
             )
-            return dynamic_in_time_x
+            return space_time_x, num_timesteps
         else:
             raise NotImplementedError(f"Unknown variation type: {variation_type}")
 
     def _tif_to_array_with_checks(
         self, tif_path: UPath | str, data_source: str
-    ) -> np.ndarray:
+    ) -> tuple[np.ndarray, float]:
         """Load the tif file and return the array.
 
         Args:
@@ -265,8 +275,13 @@ class HeliosDataset(PyTorchDataset):
         sample_metadata = self.example_id_to_index_metadata_dict[example_id]
         data_source_output_dict = {}
         for data_source in self.data_sources:
+            # check if the data source is available for the sample idea by checking for "y" in the metadata
+            if sample_metadata[f"{data_source}_{data_frequency_type}"] != "y":
+                continue
             tif_path = self._get_tif_path(data_source, example_id, data_frequency_type)
-            data_source_array = self._tif_to_array_with_checks(tif_path, data_source)
+            data_source_array, num_timesteps = self._tif_to_array_with_checks(
+                tif_path, data_source
+            )
             print(f"Data source array shape: {data_source_array.shape}")
             # Probably there is a better way to have direct access to the metadata but will leave for now
             metadata_dict = self._get_metadata_for_sample(
@@ -278,6 +293,7 @@ class HeliosDataset(PyTorchDataset):
             )
         sample_metadata["frequency_type"] = data_frequency_type
         sample_metadata["example_id"] = str(example_id)
+        sample_metadata["num_timesteps"] = num_timesteps
         return DatasetOutput(**data_source_output_dict, sample_metadata=sample_metadata)
 
 

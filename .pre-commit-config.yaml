@@ -54,7 +54,7 @@ repos:
         exclude: ^tests/
         args:
           - -s
-          - B101
+          - B101,B311 # B101 is assert ban, B311 hates rngs
   - repo: local
     hooks:
       - id: interrogate
