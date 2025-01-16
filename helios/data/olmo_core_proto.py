@@ -1,4 +1,5 @@
 """Trying to prototype fitting everything into olmo core."""
+
 # ruff: noqa
 # mypy: ignore-errors
 
@@ -19,140 +20,9 @@ from olmo_core.utils import roundrobin, threaded_generator
 from torch.utils.data import Dataset
 from upath import UPath
 
-from helios.data.dataset import DATA_SOURCE_TO_VARIATION_TYPE, S2_BANDS
+from helios.data.constants import DATA_SOURCE_TO_VARIATION_TYPE, S2_BANDS
+from helios.data.dataset import HeliosDataset
 from helios.data.index import DatasetIndexParser
-
-# We need to be able to either subclass or replace for this to work
-
-# Can we write our dataset as a subclass of olmo core's dataset?
-# Can our collator replace olmo core's collator?
-
-
-# Eventually we don't want a dataset index to be forced we want to be able to pass anything like a dataset index specific to this
-# and have it be able to be used by the dataset
-
-
-# I want a class that parses dataset structure and just returns a list of dicts or namedtuples that are samples
-
-
-# the dataset index Parser outputs a list of dicts with all the info needed to load the sample plus sample_metadata
-class HeliosDataset(NumpyDatasetBase, Dataset):
-    """Helios dataset."""
-
-    def __init__(self, *samples: dict[str, Any], dtype: np.dtype):
-        """ "init
-
-        Things that would need to be optional or should be forgotten about, or changed
-        - paths would need to ba dictionary or collection of paths for this to work
-        - pad_token_id: int,
-        - eos_token_id: int,
-        - vocab_size: int,
-        """
-        super().__init__(
-            *samples,
-            dtype=dtype,
-            pad_token_id=-1,  # Not needed only LM
-            eos_token_id=-1,  # Not needed only LM
-            vocab_size=-1,  # Not needed only LM
-        )
-        #
-        # What does it look like for me to access paths?
-
-        # After init we have
-        # paths to samples
-        # numpy data type
-        pass
-
-    @property
-    def max_sequence_length(self) -> int:
-        """Max sequence length."""
-        # NOT SUPER needed
-        return max(item["num_timesteps"] for item in self.paths)
-
-    @property
-    def fingerprint(self) -> str:
-        """Fingerprint of the dataset."""
-        # LM specific
-        raise NotImplementedError("Fingerprint not implemented")
-
-    def __len__(self) -> int:
-        """Get the length of the dataset."""
-        return len(self.paths)
-
-    def _tif_to_array(
-        self, tif_path: UPath | str, data_source: str
-    ) -> tuple[np.ndarray, float]:
-        """Convert a tif file to an array.
-
-        Args:
-            tif_path: The path to the tif file.
-            data_source: The data source string to load the correct datasource
-        Returns:
-            The array from the tif file.
-        """
-        if data_source == "sentinel2":
-            space_bands = S2_BANDS
-        else:
-            raise ValueError(f"Unknown data source: {data_source}")
-        # We will need different ingestion logic for different data sources at this point
-
-        variation_type = DATA_SOURCE_TO_VARIATION_TYPE[data_source]
-        if variation_type == "space_time_varying":
-            with cast(xr.Dataset, rioxarray.open_rasterio(tif_path)) as data:
-                # [all_combined_bands, H, W]
-                # all_combined_bands includes all dynamic-in-time bands
-                # interleaved for all timesteps
-                # followed by the static-in-time bands
-                values = cast(np.ndarray, data.values)
-                # lon = np.mean(cast(np.ndarray, data.x)).item()
-                # lat = np.mean(cast(np.ndarray, data.y)).item()
-
-            num_timesteps = values.shape[0] / len(space_bands)
-            assert (
-                num_timesteps % 1 == 0
-            ), f"{tif_path} has incorrect number of channels {space_bands} \
-                {values.shape[0]=} {len(space_bands)=}"
-            space_time_x = rearrange(
-                values, "(t c) h w -> h w t c", c=len(space_bands), t=int(num_timesteps)
-            )
-            return space_time_x, num_timesteps
-        else:
-            raise NotImplementedError(f"Unknown variation type: {variation_type}")
-
-    def _tif_to_array_with_checks(
-        self, tif_path: UPath | str, data_source: str
-    ) -> tuple[np.ndarray, float]:
-        """Load the tif file and return the array.
-
-        Args:
-            tif_path: The path to the tif file.
-            data_source: The data source.
-
-        Returns:
-            The array from the tif file.
-        """
-        try:
-            output = self._tif_to_array(tif_path, data_source)
-            return output
-        except Exception as e:
-            print(f"Replacing tif {tif_path} due to {e}")
-            raise e
-
-    def __getitem__(self, index: int) -> dict[str, Any]:
-        """Get the item at the given index."""
-        sample = self.paths[index]  # THis really is the dict of all the sample info
-        data_source_paths = sample["data_source_paths"]
-        data_arrays = {}
-        for data_source, tif_path in data_source_paths.items():
-            data_source_array, num_timesteps = self._tif_to_array_with_checks(
-                tif_path, data_source
-            )
-            data_arrays[data_source] = data_source_array
-        output_dict: dict[str, Any] = {"data_arrays": data_arrays}
-        output_dict["sample_metadata"] = sample["sample_metadata"]
-        output_dict["num_timesteps"] = num_timesteps
-        output_dict["data_source_metadata"] = sample["data_source_metadata"]
-        return output_dict
 
 
 def iter_batched_helios(
@@ -393,7 +263,7 @@ class HeliosDataLoader(NumpyDataLoaderBase):
 
 ## Config does not yet support our new dataset type so we will construct manually for now
 if __name__ == "__main__":
-    from helios.data.collator import olmo_compatible_variable_time_collate_fn
+    from helios.data.collator import variable_time_collate_fn
 
     index_path = "gs://ai2-helios/data/20250113-sample-dataset-helios/index.csv"
     index_parser = DatasetIndexParser(index_path)
@@ -402,7 +272,7 @@ if __name__ == "__main__":
     dataloader = HeliosDataLoader.wrap_numpy_dataset(
         dataset=HeliosDataset(*samples, dtype=np.dtype("float32")),
         global_batch_size=4,
-        collator=olmo_compatible_variable_time_collate_fn,
+        collator=variable_time_collate_fn,
         work_dir=workdir,
         num_threads=4,
     )
