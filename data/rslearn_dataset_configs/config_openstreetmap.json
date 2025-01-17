@@ -2,7 +2,7 @@
   "layers": {
     "openstreetmap": {
       "data_source": {
-        "bounds_fname": "file:///data/favyenb/openstreetmap/pbf_bounds.json",
+        "bounds_fname": "source_data/openstreetmap/pbf_bounds.json",
         "categories": {
           "aerialway_pylon": {
             "tag_conditions": {
@@ -303,9 +303,9 @@
         },
         "name": "rslearn.data_sources.openstreetmap.OpenStreetMap",
         "pbf_fnames": [
-          "file:///data/favyenb/openstreetmap/china-latest.osm.pbf",
-          "file:///data/favyenb/openstreetmap/india-latest.osm.pbf",
-          "file:///data/favyenb/openstreetmap/us-latest.osm.pbf"
+          "source_data/openstreetmap//china-latest.osm.pbf",
+          "source_data/openstreetmap/india-latest.osm.pbf",
+          "source_data/openstreetmap/us-latest.osm.pbf"
         ],
         "query_config": {
           "max_matches": 16
