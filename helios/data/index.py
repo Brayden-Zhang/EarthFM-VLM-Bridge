@@ -3,11 +3,27 @@
 TODO: Add the assumed dataset organizing format and rules
 """
 
+from typing import NamedTuple
+
 import numpy as np
 from upath import UPath
 
 from helios.data.constants import ALL_DATA_SOURCES
 from helios.data.utils import DataSourceMetadataRegistry, FrequencyType, load_data_index
+
+
+class SampleInformation(NamedTuple):
+    """Information about a sample.
+
+    Attributes:
+        data_source_metadata: Metadata for each of the data sources.
+        data_source_paths: Paths to the data sources.
+        sample_metadata: Metadata for the sample.
+    """
+
+    data_source_metadata: dict[str, dict]
+    data_source_paths: dict[str, dict]
+    sample_metadata: dict[str, dict]
 
 
 class DatasetIndexParser:
@@ -56,8 +72,16 @@ class DatasetIndexParser:
 
     def get_sample_information_from_example_id(
         self, example_id: str, freq_type: FrequencyType
-    ) -> dict:
-        """Get the sample information from an example ID."""
+    ) -> SampleInformation:
+        """Get the sample information from an example ID.
+
+        Args:
+            example_id: The example ID to get information for.
+            freq_type: The frequency type to get information for.
+
+        Returns:
+            SampleInformation: Information about the sample.
+        """
         data_source_metadata = {}
         data_source_paths = {}
         sample_metadata = self.example_id_to_sample_metadata_dict[example_id]
@@ -76,15 +100,15 @@ class DatasetIndexParser:
             data_source_paths[data_source] = self.get_tif_path(
                 data_source, example_id, freq_type
             )
-        return {
-            "data_source_metadata": data_source_metadata,
-            "data_source_paths": data_source_paths,
-            "sample_metadata": sample_metadata,
-        }
+        return SampleInformation(
+            data_source_metadata=data_source_metadata,
+            data_source_paths=data_source_paths,
+            sample_metadata=sample_metadata,
+        )
 
     def get_sample_information_from_example_id_list(
         self, example_ids: list[str], freq_type: FrequencyType
-    ) -> list[dict]:
+    ) -> list[SampleInformation]:
         """Get the sample information from a list of example IDs."""
         return [
             self.get_sample_information_from_example_id(example_id, freq_type)
@@ -146,6 +170,6 @@ class DatasetIndexParser:
         return len(self.samples)
 
     @property
-    def samples(self) -> list[dict]:
+    def samples(self) -> list[SampleInformation]:
         """Get the samples."""
         return self._samples
