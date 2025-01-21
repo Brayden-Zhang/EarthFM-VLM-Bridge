@@ -12,12 +12,17 @@ from rslearn.utils.vector_format import GeojsonCoordinateMode, GeojsonVectorForm
 from upath import UPath
 
 from ..const import METADATA_COLUMNS
+from ..util import get_modality_fname, get_modality_temp_meta_fname
 
 # Placeholder time range for OpenStreetMap.
 START_TIME = datetime(2020, 1, 1, tzinfo=timezone.utc)
 END_TIME = datetime(2025, 1, 1, tzinfo=timezone.utc)
 
+# Layer name in the input rslearn dataset.
 LAYER_NAME = "openstreetmap"
+
+# Modality in the output Helios dataset.
+MODALITY = "openstreetmap"
 
 
 def convert_openstreetmap(window_path: UPath, helios_path: UPath) -> None:
@@ -35,12 +40,14 @@ def convert_openstreetmap(window_path: UPath, helios_path: UPath) -> None:
 
     layer_dir = window.get_layer_dir(LAYER_NAME)
     features = vector_format.decode_vector(layer_dir, window.bounds)
+    dst_fname = get_modality_fname(helios_path, MODALITY, window.name, "geojson")
     vector_format.encode_to_file(
-        fname=helios_path / "openstreetmap" / f"{window.name}.geojson",
+        fname=dst_fname,
         projection=window.projection,
         features=features,
     )
-    with (helios_path / "openstreetmap_meta" / f"{window.name}.csv").open("w") as f:
+    metadata_fname = get_modality_temp_meta_fname(helios_path, MODALITY, window.name)
+    with metadata_fname.open("w") as f:
         writer = csv.DictWriter(f, fieldnames=METADATA_COLUMNS)
         writer.writeheader()
         writer.writerow(

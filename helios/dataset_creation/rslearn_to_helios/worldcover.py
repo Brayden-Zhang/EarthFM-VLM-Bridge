@@ -12,11 +12,17 @@ from rslearn.utils.raster_format import GeotiffRasterFormat
 from upath import UPath
 
 from ..const import METADATA_COLUMNS
+from ..util import get_modality_fname, get_modality_temp_meta_fname
 
 BANDS = ["B1"]
-LAYER_NAME = "worldcover"
 START_TIME = datetime(2021, 1, 1, tzinfo=timezone.utc)
 END_TIME = datetime(2022, 1, 1, tzinfo=timezone.utc)
+
+# Layer name in the input rslearn dataset.
+LAYER_NAME = "worldcover"
+
+# Modality in the output Helios dataset.
+MODALITY = "worldcover"
 
 
 def convert_worldcover(window_path: UPath, helios_path: UPath) -> None:
@@ -34,14 +40,16 @@ def convert_worldcover(window_path: UPath, helios_path: UPath) -> None:
 
     raster_dir = window.get_raster_dir(LAYER_NAME, BANDS)
     image = raster_format.decode_raster(raster_dir, window.bounds)
+    dst_fname = get_modality_fname(helios_path, MODALITY, window.name, "tif")
     raster_format.encode_raster(
-        path=helios_path / "worldcover",
+        path=dst_fname.parent,
         projection=window.projection,
         bounds=window.bounds,
         array=image,
-        fname=f"{window.name}.tif",
+        fname=dst_fname.name,
     )
-    with (helios_path / "worldcover_meta" / f"{window.name}.csv").open("w") as f:
+    metadata_fname = get_modality_temp_meta_fname(helios_path, MODALITY, window.name)
+    with metadata_fname.open("w") as f:
         writer = csv.DictWriter(f, fieldnames=METADATA_COLUMNS)
         writer.writeheader()
         writer.writerow(

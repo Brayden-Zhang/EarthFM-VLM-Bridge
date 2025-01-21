@@ -14,6 +14,7 @@ from rslearn.utils.raster_format import GeotiffRasterFormat
 from upath import UPath
 
 from ..const import METADATA_COLUMNS
+from ..util import get_modality_fname, get_modality_temp_meta_fname
 
 BANDS = [
     "B01",
@@ -30,6 +31,12 @@ BANDS = [
     "B11",
     "B12",
 ]
+
+# Modality for frequent data in the output Helios dataset.
+MODALITY_FREQ = "sentinel2_freq"
+
+# Modality for monthly data in the output Helios dataset.
+MODALITY_MONTHLY = "sentinel2_monthly"
 
 
 def convert_sentinel2(window_path: UPath, helios_path: UPath) -> None:
@@ -63,16 +70,18 @@ def convert_sentinel2(window_path: UPath, helios_path: UPath) -> None:
 
     if len(images) > 0:
         stacked_image = np.concatenate(images, axis=0)
+        dst_fname = get_modality_fname(helios_path, MODALITY_FREQ, window.name, "tif")
         raster_format.encode_raster(
-            path=helios_path / "sentinel2_freq",
+            path=dst_fname.parent,
             projection=window.projection,
             bounds=window.bounds,
             array=stacked_image,
-            fname=f"{window.name}.tif",
+            fname=dst_fname.name,
         )
-        with (helios_path / "sentinel2_freq_meta" / f"{window.name}.csv").open(
-            "w"
-        ) as f:
+        metadata_fname = get_modality_temp_meta_fname(
+            helios_path, MODALITY_FREQ, window.name
+        )
+        with metadata_fname.open("w") as f:
             writer = csv.DictWriter(f, fieldnames=METADATA_COLUMNS)
             writer.writeheader()
             for group_idx, timestamp in enumerate(timestamps):
@@ -104,16 +113,20 @@ def convert_sentinel2(window_path: UPath, helios_path: UPath) -> None:
 
     if len(images) > 0:
         stacked_image = np.concatenate(images, axis=0)
+        dst_fname = get_modality_fname(
+            helios_path, MODALITY_MONTHLY, window.name, "tif"
+        )
         raster_format.encode_raster(
-            path=helios_path / "sentinel2_monthly",
+            path=dst_fname.parent,
             projection=window.projection,
             bounds=window.bounds,
             array=stacked_image,
-            fname=f"{window.name}.tif",
+            fname=dst_fname.name,
         )
-        with (helios_path / "sentinel2_monthly_meta" / f"{window.name}.csv").open(
-            "w"
-        ) as f:
+        metadata_fname = get_modality_temp_meta_fname(
+            helios_path, MODALITY_MONTHLY, window.name
+        )
+        with metadata_fname.open("w") as f:
             writer = csv.DictWriter(f, fieldnames=METADATA_COLUMNS)
             writer.writeheader()
             for image_idx, (start_time, end_time) in enumerate(time_ranges):

@@ -12,6 +12,7 @@ from rslearn.utils.raster_format import GeotiffRasterFormat
 from upath import UPath
 
 from ..const import METADATA_COLUMNS
+from ..util import get_modality_fname, get_modality_temp_meta_fname
 
 GROUPS = ["naip"]
 BANDS = [
@@ -20,7 +21,12 @@ BANDS = [
     "B",
     "IR",
 ]
+
+# Layer name in the input rslearn dataset.
 LAYER_NAME = "naip"
+
+# Modality in the output Helios dataset.
+MODALITY = "naip"
 
 
 def convert_naip(window_path: UPath, helios_path: UPath) -> None:
@@ -56,14 +62,16 @@ def convert_naip(window_path: UPath, helios_path: UPath) -> None:
 
     raster_dir = window.get_raster_dir(LAYER_NAME, BANDS)
     image = raster_format.decode_raster(raster_dir, window.bounds)
+    dst_fname = get_modality_fname(helios_path, MODALITY, window.name, "tif")
     raster_format.encode_raster(
-        path=helios_path / "naip",
+        path=dst_fname.parent,
         projection=window.projection,
         bounds=window.bounds,
         array=image,
-        fname=f"{window.name}.tif",
+        fname=dst_fname.name,
     )
-    with (helios_path / "naip_meta" / f"{window.name}.csv").open("w") as f:
+    metadata_fname = get_modality_temp_meta_fname(helios_path, MODALITY, window.name)
+    with metadata_fname.open("w") as f:
         writer = csv.DictWriter(f, fieldnames=METADATA_COLUMNS)
         writer.writeheader()
         writer.writerow(
