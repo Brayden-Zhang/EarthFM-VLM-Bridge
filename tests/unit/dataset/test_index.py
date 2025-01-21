@@ -2,7 +2,7 @@
 
 import pytest
 
-from helios.data.index import DatasetIndexParser
+from helios.helios.dataset.index import DatasetIndexParser
 
 
 @pytest.fixture
