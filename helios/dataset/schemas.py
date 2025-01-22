@@ -2,6 +2,7 @@
 
 from typing import Any
 
+import pandas as pd
 import pandera as pa
 from pandera import DataFrameModel
 from pandera.typing import Series
@@ -17,6 +18,9 @@ class BaseDataModel(DataFrameModel):
         strict = False  # allow extra columns
 
 
+# Should we have a different metadata model for stuff with no time axis?
+
+
 class DataSourceMetadataModel(BaseDataModel):
     """Data source metadata schema."""
 
@@ -25,10 +29,11 @@ class DataSourceMetadataModel(BaseDataModel):
         nullable=False,
     )
 
-    image_idx: Series[int] = pa.Field(
+    image_idx: Series[pd.Int64Dtype] = pa.Field(
         description="Index of the image on the time axis for the geotiff",
-        nullable=False,
+        nullable=True,
     )
+    # TODO: Add check that if the column has a null it is all null
 
     start_time: Series[str] = pa.Field(
         description="Start time in ISO format",
@@ -60,7 +65,7 @@ def is_data_source_field(is_data_source: bool, *args: Any, **kwargs: Any) -> pa.
     return pa.Field(*args, **kwargs)
 
 
-class TrainingDataIndexDataModel(BaseDataModel):
+class TrainingDataIndexModel(BaseDataModel):
     """Schema for training data index files.
 
     This file contains metadata about the training data, including the example_id, projection,
@@ -124,4 +129,25 @@ class TrainingDataIndexDataModel(BaseDataModel):
         nullable=False,
         isin=["y", "n"],
         metadata={"frequency_type": "monthly"},
+    )
+
+    naip: Series[str] = is_data_source_field(
+        is_data_source=True,
+        description="Whether the example_id is available in the NAIP dataset",
+        nullable=False,
+        isin=["y", "n"],
+    )
+
+    worldcover: Series[str] = is_data_source_field(
+        is_data_source=True,
+        description="Whether the example_id is available in the WorldCover dataset",
+        nullable=False,
+        isin=["y", "n"],
+    )
+
+    openstreetmap: Series[str] = is_data_source_field(
+        is_data_source=True,
+        description="Whether the example_id is available in the OpenStreetMap dataset",
+        nullable=False,
+        isin=["y", "n"],
     )

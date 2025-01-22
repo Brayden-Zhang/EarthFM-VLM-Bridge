@@ -20,6 +20,14 @@ if __name__ == "__main__":
     index_path = "gs://ai2-helios/data/20250115-sample-dataset-helios/index.csv"
     index_parser = DatasetIndexParser(index_path)
     samples = index_parser.samples
+    print(index_parser.data_index_df.head())
+    print(len(samples))
+    print("DATA SOURCE METADATA\n")
+    print(samples[10].data_source_metadata)
+    print("DATA SOURCE PATHS\n")
+    print(samples[10].data_source_paths)
+    print("SAMPLE METADATA\n")
+    print(samples[10].sample_metadata)
     # workdir = UPath("/Users/henryh/Desktop/eai-repos/helios-repos/helios/workdir")
     # dataloader = HeliosDataLoader.wrap_numpy_dataset(
     #     dataset=HeliosDataset(*samples, dtype=np.dtype("float32")),

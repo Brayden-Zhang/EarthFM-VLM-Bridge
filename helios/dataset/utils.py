@@ -7,7 +7,7 @@ import pandas as pd
 import pandera as pa
 from pandera.typing import DataFrame
 
-from helios.dataset.schemas import DataSourceMetadataModel, TrainingDataIndexDataModel
+from helios.dataset.schemas import DataSourceMetadataModel, TrainingDataIndexModel
 
 T = TypeVar("T")
 FrequencyType = Literal["monthly", "freq"]
@@ -38,9 +38,9 @@ def load_metadata(path: Path | str, schema: type[T], **kwargs: Any) -> DataFrame
 @pa.check_types
 def load_data_index(
     data_index_path: Path | str, **kwargs: Any
-) -> DataFrame[TrainingDataIndexDataModel]:
+) -> DataFrame[TrainingDataIndexModel]:
     """Load the data index from a csv file."""
-    return load_metadata(data_index_path, TrainingDataIndexDataModel, **kwargs)
+    return load_metadata(data_index_path, TrainingDataIndexModel, **kwargs)
 
 
 @pa.check_types

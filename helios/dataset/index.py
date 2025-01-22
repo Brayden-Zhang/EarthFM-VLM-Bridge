@@ -10,7 +10,7 @@ import numpy as np
 from pandera.typing import DataFrame
 from upath import UPath
 
-from helios.dataset.schemas import TrainingDataIndexDataModel
+from helios.dataset.schemas import TrainingDataIndexModel
 from helios.dataset.utils import (
     FrequencyType,
     load_data_index,
@@ -59,15 +59,15 @@ class DatasetIndexParser:
 
     def __init__(self, data_index_path: UPath | str):
         """Initialize the dataset index parser."""
+        self.data_source_and_freq_types = self._get_data_sources_and_freq_types()
         self.data_index_path = UPath(data_index_path)
         self.root_dir = self.data_index_path.parent
-        self.data_index_df: DataFrame[TrainingDataIndexDataModel] = load_data_index(
+        self.data_index_df: DataFrame[TrainingDataIndexModel] = load_data_index(
             data_index_path
         )
         self.example_id_to_sample_metadata_dict = self.data_index_df.set_index(
             "example_id"
         ).to_dict("index")
-        self.data_source_and_freq_types = self._get_data_sources_and_freq_types()
         assert (
             len(self.data_source_and_freq_types) > 0
         ), "No data sources found in index, check naming of columns"
@@ -91,15 +91,19 @@ class DatasetIndexParser:
 
         self.root_dir = self.data_index_path.parent
 
-    def _get_data_sources_and_freq_types(
-        self,
-    ) -> list[tuple[str, FrequencyType | None]]:
-        """Get the data sources and frequency types."""
+    @staticmethod
+    def _get_data_sources_and_freq_types() -> list[tuple[str, FrequencyType | None]]:
+        """Get the data sources and frequency types from the index.
+
+        Returns:
+            list[tuple[str, FrequencyType | None]]: The data sources and frequency types.
+        """
+        # TODO: SHould this be part of the model class Directly
         data_source_columns_and_freq_types = []
         for (
             column_name,
             field,
-        ) in TrainingDataIndexDataModel.to_schema().columns.items():
+        ) in TrainingDataIndexModel.to_schema().columns.items():
             metadata = getattr(field, "metadata", {})
             if not metadata:
                 continue
@@ -166,8 +170,10 @@ class DatasetIndexParser:
         example_row = self.data_index_df[
             self.data_index_df["example_id"] == example_id
         ].iloc[0]
+        print(example_row)
         for data_source, _ in self.data_source_and_freq_types:
-            if example_row[f"{data_source}_{freq_type}"] != "y":
+            column_name = f"{data_source}_{freq_type}"
+            if example_row.get(column_name, "n") != "y":
                 continue
             data_source_metadata[data_source] = (
                 self.get_metadata_for_data_source_in_sample(
@@ -206,6 +212,10 @@ class DatasetIndexParser:
         example_ids = self.data_index_df.loc[
             frequency_type_mask, "example_id"
         ].to_numpy(dtype=str)
+        if len(example_ids) == 0:
+            raise ValueError(
+                f"No example IDs found for frequency type {frequency_type}"
+            )
         return example_ids
 
     def get_path_to_data_source_metadata(
@@ -255,6 +265,7 @@ class DatasetIndexParser:
             image_idx = record.pop("image_idx")
             record.pop("example_id")
             meta_dict[image_idx] = record
+        # TODO: ADD CLARITY TO WHAT ACTUALLY IS BEING RETURNED HERE
         return meta_dict
 
     def __len__(self) -> int:
