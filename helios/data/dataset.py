@@ -8,7 +8,7 @@ from olmo_core.data.numpy_dataset import NumpyDatasetBase
 from torch.utils.data import Dataset
 from upath import UPath
 
-from helios.data.data_source_io import DataSourceLoaderRegistry
+from helios.data.data_source_io import DataSourceReader, DataSourceReaderRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ class HeliosDataset(NumpyDatasetBase, Dataset):
 
     def _load_data_source(
         self, file_path: UPath | str, data_source: str
-    ) -> tuple[np.ndarray, int]:
+    ) -> np.ndarray | dict[str, Any]:
         """Load data from a data source using the appropriate reader.
 
         Args:
@@ -59,10 +59,10 @@ class HeliosDataset(NumpyDatasetBase, Dataset):
             data_source: Name of the data source
 
         Returns:
-            Tuple of (data_array, num_timesteps)
+            Either a numpy array or a dictionary of data
         """
         try:
-            reader = DataSourceLoaderRegistry.get_reader(data_source)
+            reader: DataSourceReader = DataSourceReaderRegistry.get_class(data_source)
             return reader.load(file_path)
         except Exception as e:
             logger.error(f"Error loading {file_path} from {data_source}: {e}")
@@ -72,22 +72,13 @@ class HeliosDataset(NumpyDatasetBase, Dataset):
         """Get the item at the given index."""
         sample = self.paths[index]
         data_source_paths = sample["data_source_paths"]
-        data_arrays = {}
-        num_timesteps = None
+        data_inputs = {}
 
         for data_source, file_path in data_source_paths.items():
-            data_array, ts = self._load_data_source(file_path, data_source)
-            data_arrays[data_source] = data_array
-            if num_timesteps is None:
-                num_timesteps = ts
-            else:
-                assert (
-                    ts == num_timesteps
-                ), f"Mismatched timesteps: {ts} != {num_timesteps}"
-
+            data_input = self._load_data_source(file_path, data_source)
+            data_inputs[data_source] = data_input
         return {
-            "data_arrays": data_arrays,
+            "data_inputs": data_inputs,
             "sample_metadata": sample["sample_metadata"],
-            "num_timesteps": num_timesteps,
             "data_source_metadata": sample["data_source_metadata"],
         }

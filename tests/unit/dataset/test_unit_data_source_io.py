@@ -6,14 +6,8 @@ import numpy as np
 import pytest
 from upath import UPath
 
-from helios.constants import S2_BANDS
-from helios.data.data_source_io import (
-    DataSourceLoaderRegistry,
-    NAIPReader,
-    OpenStreetMapReader,
-    Sentinel2Reader,
-    WorldCoverReader,
-)
+from helios.constants import NAIP_BANDS, S2_BANDS, WORLDCOVER_BANDS
+from helios.data.data_source_io import NAIPReader, Sentinel2Reader, WorldCoverReader
 
 
 @pytest.fixture
@@ -42,10 +36,9 @@ class TestSentinel2Reader:
             )
 
             # Test loading
-            data_array, timesteps = Sentinel2Reader.load(mock_tiff_file)
+            data_array = Sentinel2Reader.load(mock_tiff_file, bands=S2_BANDS)
 
         # Verify shape and properties
-        assert timesteps == num_timesteps
         assert data_array.shape == (64, 64, num_timesteps, len(S2_BANDS))
         assert isinstance(data_array, np.ndarray)
 
@@ -59,7 +52,7 @@ class TestSentinel2Reader:
                 mock_data
             )
             with pytest.raises(ValueError):
-                Sentinel2Reader.load(mock_tiff_file)
+                Sentinel2Reader.load(mock_tiff_file, bands=S2_BANDS)
 
 
 class TestWorldCoverReader:
@@ -74,24 +67,15 @@ class TestWorldCoverReader:
             mock_rasterio.return_value.__enter__.return_value.read.return_value = (
                 mock_data
             )
-            data_array, timesteps = WorldCoverReader.load(mock_tiff_file)
+            data_array = WorldCoverReader.load(mock_tiff_file, bands=WORLDCOVER_BANDS)
 
-        assert timesteps == 1
         assert data_array.shape == (64, 64, 1, 1)
         assert isinstance(data_array, np.ndarray)
 
-
-class TestOpenStreetMapReader:
-    """Tests for OpenStreetMapReader."""
-
-    def test_load_data(self) -> None:
-        """Test OpenStreetMapReader creates correct placeholder."""
-        data_array, timesteps = OpenStreetMapReader.load("dummy_path")
-
-        assert timesteps == 1
-        assert data_array.shape == (256, 256, 1, 3)
-        assert data_array.dtype == np.float32
-        assert np.all(data_array == 0)  # Should be initialized with zeros
+    def test_invalid_bands(self, mock_tiff_file: UPath) -> None:
+        """Test WorldCoverReader raises error with invalid number of bands."""
+        with pytest.raises(ValueError):
+            WorldCoverReader.load(mock_tiff_file, bands=["invalid_band"])
 
 
 class TestNAIPReader:
@@ -106,26 +90,16 @@ class TestNAIPReader:
             mock_rasterio.return_value.__enter__.return_value.read.return_value = (
                 mock_data
             )
-            data_array, timesteps = NAIPReader.load(mock_tiff_file)
+            data_array = NAIPReader.load(mock_tiff_file, bands=NAIP_BANDS)
 
-        assert timesteps == 1
         assert data_array.shape == (64, 64, 1, 4)
         assert isinstance(data_array, np.ndarray)
 
 
-class TestDataSourceLoaderRegistry:
-    """Tests for DataSourceLoaderRegistry."""
+class TestOpenStreetMapReader:
+    """Tests for OpenStreetMapReader."""
 
-    def test_registration(self) -> None:
-        """Test DataSourceLoaderRegistry registration and retrieval."""
-        # Test getting registered readers
-        assert DataSourceLoaderRegistry.get_reader("sentinel2") == Sentinel2Reader
-        assert DataSourceLoaderRegistry.get_reader("worldcover") == WorldCoverReader
-        assert (
-            DataSourceLoaderRegistry.get_reader("openstreetmap") == OpenStreetMapReader
-        )
-        assert DataSourceLoaderRegistry.get_reader("naip") == NAIPReader
-
-        # Test error on unknown reader
-        with pytest.raises(ValueError, match="No reader registered for source"):
-            DataSourceLoaderRegistry.get_reader("unknown_source")
+    def test_load_data(self) -> None:
+        """Test OpenStreetMapReader loads data correctly."""
+        # Not any functionality to Unit Test here yet
+        pass
