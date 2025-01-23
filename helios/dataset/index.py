@@ -57,7 +57,10 @@ class DatasetIndexParser:
         "worldcover": "tif",
     }
 
-    def __init__(self, data_index_path: UPath | str):
+    def __init__(
+        self,
+        data_index_path: UPath | str,
+    ):
         """Initialize the dataset index parser."""
         self.data_source_and_freq_types = self._get_data_sources_and_freq_types()
         self.data_index_path = UPath(data_index_path)
@@ -172,6 +175,7 @@ class DatasetIndexParser:
         example_row = self.data_index_df[
             self.data_index_df["example_id"] == example_id
         ].iloc[0]
+        sample_metadata["has_missing_inputs"] = False
         for data_source, freq_type in self.data_source_and_freq_types:
             if freq_type is not None and reference_freq_type != freq_type:
                 logger.debug(
@@ -181,6 +185,7 @@ class DatasetIndexParser:
             # Gather data from static
             column_name = f"{data_source}_{freq_type}" if freq_type else data_source
             if example_row.get(column_name, "n") != "y":
+                sample_metadata["has_missing_inputs"] = True
                 logger.debug(
                     f"Skipping {data_source} {freq_type} as it is not available"
                 )

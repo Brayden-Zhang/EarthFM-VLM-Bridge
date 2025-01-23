@@ -9,6 +9,7 @@ from torch.utils.data import Dataset
 from upath import UPath
 
 from helios.data.data_source_io import DataSourceReader, DataSourceReaderRegistry
+from helios.dataset.index import SampleInformation
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +17,13 @@ logger = logging.getLogger(__name__)
 class HeliosDataset(NumpyDatasetBase, Dataset):
     """Helios dataset."""
 
-    def __init__(self, *samples: dict[str, Any], dtype: np.dtype):
+    def __init__(
+        self,
+        *samples: SampleInformation,
+        ignore_data_sources: list[str] = [],
+        filter_samples_with_missing_inputs: bool = False,
+        dtype: np.dtype,
+    ):
         """Initialize the dataset.
 
         Things that would need to be optional or should be forgotten about, or changed
@@ -25,8 +32,17 @@ class HeliosDataset(NumpyDatasetBase, Dataset):
         - eos_token_id: int,
         - vocab_size: int,
         """
+        self.ignore_data_sources = ignore_data_sources
+        if filter_samples_with_missing_inputs:
+            filtered_samples = [
+                sample
+                for sample in samples
+                if not sample.sample_metadata["has_missing_inputs"]
+            ]
+        else:
+            filtered_samples = list(samples)
         super().__init__(
-            *samples,
+            *filtered_samples,
             dtype=dtype,
             pad_token_id=-1,  # Not needed only LM
             eos_token_id=-1,  # Not needed only LM
@@ -70,15 +86,22 @@ class HeliosDataset(NumpyDatasetBase, Dataset):
 
     def __getitem__(self, index: int) -> dict[str, Any]:
         """Get the item at the given index."""
-        sample = self.paths[index]
-        data_source_paths = sample["data_source_paths"]
+        sample: SampleInformation = self.paths[index]
+        data_source_paths = sample.data_source_paths
         data_inputs = {}
-
+        max_num_timesteps = 1
         for data_source, file_path in data_source_paths.items():
+            if data_source in self.ignore_data_sources:
+                continue
             data_input = self._load_data_source(file_path, data_source)
+            if isinstance(data_input, np.ndarray):
+                max_num_timesteps = max(max_num_timesteps, data_input.shape[2])
+                # make the data all have same dtype
+                data_input = data_input.astype(self.dtype)
             data_inputs[data_source] = data_input
         return {
             "data_inputs": data_inputs,
-            "sample_metadata": sample["sample_metadata"],
-            "data_source_metadata": sample["data_source_metadata"],
+            "sample_metadata": sample.sample_metadata,
+            "num_timesteps": max_num_timesteps,
+            "data_source_metadata": sample.data_source_metadata,
         }
