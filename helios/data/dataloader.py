@@ -8,8 +8,7 @@ from typing import Any
 
 import numpy as np
 import torch
-from olmo_core.data.data_loader import (NumpyDataLoaderBase,
-                                        _IterableDatasetWrapper)
+from olmo_core.data.data_loader import NumpyDataLoaderBase, _IterableDatasetWrapper
 from olmo_core.data.numpy_dataset import NumpyDatasetBase
 from olmo_core.data.utils import get_rng
 from olmo_core.utils import roundrobin, threaded_generator
@@ -285,9 +284,7 @@ class HeliosDataLoader(NumpyDataLoaderBase):
         )
 
     def __iter__(self) -> Iterator[dict[str, Any]]:
-        """
-        Iterate over the local rank batches.
-        """
+        """Iterate over the local rank batches."""
         for batch in self._iter_batches():
             # TODO: Ensure this tracking aligns in a meaningful way with the trainer
             self.batches_processed += 1

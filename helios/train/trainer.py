@@ -4,9 +4,6 @@ from logging import getLogger
 from typing import Any
 
 import torch
-from olmo_core.data.utils import split_batch
-from olmo_core.optim.skip_step_optimizer import SkipStepOptimizer
-from olmo_core.train.common import ReduceType
 from olmo_core.train.trainer import Trainer
 from olmo_core.utils import move_to_device
 
@@ -32,7 +29,7 @@ class HeliosTrainer(Trainer):
 
     def _train_batch(self, batch: dict[str, Any]) -> dict[str, Any]:
         """Train a batch."""
-         # Record how many instances are going to be skipped (masked out).
+        # Record how many instances are going to be skipped (masked out).
         # if (instance_mask := batch.get("instance_mask")) is not None and not dry_run:
         #     self.record_metric("train/masked instances", (~instance_mask).sum(), ReduceType.sum)
 
@@ -54,7 +51,6 @@ class HeliosTrainer(Trainer):
             raise RuntimeError(
                 f"Microbatch size ({self.rank_microbatch_size}) is too small relative to sequence length ({seq_len})"
             )
-
 
         # ce_batch_loss = move_to_device(torch.tensor(0.0), self.device)
         # z_batch_loss = (
@@ -102,7 +98,8 @@ class HeliosTrainer(Trainer):
     def _fit_epoch(self):
         """Copied almost directly from olmo_core.train.trainer.Trainer._fit_epoch
 
-        but removing the seq len logging metric collection"""
+        but removing the seq len logging metric collection
+        """
         self.data_loader.reshuffle(self.epoch)
 
         logger.info(f"Starting epoch {self.epoch}...")
