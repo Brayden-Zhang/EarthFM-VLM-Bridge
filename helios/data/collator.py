@@ -17,6 +17,8 @@ class PerModalityCollatedOutput(NamedTuple):
     naip: torch.Tensor
     worldcover: torch.Tensor
     sample_metadata: list[dict]
+    naip_time_indices: torch.Tensor
+    sentinel2_time_indices: torch.Tensor
 
 
 def pad_time_dim(
@@ -48,13 +50,17 @@ def per_modality_collate_fn(items: Sequence[dict]) -> PerModalityCollatedOutput:
     all_naip = []
     all_worldcover = []
     sample_metadata = []
+    naip_time_indices = []
+    sentinel2_time_indices = []
 
     for item in items:
         data_inputs = item["data_inputs"]
         assert "sentinel2" in data_inputs.keys()
         assert "naip" in data_inputs.keys()
         assert "worldcover" in data_inputs.keys()
-
+        # Random time index a number between 0 and 365 padded to max num timesteps
+        sentinel2_time_index = torch.randint(0, 365, (item["num_timesteps"],))
+        sentinel2_time_index = F.pad(sentinel2_time_index, (0, max_len - item["num_timesteps"]))
         all_sentinel2.append(
             pad_time_dim(
                 torch.as_tensor(data_inputs["sentinel2"]),
@@ -62,15 +68,25 @@ def per_modality_collate_fn(items: Sequence[dict]) -> PerModalityCollatedOutput:
                 max_len,
             )
         )
+        naip_time_steps = data_inputs["naip"].shape[2]
+        naip_time_index = torch.randint(0, 365, (naip_time_steps,))
         all_naip.append(torch.as_tensor(data_inputs["naip"]))
         all_worldcover.append(torch.as_tensor(data_inputs["worldcover"]))
         sample_metadata.append(item["sample_metadata"])
+        naip_time_indices.append(naip_time_index)
+        sentinel2_time_indices.append(sentinel2_time_index)
     sentinel2_batch = torch.stack(all_sentinel2)
     naip_batch = torch.stack(all_naip)
     worldcover_batch = torch.stack(all_worldcover)
+    naip_time_indices_batch = torch.stack(naip_time_indices)
+    sentinel2_time_indices_batch = torch.stack(sentinel2_time_indices)
+    # for each time index we just need the day of the year of each timestep
+    # That can be gotten and acqured from the metadata but also must be padded
     return PerModalityCollatedOutput(
         sentinel2=sentinel2_batch,
         naip=naip_batch,
         worldcover=worldcover_batch,
         sample_metadata=sample_metadata,
+        naip_time_indices=naip_time_indices_batch,
+        sentinel2_time_indices=sentinel2_time_indices_batch,
     )

@@ -277,6 +277,7 @@ class DatasetIndexParser:
         # TURN INto single dict without example_id
         meta_dict = {}
         for record in meta_dict_records:
+            #maybe this should be structured to be a list
             image_idx = record.pop("image_idx")
             record.pop("example_id")
             meta_dict[image_idx] = record

@@ -60,6 +60,12 @@ class HeliosTrainer(Trainer):
         # )
 
         # NO MICROBATCHING for now
+        # What does JEPA need to do here
+        # Create the masks- maybe leave this out for now
+        # Run the target encoder forward pass without grads
+        # Run the actual model forward pass
+
+        # Run the loss
         logits = self.model_forward(batch)
         # TODO: Get loss
         # In case this helps with memory utilization.
