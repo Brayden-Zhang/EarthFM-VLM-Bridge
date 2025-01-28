@@ -38,7 +38,7 @@ DataSourceReaderRegistry = ClassRegistry[DataSourceReader]()
 class TiffReader(DataSourceReader):
     """Base reader for Tiff files."""
 
-    #TODO: Add support for loading some subset of bands
+    # TODO: Add support for loading some subset of bands
     @classmethod
     def load(cls, file_path: UPath, bands: list[str] = []) -> np.ndarray:
         """Load data from a Tiff file."""
