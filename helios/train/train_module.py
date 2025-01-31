@@ -74,6 +74,7 @@ class HeliosTrainModuleConfig(Config):
 
     # Loss function settings
     compile_loss: bool = False
+    loss_fn: Callable | None = None
 
     # Training settings
     autocast_precision: DType | None = None  # UNTESTED for helios
@@ -113,6 +114,9 @@ class HeliosTrainModuleConfig(Config):
             kwargs["state_dict_load_opts"] = dist_cp_sd.StateDictOptions(
                 **state_dict_load_opts
             )
+        if (loss_fn := kwargs.pop("loss_fn", None)) is  None:
+            raise ValueError("loss_fn must be provided")
+        kwargs["loss_fn"] = loss_fn
         return HeliosTrainModule(
             model=model,
             device=device,

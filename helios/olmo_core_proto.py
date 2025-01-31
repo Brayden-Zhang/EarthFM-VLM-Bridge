@@ -5,6 +5,7 @@ import uuid
 
 import numpy as np
 from olmo_core.distributed.utils import get_fs_local_rank, get_rank, get_world_size
+from olmo_core.distributed.parallel import DataParallelConfig, DataParallelType
 from olmo_core.optim import AdamWConfig
 from olmo_core.train import prepare_training_environment, teardown_training_environment
 from olmo_core.train.callbacks.wandb import WandBCallback
@@ -50,10 +51,13 @@ if __name__ == "__main__":
     dp_config = None
     # for distributed training use torchrun
     # Uncomment this line to use distributed training
-    # dp_config = DataParallelConfig(name=DataParallelType.ddp)
+    dp_config = DataParallelConfig(name=DataParallelType.ddp)
 
     # for distributed training use torchrun
-    prepare_training_environment(seed=42)
+    if dp_config is not None:
+        prepare_training_environment(seed=42)
+    else:
+        prepare_training_environment(seed=42, backend=None)
     # set log level to debug
     logger.setLevel(logging.DEBUG)
 
@@ -81,7 +85,6 @@ if __name__ == "__main__":
     # Ideally though this should be handled by the Model COnfig and build
     model = model.to(device)
     checkpointer_config = CheckpointerConfig(work_dir=workdir)
-    checkpointer = checkpointer_config.build()
     optim_config = AdamWConfig()
 
     train_module_config = HeliosTrainModuleConfig(
@@ -127,7 +130,7 @@ if __name__ == "__main__":
         cancel_check_interval=CANCEL_CHECK_INTERVAL,
         metrics_collect_interval=METRICS_COLLECT_INTERVAL,
         max_duration=MAX_DURATION,
-        checkpointer=checkpointer,
+        checkpointer=checkpointer_config,
     )
     trainer = trainer_config.build(
         train_module=train_module,
