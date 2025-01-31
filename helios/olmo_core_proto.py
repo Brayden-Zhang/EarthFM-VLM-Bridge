@@ -70,12 +70,12 @@ if __name__ == "__main__":
     model = LatentMIMStyle(encoder, decoder)
 
     from olmo_core.optim import AdamWConfig
+    from olmo_core.train.callbacks.wandb import WandBCallback
     from olmo_core.train.checkpoint import CheckpointerConfig
     from olmo_core.train.common import Duration, LoadStrategy
     from olmo_core.utils import get_default_device
 
     from helios.train.callbacks.speed_monitor import HeliosSpeedMonitorCallback
-
     max_duration = Duration.epochs(4)
 
     checkpointer_config = CheckpointerConfig(work_dir=workdir)
@@ -91,6 +91,13 @@ if __name__ == "__main__":
         rank_batch_size=4,
         loss_fn=patch_disc_loss,
     )
+    import uuid
+    run_name = f"test-debug-{uuid.uuid4()}"
+    wandb_callback = WandBCallback(
+        name=run_name,
+        project="helios-test",
+        entity="henryhzog",#PLEASE CHANGE
+    )
     trainer = HeliosTrainer(
         work_dir=workdir,
         train_module=train_module,
@@ -98,7 +105,7 @@ if __name__ == "__main__":
         load_strategy=LoadStrategy.if_available,
         device=DEVICE,
         save_folder=workdir / "save_folder",
-        callbacks={"speed_monitor": HeliosSpeedMonitorCallback()},
+        callbacks={"speed_monitor": HeliosSpeedMonitorCallback(), "wandb": wandb_callback},
         cancel_check_interval=1,
         metrics_collect_interval=1,
         max_duration=max_duration,
