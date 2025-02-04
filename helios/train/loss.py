@@ -101,71 +101,20 @@ class PatchDiscriminationLoss(Loss):
         raise NotImplementedError
 
 
-class CompositeLoss:
-    """Combines multiple loss functions with optional weights."""
-
-    def __init__(self, losses: list[Loss], weights: list[float] | None = None):
-        """Initialize a composite loss.
-
-        Args:
-            losses: List of loss functions to combine
-            weights: Optional weights for each loss function.
-                    If None, losses are weighted equally.
-        """
-        self.losses = losses
-        self.weights = weights or [1.0] * len(losses)
-
-        if len(self.weights) != len(losses):
-            raise ValueError("Number of weights must match number of losses")
-
-    def compute(
-        self, predictions: TokensAndMasks, targets: TokensAndMasks, **kwargs: Any
-    ) -> torch.Tensor:
-        """Compute weighted combination of multiple losses.
-
-        Args:
-            predictions: Model predictions.
-            targets: Ground truth targets.
-            **kwargs: Additional keyword arguments.
-
-        Returns:
-            Combined loss value as a tensor.
-        """
-        total_loss = torch.zeros(1, device=predictions.device)
-        for loss_fn, weight in zip(self.losses, self.weights):
-            total_loss += weight * loss_fn.compute(predictions, targets, **kwargs)
-        return total_loss
-
-
 @dataclass
 class LossConfig(Config):
     """Configuration for loss functions.
 
     Args:
-        losses: List of loss configs in the format of
+        loss_config: Loss config in the format of
         e.g.
         {
             "type": "patch_discrimination",
             # rest of init kwargs
-        }
-        weights: Optional weights for each loss function.
     """
 
-    losses: list[dict[str, Any]]  # List of loss configs
-    weights: list[float] | None = None
+    loss_config: dict[str, Any]  # List of loss configs
 
-    def validate(self) -> None:
-        """Validate the loss configuration."""
-        if self.weights and len(self.weights) != len(self.losses):
-            raise ValueError("Number of weights must match number of losses")
-
-    def build(self) -> CompositeLoss:
-        """Build a CompositeLoss from the config."""
-        built_losses = []
-        for loss_config in self.losses:
-            loss_type = loss_config.pop("type")
-            # This assumes you have a registry of losses or will implement specific builders
-            loss = LOSS_REGISTRY[loss_type](**loss_config)
-            built_losses.append(loss)
-
-        return CompositeLoss(losses=built_losses, weights=self.weights)
+    def build(self) -> type[Loss]:
+        """Build a Loss from the config."""
+        return LOSS_REGISTRY[self.loss_config["type"]](**self.loss_config)

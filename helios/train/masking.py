@@ -8,7 +8,7 @@ from class_registry import ClassRegistry
 from olmo_core.config import Config
 
 from helios.data.dataset import HeliosSample
-from helios.helios.types import ArrayTensor
+from helios.types import ArrayTensor
 
 
 # SHould be return type of masking strategy
@@ -99,7 +99,7 @@ class MaskingConfig(Config):
     strategy_config: dict[str, Any]
 
     def build(self) -> type[MaskingStrategy]:
-        """Build a CompositeMaskingStrategy from the config."""
+        """Build a MaskingStrategy from the config."""
         return MASKING_STRATEGY_REGISTRY[self.strategy_config["type"]](
             **self.strategy_config
         )
