@@ -46,6 +46,21 @@ class MaskedHeliosSample(NamedTuple):
             return_dict[field] = val
         return return_dict
 
+    @property
+    def height(self) -> int:
+        """Get the height of the data."""
+        return self.s2.shape[2]
+
+    @property
+    def width(self) -> int:
+        """Get the width of the data."""
+        return self.s2.shape[3]
+
+    @staticmethod
+    def get_masked_modality_name(modality: str) -> str:
+        """Get the masked modality name."""
+        return f"{modality}_mask"
+
 
 class MaskingStrategy(ABC):
     """Abstract base class for masking strategies."""

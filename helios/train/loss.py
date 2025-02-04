@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from class_registry import ClassRegistry
 from olmo_core.config import Config
 
-from helios.train.model import TokensAndMasks
+from helios.helios.nn.model import TokensAndMasks
 
 
 # V-1 loss function
