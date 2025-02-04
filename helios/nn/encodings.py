@@ -13,8 +13,7 @@ import numpy as np
 import torch
 
 
-# all these functions will need Unit tests
-def get_1d_sincos_pos_encoding(pos: torch.Tensor, encoding_dim: int):
+def get_1d_sincos_pos_encoding(pos: torch.Tensor, encoding_dim: int) -> torch.Tensor:
     """Get 1D sin cos position encoding for a given set of positions.
 
     Args:
@@ -36,7 +35,7 @@ def get_1d_sincos_pos_encoding(pos: torch.Tensor, encoding_dim: int):
     return encoding
 
 
-def get_2d_sincos_pos_encoding(grid: torch.Tensor, encoding_dim: int):
+def get_2d_sincos_pos_encoding(grid: torch.Tensor, encoding_dim: int) -> torch.Tensor:
     """Get 2D sin cos position encoding for a given grid of positions.
 
     Args:
@@ -61,7 +60,7 @@ def get_2d_sincos_pos_encoding_with_resolution(
     encoding_dim: int,
     device: torch.device,
     cls_token: bool = False,
-):
+) -> torch.Tensor:
     """Get 2D sin cos position encoding for a given grid of positions with resolution.
 
     Args:
@@ -73,7 +72,6 @@ def get_2d_sincos_pos_encoding_with_resolution(
     Returns:
         encoding: position encoding for the given grid: size (H*W, D)
     """
-    res = res.to(device)
     grid_h = torch.arange(grid_size, device=device)
     grid_w = torch.arange(grid_size, device=device)
     grid = torch.meshgrid(grid_w, grid_h, indexing="xy")  # (h_grid, w_grid)
@@ -95,7 +93,7 @@ def get_2d_sincos_pos_encoding_with_resolution(
     return pos_embed
 
 
-def get_month_encoding_table(encoding_dim: int):
+def get_month_encoding_table(encoding_dim: int) -> torch.Tensor:
     """Sinusoid month encoding table, for 12 months indexed from 0-11"""
     assert encoding_dim % 2 == 0
     angles = torch.arange(0, 13) / (12 / (2 * np.pi))

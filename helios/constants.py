@@ -35,3 +35,5 @@ DATA_SOURCE_TO_VARIATION_TYPE = {
     "naip": "space_varying",
     "openstreetmap": "space_varying",  # How do we want to use open Streetmap
 }
+
+BASE_GSD = 10  # What unit is this in?
