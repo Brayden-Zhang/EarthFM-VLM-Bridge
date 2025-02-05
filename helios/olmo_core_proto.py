@@ -204,11 +204,9 @@ if __name__ == "__main__":
         collate_fn=GeobenchDataset.collate_fn,
     )
     train_embeddings, train_labels = get_embeddings(
-        data_loader=train_loader, model=encoder, device=device
+        data_loader=train_loader, model=encoder
     )
-    val_embeddings, test_labels = get_embeddings(
-        data_loader=val_loader, model=encoder, device=device
-    )
+    val_embeddings, test_labels = get_embeddings(data_loader=val_loader, model=encoder)
     val_result = run_knn(
         eval_type="KNN-20",
         train_embeddings=train_embeddings,
