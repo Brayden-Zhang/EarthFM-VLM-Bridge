@@ -81,7 +81,6 @@ class GeobenchDataset(Dataset):
         self.config = config
         self.num_classes = config.num_classes
         self.is_multilabel = config.is_multilabel
-        self.dataset = dataset
 
         if split not in ["train", "valid", "test"]:
             raise ValueError(
@@ -122,17 +121,21 @@ class GeobenchDataset(Dataset):
         self.norm_method = norm_method
 
     @staticmethod
-    def _get_norm_stats(imputed_band_info: list[Stats]):
+    def _get_norm_stats(
+        imputed_band_info: list[Stats],
+    ) -> tuple[np.ndarray, np.ndarray]:
         means = []
         stds = []
         for band_name in GEOBENCH_S2_BAND_NAMES:
             assert band_name in imputed_band_info, f"{band_name} not found in band_info"
-            means.append(imputed_band_info[band_name].mean)
-            stds.append(imputed_band_info[band_name].std)
+            means.append(imputed_band_info[band_name].mean)  # type: ignore
+            stds.append(imputed_band_info[band_name].std)  # type: ignore
         return np.array(means), np.array(stds)
 
     @staticmethod
-    def _impute_normalization_stats(band_info: list[float], imputes: list[str]):
+    def _impute_normalization_stats(
+        band_info: dict, imputes: list[tuple[str, str]]
+    ) -> dict:
         # band_info is a dictionary with band names as keys and statistics (mean / std) as values
         if not imputes:
             return band_info
@@ -185,7 +188,7 @@ class GeobenchDataset(Dataset):
     @staticmethod
     def _normalize_bands(
         image: np.ndarray, means: np.array, stds: np.array, method: str = "norm_no_clip"
-    ):
+    ) -> np.ndarray:
         original_dtype = image.dtype
 
         if method == "standardize":
@@ -214,7 +217,7 @@ class GeobenchDataset(Dataset):
                 )
         return image
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx) -> tuple[HeliosSample, torch.Tensor]:
         """Return a single GeoBench data instance."""
         label = self.dataset[idx].label
 
@@ -245,7 +248,7 @@ class GeobenchDataset(Dataset):
         s2 = repeat(x, "h w c -> c t h w", t=1)[GEOBENCH_TO_HELIOS_S2_BANDS, :, :, :]
         return HeliosSample(s2=s2), target
 
-    def __len__(self):
+    def __len__(self) -> int:
         """Length of dataset."""
         return len(self.dataset)
 
