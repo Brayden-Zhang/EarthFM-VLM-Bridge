@@ -1,5 +1,6 @@
 """Model code for the Helios model."""
 
+import logging
 from collections import OrderedDict
 from typing import NamedTuple
 
@@ -17,6 +18,8 @@ from helios.nn.encodings import (
 )
 from helios.nn.flexi_patch_embed import FlexiPatchEmbed
 from helios.train.masking import MaskedHeliosSample, MaskValue
+
+logger = logging.getLogger(__name__)
 
 
 class TokensOnly(NamedTuple):
@@ -332,6 +335,9 @@ class Encoder(nn.Module):
         super().__init__()
         self.embedding_size = embedding_size
         self.modalities_to_channel_groups_dict = modalities_to_channel_groups_dict
+        logger.info(
+            f"modalities being used by model: {modalities_to_channel_groups_dict.keys()}"
+        )
 
         self.max_sequence_length = max_sequence_length
         self.base_patch_size = base_patch_size
@@ -395,7 +401,7 @@ class Encoder(nn.Module):
 
     def create_token_exit_ids(
         self, x: TokensOnly, token_exit_cfg: dict[str, int]
-    ) -> TokensOnly:
+    ) -> dict[str, Tensor]:
         """Create the token exit ids for # of layers of attention for each band group"""
         exit_ids_per_modality_dict = {}
         for (
@@ -407,7 +413,7 @@ class Encoder(nn.Module):
                 num_exit_layers = token_exit_cfg[band_group]
                 exit_seq_modality[:, :, :, idx, :] = num_exit_layers
             exit_ids_per_modality_dict[modality] = exit_seq_modality
-        return TokensOnly(**exit_ids_per_modality_dict)
+        return exit_ids_per_modality_dict
 
     @staticmethod
     def remove_masked_tokens(x: Tensor, mask: Tensor) -> tuple[Tensor, Tensor, Tensor]:
@@ -559,12 +565,13 @@ class Encoder(nn.Module):
             exit_ids_per_modality = self.create_token_exit_ids(
                 tokens_only, token_exit_cfg
             )
-            exited_tokens_and_masks = x._asdict().update(
-                exit_ids_per_modality._asdict()
-            )
+            x_dict = x._asdict()
+            assert exit_ids_per_modality.keys() in x_dict.keys()
+            x_dict.update(exit_ids_per_modality)
+            exit_ids_per_modality = TokensAndMasks(**x_dict)
             # Exit ids seqs tells us which layer to exit each token
             exit_ids_seq, _ = self.collapse_and_combine_hwtc(exit_ids_per_modality)
-            exited_tokens_and_masks = TokensAndMasks(**exited_tokens_and_masks)
+            exited_tokens_and_masks = TokensAndMasks(**x_dict)
             # The exit tokens are the tensor that store tokens that exit early from the encoder
             exited_tokens, _ = self.collapse_and_combine_hwtc(exited_tokens_and_masks)
         else:
@@ -658,6 +665,7 @@ class Encoder(nn.Module):
         Returns:
             TokensAndMasks containing the encoded representations and their masks
         """
+        # TODO: Add step to validate the exit config is valid
         patchified_tokens_and_masks = self.patch_embeddings.forward(x, patch_size)
         if (exit_after is None) or (exit_after > 0):
             patchified_tokens_and_masks = self.apply_attn(

@@ -6,7 +6,7 @@ import pytest
 import torch
 from einops import repeat
 
-from helios.nn.model import Encoder, TokensAndMasks
+from helios.nn.model import Encoder, TokensAndMasks, TokensOnly
 
 
 class TestEncoder:
@@ -47,13 +47,45 @@ class TestEncoder:
         assert tokens.shape == (B, 4, D)
         assert masks.shape == (B, 4)
 
-    def test_create_token_exit_ids(self, encoder: Encoder) -> None:
-        """Test creating exit IDs for early token exiting.
+    def test_create_token_exit_ids_normal_usage(self, encoder: Encoder) -> None:
+        """Test creating exit IDs for early token exiting - normal usage.
 
-        Args:
-            encoder: Test encoder instance
+        Tests normal usage with full token_exit_cfg.
         """
-        pass
+        B, H, W, T, D = 1, 2, 2, 2, 4
+        s2_tokens = torch.zeros(B, H, W, T, D)
+        x = TokensOnly(s2_tokens)
+
+        token_exit_cfg = {"rgb": 1, "nir": 2}
+        exit_ids_dict = encoder.create_token_exit_ids(x, token_exit_cfg)
+        assert "s2" in exit_ids_dict, "Expected 's2' key in the result dict"
+        s2_exit_ids = exit_ids_dict["s2"]
+        assert (
+            s2_exit_ids.shape == s2_tokens.shape
+        ), "Shape of exit IDs should match the shape of the modality tokens."
+
+        assert (
+            s2_exit_ids[:, :, :, 0, :] == 1
+        ).all(), "Expected the first band group ('rgb') tokens to be set to 1"
+        assert (
+            s2_exit_ids[:, :, :, 1, :] == 2
+        ).all(), "Expected the second band group ('nir') tokens to be set to 2"
+
+    def test_create_token_exit_ids_missing_exit_cfg_band_group(
+        self, encoder: Encoder
+    ) -> None:
+        """Test creating exit IDs for early token exiting - error cases.
+
+        Tests error handling for:
+        - Missing band group in token_exit_cfg (KeyError)
+        """
+        B, H, W, T, D = 1, 2, 2, 2, 4
+        s2_tokens = torch.zeros(B, H, W, T, D)
+        x = TokensOnly(s2_tokens)
+
+        with pytest.raises(KeyError):
+            incomplete_exit_cfg = {"rgb": 1}  # Missing the "nir" key
+            encoder.create_token_exit_ids(x, incomplete_exit_cfg)
 
     def test_remove_masked_tokens(self) -> None:
         """Test removing masked tokens and tracking indices."""
@@ -103,21 +135,18 @@ class TestEncoder:
 
     def test_add_removed_tokens(self) -> None:
         """Test adding removed tokens back into tensor."""
-        # Partial tokens after removal (shape [B, T', D]):
         partial_tokens = torch.tensor(
             [
                 [[1.0, 11.0], [2.0, 22.0]],
                 [[5.0, 55.0], [6.0, 66.0]],
             ]
         )
-        # Indices that map how tokens should be laid out in the original sequence of length 3 (shape [B, 3]):
         indices = torch.tensor(
             [
                 [0, 1, 2],
                 [1, 0, 2],
             ]
         )
-        # Corresponding partial masks (shape [B, T']), representing unmasked tokens:
         partial_mask = torch.tensor(
             [
                 [0.0, 0.0],
@@ -125,14 +154,12 @@ class TestEncoder:
             ]
         )
 
-        # Expected full re-inserted output (shape [B, T, D]), with masked positions zeroed out
         expected_out = torch.tensor(
             [
                 [[1.0, 11.0], [2.0, 22.0], [0.0, 0.0]],
                 [[0.0, 0.0], [5.0, 55.0], [0.0, 0.0]],
             ]
         )
-        # Expected mask (shape [B, T]), re-including the masked tokens
         expected_mask = torch.tensor(
             [
                 [0.0, 0.0, 1.0],
