@@ -1,4 +1,4 @@
-"""Attention Components for Helios"""
+"""Attention Components for Helios."""
 
 import torch
 import torch.nn as nn
@@ -34,6 +34,18 @@ class Attention(nn.Module):
         norm_layer: nn.Module = nn.LayerNorm,
         cross_attn: bool = False,
     ) -> None:
+        """Initialize the attention module.
+
+        Args:
+            dim: Input dimension
+            num_heads: Number of attention heads
+            qkv_bias: Enable bias for QKV projections
+            qk_norm: Apply normalization to Q and K
+            attn_drop: Attention dropout rate
+            proj_drop: Output projection dropout rate
+            norm_layer: Normalization layer
+            cross_attn: Enable cross-attention
+        """
         super().__init__()
         assert dim % num_heads == 0, "dim should be divisible by num_heads"
         self.num_heads = num_heads
@@ -41,6 +53,7 @@ class Attention(nn.Module):
         self.scale = self.head_dim**-0.5
 
         self.cross_attn = cross_attn
+        self.fast_attn = hasattr(torch.nn.functional, "scaled_dot_product_attention")
 
         self.q = nn.Linear(dim, dim, bias=qkv_bias)
         self.k = nn.Linear(dim, dim, bias=qkv_bias)
@@ -51,11 +64,6 @@ class Attention(nn.Module):
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
-
-    @property
-    def fast_attn(self) -> bool:
-        """Check if the fast attention implementation is available."""
-        return hasattr(torch.nn.functional, "scaled_dot_product_attention")
 
     def sdpa(
         self,
@@ -71,6 +79,7 @@ class Attention(nn.Module):
             q: Query tensor of shape (B, H, N, D)
             k: Key tensor of shape (B, H, N, D)
             v: Value tensor of shape (B, H, N, D)
+            n: Number of tokens
             attn_mask: Attention mask. Defaults to None.
 
         Returns:
@@ -163,6 +172,16 @@ class Mlp(nn.Module):
         bias: bool = True,
         drop: float = 0.0,
     ) -> None:
+        """Initialize the MLP module.
+
+        Args:
+            in_features: Number of input features
+            hidden_features: Hidden dimension. Defaults to None.
+            out_features: Output dimension. Defaults to None.
+            act_layer: Activation layer. Defaults to nn.GELU.
+            bias: Enable bias in linear layers. Defaults to True.
+            drop: Dropout rate. Defaults to 0.0.
+        """
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
@@ -202,6 +221,13 @@ class LayerScale(nn.Module):
     def __init__(
         self, dim: int, init_values: float = 1e-5, inplace: bool = False
     ) -> None:
+        """Initialize the LayerScale module.
+
+        Args:
+            dim: Input dimension
+            init_values: Initial scaling value
+            inplace: Perform scaling operation in-place
+        """
         super().__init__()
         self.inplace = inplace
         self.gamma = nn.Parameter(init_values * torch.ones(dim))
@@ -232,6 +258,11 @@ class DropPath(nn.Module):
     """
 
     def __init__(self, drop_prob: float) -> None:
+        """Initialize the DropPath module.
+
+        Args:
+            drop_prob: Probability of dropping the path. Defaults to None.
+        """
         super().__init__()
         self.drop_prob = drop_prob
 
@@ -287,6 +318,22 @@ class Block(nn.Module):
         norm_layer: nn.Module = nn.LayerNorm,
         cross_attn: bool = False,
     ) -> None:
+        """Initialize the Transformer block.
+
+        Args:
+            dim: Input dimension
+            num_heads: Number of attention heads
+            mlp_ratio: Ratio of mlp hidden dim to input dim
+            qkv_bias: Add bias to qkv projections
+            qk_norm: Apply normalization to q,k
+            drop: Dropout rate
+            attn_drop: Attention dropout rate
+            drop_path: Drop path rate
+            init_values: Layer scale initialization value
+            act_layer: Activation layer
+            norm_layer: Normalization layer
+            cross_attn: Whether to use cross attention
+        """
         super().__init__()
         self.norm1 = norm_layer(dim)
         self.attn = Attention(

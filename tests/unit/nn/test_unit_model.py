@@ -1,13 +1,94 @@
-"""Unit tests for the core model code"""
+"""Unit tests for the core model code."""
 
 import pytest
 import torch
 from einops import repeat
 
-from helios.nn.model import Encoder, TokensAndMasks, TokensOnly
+from helios.nn.model import (
+    Encoder,
+    FlexiHeliosBase,
+    Predictor,
+    TokensAndMasks,
+    TokensOnly,
+)
+from helios.train.masking import MaskValue
+
+
+class TestFlexiHeliosBase:
+    """Unit tests for the FlexiHeliosBase class."""
+
+    @pytest.fixture
+    def flexi_helios_base(self) -> FlexiHeliosBase:
+        """Create encoder fixture for testing."""
+        modalities_dict = dict({"s2": dict({"rgb": [0, 1, 2], "nir": [3]})})
+        flexi_helios_base = FlexiHeliosBase(
+            embedding_size=8,
+            num_heads=2,
+            mlp_ratio=4.0,
+            depth=2,
+            drop_path=0.1,
+            modalities_to_channel_groups_dict=modalities_dict,
+            max_sequence_length=12,
+            base_patch_size=4,
+            use_channel_embs=True,
+        )
+        return flexi_helios_base
+
+    def test_collapse_and_combine_hwtc(
+        self, flexi_helios_base: FlexiHeliosBase
+    ) -> None:
+        """Test collapsing tokens from different modalities into single tensor."""
+        B, D = 2, 4
+        s2_tokens = torch.randn(B, 2, 1, 1, 2, D)
+        s2_mask = torch.randint(0, 2, (B, 2, 1, 1, 2)).float()
+        x = TokensAndMasks(s2=s2_tokens, s2_mask=s2_mask)
+        tokens, masks = flexi_helios_base.collapse_and_combine_hwtc(x)
+        assert tokens.shape == (B, 4, D)
+        assert masks.shape == (B, 4)
+
+    def test_split_and_expand_per_modality(self) -> None:
+        """Test splitting combined tensor back into per-modality tensors."""
+        B, D = 2, 4  # Batch size and embedding dimension
+        modality_1_channel_groups = 3
+        modality_2_channel_groups = 5
+        modalities_to_dims_dict: dict[str, tuple[int, ...]] = {
+            "modality1": (B, 2, 2, 1, modality_1_channel_groups, D),
+            "modality2": (B, 1, 1, 2, modality_2_channel_groups, D),
+        }
+
+        modality1_data = torch.randn(B, 4 * modality_1_channel_groups, D)
+        modality2_data = torch.randn(B, 4 * modality_2_channel_groups, D)
+
+        x = torch.cat([modality1_data, modality2_data], dim=1)
+
+        # Now call the function
+        modality_tokens_dict = FlexiHeliosBase.split_and_expand_per_modality(
+            x, modalities_to_dims_dict
+        )
+
+        modality1_tokens = modality_tokens_dict["modality1"]
+        modality2_tokens = modality_tokens_dict["modality2"]
+        assert list(modality1_tokens.shape) == [
+            2,
+            2,
+            2,
+            1,
+            3,
+            4,
+        ], f"Incorrect shape for modality1 tokens: {modality1_tokens.shape}"
+        assert list(modality2_tokens.shape) == [
+            2,
+            1,
+            1,
+            2,
+            5,
+            4,
+        ], f"Incorrect shape for modality2 tokens: {modality2_tokens.shape}"
 
 
 class TestEncoder:
+    """Unit tests for the Encoder class."""
+
     @pytest.fixture
     def encoder(self) -> Encoder:
         """Create encoder fixture for testing.
@@ -28,20 +109,6 @@ class TestEncoder:
             base_patch_size=4,
             use_channel_embs=True,
         )
-
-    def test_collapse_and_combine_hwtc(self, encoder: Encoder) -> None:
-        """Test collapsing tokens from different modalities into single tensor.
-
-        Args:
-            encoder: Test encoder instance
-        """
-        B, D = 2, 4
-        s2_tokens = torch.randn(B, 2, 1, 1, 2, D)
-        s2_mask = torch.randint(0, 2, (B, 2, 1, 1, 2)).float()
-        x = TokensAndMasks(s2=s2_tokens, s2_mask=s2_mask)
-        tokens, masks = encoder.collapse_and_combine_hwtc(x)
-        assert tokens.shape == (B, 4, D)
-        assert masks.shape == (B, 4)
 
     def test_create_token_exit_ids_normal_usage(self, encoder: Encoder) -> None:
         """Test creating exit IDs for early token exiting - normal usage.
@@ -169,48 +236,95 @@ class TestEncoder:
         assert torch.equal(out, expected_out)
         assert torch.equal(full_mask, expected_mask)
 
-    def test_split_and_expand_per_modality(self) -> None:
-        """Test splitting combined tensor back into per-modality tensors."""
-        B, D = 2, 4  # Batch size and embedding dimension
-        modality_1_channel_groups = 3
-        modality_2_channel_groups = 5
-        modalities_to_dims_dict = OrderedDict(
-            {
-                "modality1": (B, 2, 2, 1, modality_1_channel_groups, D),
-                "modality2": (B, 1, 1, 2, modality_2_channel_groups, D),
-            }
+
+class TestPredictor:
+    """Unit tests for the Predictor class."""
+
+    @pytest.fixture
+    def predictor(self) -> Predictor:
+        """Create predictor fixture for testing."""
+        modalities_to_channel_groups_dict = dict(
+            {"s2": dict({"rgb": [0, 1, 2], "nir": [3]})}
+        )
+        return Predictor(
+            modalities_to_channel_groups_dict=modalities_to_channel_groups_dict,
+            encoder_embedding_size=8,
+            decoder_embedding_size=8,
+            depth=2,
+            mlp_ratio=4.0,
+            num_heads=2,
+            max_sequence_length=12,
+            max_patch_size=8,
+            drop_path=0.1,
+            learnable_channel_embeddings=True,
+            output_embedding_size=8,
         )
 
-        modality1_data = torch.randn(B, 4 * modality_1_channel_groups, D)
-        modality2_data = torch.randn(B, 4 * modality_2_channel_groups, D)
+    def test_add_masks(self, predictor: Predictor) -> None:
+        """Test that marked tokens are replaced with the learnable mask token."""
+        B, H, W, T, C_G, D = 1, 2, 2, 1, 5, 8
+        s2_tokens = torch.randn(B, H, W, T, C_G, D)
 
-        x = torch.cat([modality1_data, modality2_data], dim=1)
+        s2_mask = torch.zeros(B, H, W, T, C_G).float()
+        s2_mask[0, 0, 0, 0, 0] = MaskValue.DECODER_ONLY.value
 
-        # Now call the function
-        modality_tokens_dict = Encoder.split_and_expand_per_modality(
-            x, modalities_to_dims_dict
+        tokens_and_masks = TokensAndMasks(s2=s2_tokens, s2_mask=s2_mask)
+
+        replaced_dict = predictor.add_masks(tokens_and_masks)
+
+        # We expect replaced_dict to have the key "s2", shaped like s2_tokens
+        assert "s2" in replaced_dict, "Expected an output key for modality s2"
+        replaced_s2 = replaced_dict["s2"]
+        assert replaced_s2.shape == s2_tokens.shape, (
+            f"Expected shape {s2_tokens.shape} for replaced tokens, "
+            f"got {replaced_s2.shape}"
+        )
+        replaced_location = replaced_s2[
+            0, 0, 0, 0, 0, :
+        ]  # the single pixel & channel we set to 2
+
+        unchanged_location = replaced_s2[0, 0, 0, 0, 1, :]
+
+        assert torch.allclose(
+            replaced_location, predictor.mask_token, atol=1e-6
+        ), "Tokens at masked=2 location were not replaced by the learnable mask token."
+
+        assert torch.allclose(
+            unchanged_location, s2_tokens[0, 0, 0, 0, 1, :], atol=1e-6
+        ), "Tokens at non-masked location should remain the same."
+
+    def test_split_x_y(self) -> None:
+        """Test splitting the tokens into x and y."""
+        tokens = torch.tensor(
+            [[5, 6, 7, 8, 2, 13, 14, 15, 16], [5, 6, 7, 1, 2, 3, 4, 15, 16]]
+        ).unsqueeze(-1)
+        mask = torch.tensor([[0, 0, 0, 0, 1, 1, 2, 2, 2], [0, 0, 0, 1, 1, 1, 1, 2, 2]])
+
+        x, y, x_mask, y_mask, _ = Predictor.split_x_y(tokens, mask)
+        assert torch.equal(x, torch.tensor([[14, 15, 16], [15, 16, 1]]).unsqueeze(-1))
+        assert torch.equal(y, torch.tensor([[5, 6, 7, 8], [4, 5, 6, 7]]).unsqueeze(-1))
+        assert torch.equal(x_mask, torch.tensor([[1, 1, 1], [1, 1, 0]]))
+        assert torch.equal(y_mask, torch.tensor([[1, 1, 1, 1], [0, 1, 1, 1]]))
+
+    def test_combine_x_y(self) -> None:
+        """Test combining the x and y tokens."""
+        # x is the query (i.e. the masked tokens)
+        x = torch.tensor([[14, 15, 16], [15, 16, 1]]).unsqueeze(-1)
+        # y is the keys and values (i.e. the unmasked tokens)
+        y = torch.tensor([[5, 6, 7, 8], [4, 5, 6, 7]]).unsqueeze(-1)
+        x_mask = torch.tensor([[1, 1, 1], [1, 1, 0]])
+        y_mask = torch.tensor([[1, 1, 1, 1], [0, 1, 1, 1]])
+        indices = torch.tensor(
+            [[6, 7, 8, 4, 5, 0, 1, 2, 3], [7, 8, 3, 4, 5, 6, 0, 1, 2]]
         )
 
-        modality1_tokens = modality_tokens_dict["modality1"]
-        modality2_tokens = modality_tokens_dict["modality2"]
-        assert list(modality1_tokens.shape) == [
-            2,
-            2,
-            2,
-            1,
-            3,
-            4,
-        ], f"Incorrect shape for modality1 tokens: {modality1_tokens.shape}"
-        assert list(modality2_tokens.shape) == [
-            2,
-            1,
-            1,
-            2,
-            5,
-            4,
-        ], f"Incorrect shape for modality2 tokens: {modality2_tokens.shape}"
+        tokens = Predictor.combine_x_y(x, y, x_mask, y_mask, indices)
+        assert torch.equal(
+            tokens,
+            torch.tensor(
+                [[5, 6, 7, 8, 0, 0, 14, 15, 16], [5, 6, 7, 0, 0, 0, 0, 15, 16]]
+            ).unsqueeze(-1),
+        )
 
-
-# TODO: write unit tests for applying the Composite encodings
 
 # TODO: write a unit test for the FlexiPatchEmbeddings

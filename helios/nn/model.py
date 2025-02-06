@@ -11,9 +11,11 @@ from torch import Tensor, nn
 
 from helios.constants import BASE_GSD
 from helios.nn.attention import Block
-from helios.nn.encodings import (get_1d_sincos_pos_encoding,
-                                 get_2d_sincos_pos_encoding_with_resolution,
-                                 get_month_encoding_table)
+from helios.nn.encodings import (
+    get_1d_sincos_pos_encoding,
+    get_2d_sincos_pos_encoding_with_resolution,
+    get_month_encoding_table,
+)
 from helios.nn.flexi_patch_embed import FlexiPatchEmbed
 from helios.train.masking import MaskedHeliosSample, MaskValue
 
@@ -21,17 +23,9 @@ logger = logging.getLogger(__name__)
 
 
 class TokensOnly(NamedTuple):
+    """Container for token tensors without masks."""
+
     s2: torch.Tensor
-
-
-# THis  should be in a utility file
-class ModuleListWithInit(nn.ModuleList):
-    def _init_weights(self, m):
-        if isinstance(m, nn.Linear):
-            # we use xavier_uniform following official JAX ViT:
-            torch.nn.init.xavier_uniform_(m.weight)
-            if isinstance(m, nn.Linear) and m.bias is not None:
-                nn.init.constant_(m.bias, 0)
 
 
 class TokensAndMasks(NamedTuple):
@@ -64,15 +58,21 @@ class TokensAndMasks(NamedTuple):
 
 
 class FlexiHeliosPatchEmbeddings(nn.Module):
-    """This will patchify and encode the data"""
+    """Module that patchifies and encodes the input data."""
 
     def __init__(
         self,
-        modalities_to_channel_groups_dict: dict[str, list[int]],
+        modalities_to_channel_groups_dict: dict[str, dict[str, list[int]]],
         max_patch_size: int,
         embedding_size: int,
     ):
-        """Initialize the embeddings"""
+        """Initialize the patch embeddings.
+
+        Args:
+            modalities_to_channel_groups_dict: Dictionary mapping modalities to channel groups
+            max_patch_size: Maximum size of patches
+            embedding_size: Size of embeddings
+        """
         super().__init__()
         self.modalities_to_channel_groups_dict = modalities_to_channel_groups_dict
         # WE want to be able to remove certain bands and moda
@@ -103,7 +103,7 @@ class FlexiHeliosPatchEmbeddings(nn.Module):
         input_data: MaskedHeliosSample,
         patch_size: int,
     ) -> TokensAndMasks:
-        """Returns flexibly patchified embeddings for each modality of the input data
+        """Return flexibly patchified embeddings for each modality of the input data.
 
         Given a [B, H, W, (T), C] inputs, returns a [B, H, W, (T), C_G, D] output.
         We assume that the spatial masks are consistent for the given patch size,
@@ -166,7 +166,7 @@ class FlexiHeliosPatchEmbeddings(nn.Module):
 
 # SHould this be called FlexiHeliosCompositeEncodings? or FlexiHeliosCompositeEmbeddings?
 class FlexiHeliosCompositeEncodings(nn.Module):
-    """This will apply the encodings to the patchified data"""
+    """Composite encodings for the FlexiHelios model."""
 
     def __init__(
         self,
@@ -176,6 +176,15 @@ class FlexiHeliosCompositeEncodings(nn.Module):
         base_patch_size: int,
         use_channel_embs: bool = True,
     ):
+        """Initialize the composite encodings.
+
+        Args:
+            embedding_size: Size of token embeddings
+            modalities_to_channel_groups_dict: Dictionary mapping modalities to channel groups
+            max_sequence_length: Maximum sequence length
+            base_patch_size: Base patch size
+            use_channel_embs: Whether to use learnable channel embeddings
+        """
         super().__init__()
         self.embedding_size = embedding_size
         self.modalities_to_channel_groups_dict = modalities_to_channel_groups_dict
@@ -216,7 +225,7 @@ class FlexiHeliosCompositeEncodings(nn.Module):
 
         self.apply(self._init_weights)
 
-    def _init_weights(self, m):
+    def _init_weights(self, m: nn.Module) -> None:
         if isinstance(m, nn.Linear):
             # we use xavier_uniform following official JAX ViT:
             torch.nn.init.xavier_uniform_(m.weight)
@@ -228,7 +237,7 @@ class FlexiHeliosCompositeEncodings(nn.Module):
         """Calculate the Ground Sample Distance ratio."""
         return input_res * patch_size / BASE_GSD
 
-    # Maybe this should just return a dict so we don't do so much unpacking and repacking
+    # TODO: Maybe this should just return a dict so we don't do so much unpacking and repacking
     def forward(
         self,
         per_modality_input_tokens: TokensOnly,
@@ -236,12 +245,17 @@ class FlexiHeliosCompositeEncodings(nn.Module):
         patch_size: int,
         input_res: int = BASE_GSD,
     ) -> TokensOnly:
-        """Apply the encodings to the patchified data"""
-        # We need a test that keeps all of this organized so that we can easily add new modalities
-        # There shoud be a named tuple isntead of a dict here
-        # How do we handle missing modalities? We are assuming that by this point we have already padded
-        # DO we need  to support Dropping modalities entirely? Probably
-        # and masked the data so that we have a consistent shape
+        """Apply the encodings to the patchified data.
+
+        Args:
+            per_modality_input_tokens: Tokens only for each modality
+            timestamps: Timestamps of the data
+            patch_size: Size of patches
+            input_res: Resolution of the input data
+
+        Returns:
+            Tokens only for each modality
+        """
         output_dict = {}
         for modality in self.modalities_to_channel_groups_dict.keys():
             # TODO: We will need to be able to handle modalities that do not need all these types of encodings
@@ -315,7 +329,7 @@ class FlexiHeliosCompositeEncodings(nn.Module):
 class FlexiHeliosBase(nn.Module):
     """FlexiHeliosBase is a base class for FlexiHelios models."""
 
-    cross_attn: bool
+    cross_attn: bool = False
 
     def __init__(
         self,
@@ -342,7 +356,7 @@ class FlexiHeliosBase(nn.Module):
         self.base_patch_size = base_patch_size
         self.use_channel_embs = use_channel_embs
 
-        self.blocks = ModuleListWithInit(
+        self.blocks = nn.ModuleList(
             [
                 Block(
                     embedding_size,
@@ -366,7 +380,7 @@ class FlexiHeliosBase(nn.Module):
         )
         self.apply(self._init_weights)
 
-    def _init_weights(self, m):
+    def _init_weights(self, m: nn.Module) -> None:
         if isinstance(m, nn.Linear):
             # we use xavier_uniform following official JAX ViT:
             torch.nn.init.xavier_uniform_(m.weight)
@@ -375,7 +389,7 @@ class FlexiHeliosBase(nn.Module):
 
     # is naming here confusing if one of these channels can be missing?
     def collapse_and_combine_hwtc(self, x: TokensAndMasks) -> tuple[Tensor, Tensor]:
-        """Collapse the tokens and masks, respectively, into two tensors"""
+        """Collapse the tokens and masks, respectively, into two tensors."""
         tokens, masks = [], []
         for modality in self.modalities_to_channel_groups_dict.keys():
             masked_modality_name = x.get_masked_modality_name(modality)
@@ -405,7 +419,7 @@ class FlexiHeliosBase(nn.Module):
     def split_and_expand_per_modality(
         x: Tensor, modalities_to_dims_dict: dict[str, tuple]
     ) -> dict[str, Tensor]:
-        """Split and expand the tokens per modality
+        """Split and expand the tokens per modality.
 
         Args:
             x: Tokens to split and expand
@@ -454,6 +468,20 @@ class Encoder(FlexiHeliosBase):
         base_patch_size: int,
         use_channel_embs: bool = True,
     ):
+        """Initialize the encoder.
+
+        Args:
+            embedding_size: Size of token embeddings
+            max_patch_size: Maximum patch size for patchification
+            num_heads: Number of attention heads
+            mlp_ratio: Ratio for MLP hidden dimension
+            depth: Number of transformer layers
+            drop_path: Drop path rate
+            modalities_to_channel_groups_dict: Dictionary mapping modalities to channel groups
+            max_sequence_length: Maximum sequence length
+            base_patch_size: Base patch size
+            use_channel_embs: Whether to use learnable channel embeddings
+        """
         super().__init__(
             embedding_size=embedding_size,
             depth=depth,
@@ -476,7 +504,7 @@ class Encoder(FlexiHeliosBase):
     def create_token_exit_ids(
         self, x: TokensOnly, token_exit_cfg: dict[str, int]
     ) -> dict[str, Tensor]:
-        """Create the token exit ids for # of layers of attention for each band group"""
+        """Create the token exit ids for # of layers of attention for each band group."""
         exit_ids_per_modality_dict = {}
         for (
             modality,
@@ -532,7 +560,7 @@ class Encoder(FlexiHeliosBase):
 
     @staticmethod
     def should_exit(i_blk: int, exit_after_n_layers: int | None) -> bool:
-        """Determine if the current block should exit the attention layers"""
+        """Determine if the current block should exit the attention layers."""
         if exit_after_n_layers is None:
             return False
         return i_blk >= exit_after_n_layers
@@ -607,9 +635,11 @@ class Encoder(FlexiHeliosBase):
             x_dict = x._asdict()
             assert exit_ids_per_modality.keys() in x_dict.keys()
             x_dict.update(exit_ids_per_modality)
-            exit_ids_per_modality = TokensAndMasks(**x_dict)
+            tokens_and_masks_exit_ids_per_modality = TokensAndMasks(**x_dict)
             # Exit ids seqs tells us which layer to exit each token
-            exit_ids_seq, _ = self.collapse_and_combine_hwtc(exit_ids_per_modality)
+            exit_ids_seq, _ = self.collapse_and_combine_hwtc(
+                tokens_and_masks_exit_ids_per_modality
+            )
             exited_tokens_and_masks = TokensAndMasks(**x_dict)
             # The exit tokens are the tensor that store tokens that exit early from the encoder
             exited_tokens, _ = self.collapse_and_combine_hwtc(exited_tokens_and_masks)
@@ -634,7 +664,7 @@ class Encoder(FlexiHeliosBase):
         # to decode those tokens. From the perspective of the encoder, 1 and 2 are equivalent
         # since they both represent masked values
         new_mask = mask >= MaskValue.TARGET_ENCODER_ONLY.value
-        x, indices, new_mask = self.remove_masked_tokens(x, new_mask)
+        tokens, indices, new_mask = self.remove_masked_tokens(x, new_mask)
         if exit_ids_seq is not None:
             exit_ids_seq, _, _ = self.remove_masked_tokens(exit_ids_seq, new_mask)
             # still linear projections
@@ -654,30 +684,30 @@ class Encoder(FlexiHeliosBase):
                 # If a token should exit, then we update the exit token with the current token at the same position
                 exited_tokens = torch.where(
                     condition=(exit_ids_seq == i_blk),
-                    input=x.detach(),
+                    input=tokens.detach(),
                     other=exited_tokens.detach(),
                 )
             # we take the inverse of the mask because a value
             # of True indicates the value *should* take part in
             # attention
             # WARNING: THIS MAY CHANGE DEPENDING ON THE ATTENTION IMPLEMENTATION
-            x = blk(x=x, y=None, attn_mask=~new_mask.bool())
+            tokens = blk(x=tokens, y=None, attn_mask=~new_mask.bool())
 
         if exit_ids_seq is not None:
             assert exited_tokens is not None
             # full depth
             # IMPORTANT: write this to x
-            x = torch.where(
+            tokens = torch.where(
                 condition=(exit_ids_seq == (i_blk + 1)),  # 2 for full depth
-                input=x.detach(),
+                input=tokens.detach(),
                 other=exited_tokens.detach(),
             )
 
         # we don't care about the mask returned by add_removed_tokens, since we will
         # just use the original, unclipped mask here
-        x, _ = self.add_removed_tokens(x, indices, new_mask)
+        tokens, _ = self.add_removed_tokens(tokens, indices, new_mask)
         tokens_per_modality_dict = self.split_and_expand_per_modality(
-            x, modalities_to_dims_dict
+            tokens, modalities_to_dims_dict
         )
         tokens_and_masks_dict = {}
         tokens_and_masks_dict.update(original_masks_dict)  # Add masks first
@@ -688,8 +718,8 @@ class Encoder(FlexiHeliosBase):
         self,
         x: MaskedHeliosSample,
         patch_size: int,
-        input_res: int | None = BASE_GSD,
-        exit_after: int | None = None,
+        input_res: int = BASE_GSD,
+        exit_after_n_layers: int | None = None,
         token_exit_cfg: dict | None = None,
     ) -> TokensAndMasks:
         """Process masked input samples into token representations.
@@ -698,7 +728,7 @@ class Encoder(FlexiHeliosBase):
             x: Masked input sample containing the data to be encoded
             patch_size: Size of patches to divide the input into
             input_res: Resolution of the input data
-            exit_after: Layer to exit after
+            exit_after_n_layers: Layer to exit after
             token_exit_cfg: Configuration for token exit
 
         Returns:
@@ -706,17 +736,16 @@ class Encoder(FlexiHeliosBase):
         """
         # TODO: Add step to validate the exit config is valid
         patchified_tokens_and_masks = self.patch_embeddings.forward(x, patch_size)
-        if (exit_after is None) or (exit_after > 0):
+        if (exit_after_n_layers is None) or (exit_after_n_layers > 0):
             patchified_tokens_and_masks = self.apply_attn(
-                patchified_tokens_and_masks,
-                x.timestamps,
-                patch_size,
-                input_res,
-                exit_after,
-                token_exit_cfg,
+                x=patchified_tokens_and_masks,
+                timestamps=x.timestamps,
+                patch_size=patch_size,
+                input_res=input_res,
+                exit_after_n_layers=exit_after_n_layers,
+                token_exit_cfg=token_exit_cfg,
             )
 
-        # Apply normalization per modality and then wrap it back up
         output_dict = {}
         for modality in self.modalities_to_channel_groups_dict.keys():
             x_modality = getattr(patchified_tokens_and_masks, modality)
@@ -740,16 +769,30 @@ class Predictor(FlexiHeliosBase):
         modalities_to_channel_groups_dict: dict[str, dict[str, list[int]]],
         encoder_embedding_size: int = 128,
         decoder_embedding_size: int = 128,
-        depth=2,
-        mlp_ratio=2,
-        num_heads=8,
-        max_sequence_length=24,
+        depth: int = 2,
+        mlp_ratio: float = 2.0,
+        num_heads: int = 8,
+        max_sequence_length: int = 24,
         max_patch_size: int = 8,
         drop_path: float = 0.0,
         learnable_channel_embeddings: bool = False,
         output_embedding_size: int | None = None,
     ):
-        # Need to refactor the Encoder to subclass the shared components because we want the exact same apply encodings etc
+        """Initialize the predictor.
+
+        Args:
+            modalities_to_channel_groups_dict: Dictionary mapping modalities to channel groups
+            encoder_embedding_size: Size of encoder embeddings
+            decoder_embedding_size: Size of decoder embeddings
+            depth: Number of transformer layers
+            mlp_ratio: Ratio for MLP hidden dimension
+            num_heads: Number of attention heads
+            max_sequence_length: Maximum sequence length
+            max_patch_size: Maximum patch size
+            drop_path: Drop path rate
+            learnable_channel_embeddings: Whether to use learnable channel embeddings
+            output_embedding_size: Size of output embeddings
+        """
         super().__init__(
             embedding_size=decoder_embedding_size,
             depth=depth,
@@ -781,7 +824,7 @@ class Predictor(FlexiHeliosBase):
         self.apply(self._init_weights)
 
     def add_masks(self, tokens_and_masks: TokensAndMasks) -> dict[str, Tensor]:
-        """Replace Tokens that should be decoded with the learnable mask token"""
+        """Replace Tokens that should be decoded with the learnable mask token."""
 
         def to_kept_boolean(m: torch.Tensor) -> torch.Tensor:
             # returns a mask where 1 indicates the value should be decoded
@@ -869,11 +912,10 @@ class Predictor(FlexiHeliosBase):
     def combine_x_y(
         x: Tensor, y: Tensor, x_mask: Tensor, y_mask: Tensor, indices: Tensor
     ) -> Tensor:
-        """
-        Reintegrate the separated x (query) and y (key-value) token sequences into
-        their original order. The token masks (x_mask, y_mask) zero out positions
-        which are not used/needed, and the final scatter step re-applies the original
-        ordering tracked in 'indices'.
+        """Reintegrate the separated x (query) and y (key-value) token sequences into their original order.
+
+        The token masks (x_mask, y_mask) zero out positions which are not used/needed,
+        and the final scatter step re-applies the original ordering tracked in 'indices'.
 
         Args:
             x: Query tokens of shape [B, X_len, D].
@@ -994,7 +1036,9 @@ class Predictor(FlexiHeliosBase):
             for idx in range(len(channel_groups_dict)):
                 if self.is_any_data_to_be_decoded(modality_mask):
                     per_channel_modality_data = modality_data[:, :, :, :, idx, :]
-                    output_data = self.to_output_embed(self.norm(per_channel_modality_data))
+                    output_data = self.to_output_embed(
+                        self.norm(per_channel_modality_data)
+                    )
                 else:
                     # If all data should be ignored by encoder, we need to return an empty tensor
                     output_data = torch.empty(
@@ -1058,19 +1102,15 @@ if __name__ == "__main__":
     s2_array = rearrange(
         s2_array, "(t c) h w -> h w t c", c=num_bands, t=num_timesteps
     ).unsqueeze(0)
-    modalities_to_channel_groups_dict = OrderedDict(
-        {
-            "s2": OrderedDict(
-                {
-                    "S2_RGB": [S2_BANDS.index(b) for b in ["B02", "B03", "B04"]],
-                    "S2_Red_Edge": [S2_BANDS.index(b) for b in ["B05", "B06", "B07"]],
-                    "S2_NIR_10m": [S2_BANDS.index(b) for b in ["B08"]],
-                    "S2_NIR_20m": [S2_BANDS.index(b) for b in ["B8A"]],
-                    "S2_SWIR": [S2_BANDS.index(b) for b in ["B11", "B12"]],
-                }
-            )
+    modalities_to_channel_groups_dict = {
+        "s2": {
+            "S2_RGB": [S2_BANDS.index(b) for b in ["B02", "B03", "B04"]],
+            "S2_Red_Edge": [S2_BANDS.index(b) for b in ["B05", "B06", "B07"]],
+            "S2_NIR_10m": [S2_BANDS.index(b) for b in ["B08"]],
+            "S2_NIR_20m": [S2_BANDS.index(b) for b in ["B8A"]],
+            "S2_SWIR": [S2_BANDS.index(b) for b in ["B11", "B12"]],
         }
-    )
+    }
 
     s2_mask = torch.randint_like(s2_array, 0, 3).float()
     latlon = torch.randn(1, 2).float()
@@ -1160,8 +1200,6 @@ if __name__ == "__main__":
     )
     print(f"decoded_tokens.s2.shape: {decoded_tokens.s2.shape}")
 
-
-    # write  unit tests for the decoder
+    # add Integration tests for the encoder decoder full process seperate and together
     # Add S1 data into the test
-    # add additional unit tests for the tsub components
     # clean up Refactor and SUbmit the PR

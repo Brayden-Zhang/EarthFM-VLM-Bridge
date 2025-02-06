@@ -6,12 +6,14 @@ Any methods that piece together multiple steps or are the entire forward pass fo
 import pytest
 import torch
 
-from helios.nn.model import Encoder, TokensAndMasks
+from helios.nn.model import Encoder, Predictor, TokensAndMasks
 from helios.train.masking import MaskValue
 
 
 # TODO: We should have a loaded Test batch with real data for this one
 class TestEncoder:
+    """Integration tests for the Encoder class."""
+
     @pytest.fixture
     def encoder(self) -> Encoder:
         """Create encoder fixture for testing.
@@ -75,7 +77,7 @@ class TestEncoder:
         # Confirm the mask was preserved and that masked tokens are zeroed out in the output.
         assert (output.s2_mask == s2_mask).all(), "Mask should be preserved in output"
         assert (
-            output.s2[s2_mask >= MaskValue.TARGET_ENCODER_ONLY] == 0
+            output.s2[s2_mask >= MaskValue.TARGET_ENCODER_ONLY.value] == 0
         ).all(), "Masked tokens should be 0 in output"
 
     def test_forward(self, encoder: Encoder) -> None:
@@ -85,3 +87,77 @@ class TestEncoder:
             encoder: Test encoder instance
         """
         pass
+
+
+class TestPredictor:
+    """Integration tests for the Predictor class."""
+
+    @pytest.fixture
+    def predictor(self) -> Predictor:
+        """Create predictor fixture for testing.
+
+        Returns:
+            Predictor: Test predictor instance with small test config
+        """
+        """Create predictor fixture for testing."""
+        modalities_to_channel_groups_dict = dict(
+            {"s2": dict({"rgb": [0, 1, 2], "nir": [3]})}
+        )
+        return Predictor(
+            modalities_to_channel_groups_dict=modalities_to_channel_groups_dict,
+            encoder_embedding_size=8,
+            decoder_embedding_size=16,
+            depth=2,
+            mlp_ratio=4.0,
+            num_heads=2,
+            max_sequence_length=12,
+            max_patch_size=8,
+            drop_path=0.1,
+            learnable_channel_embeddings=True,
+            output_embedding_size=8,
+        )
+
+    def test_predictor_forward(self, predictor: Predictor) -> None:
+        """Test the full forward pass of the Predictor."""
+        B = 1  # Batch size
+        H = 2  # Spatial height
+        W = 2  # Spatial width
+        T = 3  # Number of timesteps
+        num_groups = 2  # Number of channel groups (as defined in modalities_to_channel_groups_dict)
+
+        embedding_dim = predictor.encoder_to_decoder_embed.in_features
+
+        s2_tokens = torch.randn(B, H, W, T, num_groups, embedding_dim)
+
+        s2_mask = torch.full(
+            (B, H, W, T, num_groups),
+            fill_value=MaskValue.DECODER_ONLY.value,
+            dtype=torch.float32,
+        )
+
+        # Create dummy latitude and longitude data (and its mask)
+        latlon = torch.randn(B, 2)
+        latlon_mask = torch.ones(B, 2, dtype=torch.float32)
+
+        encoded_tokens = TokensAndMasks(
+            s2=s2_tokens, s2_mask=s2_mask, latlon=latlon, latlon_mask=latlon_mask
+        )
+        timestamps = torch.tensor(
+            [[[1, 15, 30], [6, 7, 8], [2018, 2018, 2018]]],
+            dtype=torch.long,
+        )
+
+        patch_size = 4
+        input_res = 1
+
+        output = predictor.forward(encoded_tokens, timestamps, patch_size, input_res)
+
+        expected_token_shape = (B, H, W, T, num_groups, predictor.output_embedding_size)
+        assert (
+            output.s2.shape == expected_token_shape
+        ), f"Expected tokens shape {expected_token_shape}, got {output.s2.shape}"
+
+        expected_mask_shape = (B, H, W, T, num_groups)
+        assert (
+            output.s2_mask.shape == expected_mask_shape
+        ), f"Expected mask shape {expected_mask_shape}, got {output.s2_mask.shape}"
