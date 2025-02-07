@@ -4,7 +4,7 @@ import pytest
 import torch
 from einops import repeat
 
-from helios.nn.model import Encoder, FlexiHeliosBase, Predictor, TokensAndMasks
+from helios.nn.flexihelios import Encoder, FlexiHeliosBase, Predictor, TokensAndMasks
 from helios.train.masking import MaskValue
 
 

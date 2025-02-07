@@ -6,7 +6,7 @@ Any methods that piece together multiple steps or are the entire forward pass fo
 import pytest
 import torch
 
-from helios.nn.model import Encoder, Predictor, TokensAndMasks
+from helios.nn.flexihelios import Encoder, Predictor, TokensAndMasks
 from helios.train.masking import MaskedHeliosSample, MaskValue
 
 

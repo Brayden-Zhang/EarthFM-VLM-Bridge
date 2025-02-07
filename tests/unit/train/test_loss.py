@@ -2,7 +2,7 @@
 
 import torch
 
-from helios.nn.model import TokensAndMasks
+from helios.nn.flexihelios import TokensAndMasks
 from helios.train.loss import PatchDiscriminationLoss
 
 

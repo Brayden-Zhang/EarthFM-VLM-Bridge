@@ -11,7 +11,7 @@ from einops import rearrange
 from olmo_core.config import Config
 from torch import Tensor
 
-from helios.nn.model import TokensAndMasks
+from helios.nn.flexihelios import TokensAndMasks
 from helios.train.masking import MaskValue
 
 
