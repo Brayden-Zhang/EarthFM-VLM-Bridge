@@ -6,7 +6,7 @@ from helios.data.dataset import HeliosSample
 from helios.train.masking import MaskValue, RandomMaskingStrategy
 
 
-def test_random_masking():
+def test_random_masking() -> None:
     """Test random masking ratios."""
     b, h, w, t = 100, 16, 16, 8
 
