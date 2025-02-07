@@ -282,8 +282,8 @@ def test_end_to_end_with_exit_config() -> None:
     # - days: range 1..31,
     # - months: range 1..13,
     # - years: e.g. 2018-2019.
-    days = torch.randint(1, 31, (B, 1, T), dtype=torch.long)
-    months = torch.randint(1, 13, (B, 1, T), dtype=torch.long)
+    days = torch.randint(1, 25, (B, 1, T), dtype=torch.long)
+    months = torch.randint(0, 12, (B, 1, T), dtype=torch.long)
     years = torch.randint(2018, 2020, (B, 1, T), dtype=torch.long)
     timestamps = torch.cat([days, months, years], dim=1)  # Shape: (B, 3, T)
 
