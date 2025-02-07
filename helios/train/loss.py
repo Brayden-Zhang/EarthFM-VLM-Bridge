@@ -8,11 +8,10 @@ import torch
 import torch.nn.functional as F
 from class_registry import ClassRegistry
 from einops import rearrange
-from olmo_core.config import Config
-from torch import Tensor
-
 from helios.nn.flexihelios import TokensAndMasks
 from helios.train.masking import MaskValue
+from olmo_core.config import Config
+from torch import Tensor
 
 
 class Loss(ABC):
@@ -88,19 +87,33 @@ class PatchDiscriminationLoss(Loss):
         Returns:
             The computed loss value.
         """
+        # TODO: How will we deal with only training with some subset of modalities? If we use passed in modalities channels dict to define which modalities is one way but using class directly implies all used
         all_preds = torch.cat(
-            [self._flatten(getattr(predictions, d)) for d in predictions.data_fields],
+            [
+                self._flatten(getattr(predictions, d))
+                for d in predictions.data_fields
+                # TODO: This is a hack to exclude latlon
+                if not d.startswith("latlon")
+            ],
             dim=1,
         )
         all_masks = torch.cat(
             [
                 self._flatten(getattr(predictions, f"{d}_mask").unsqueeze(dim=-1))
                 for d in predictions.data_fields
+                # TODO: This is a hack to exclude latlon
+                if not d.startswith("latlon")
             ],
             dim=1,
         )[:, :, 0]
         all_targets = torch.cat(
-            [self._flatten(getattr(targets, d)) for d in predictions.data_fields], dim=1
+            [
+                self._flatten(getattr(targets, d))
+                for d in predictions.data_fields
+                # TODO: This is a hack to exclude latlon
+                if not d.startswith("latlon")
+            ],
+            dim=1,
         )
         pred = all_preds[all_masks == MaskValue.DECODER_ONLY.value].unsqueeze(dim=0)
         target = all_targets[all_masks == MaskValue.DECODER_ONLY.value].unsqueeze(dim=0)
@@ -156,4 +169,5 @@ class LossConfig(Config):
 
     def build(self) -> type[Loss]:
         """Build a Loss from the config."""
-        return LOSS_REGISTRY[self.loss_config["type"]](**self.loss_config)
+        loss_key = self.loss_config.pop("type")
+        return LOSS_REGISTRY.get_class(loss_key)(**self.loss_config)

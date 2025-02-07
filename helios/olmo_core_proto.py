@@ -10,9 +10,9 @@ from helios.data.dataset import HeliosDataset, collate_helios
 from helios.dataset.parse import parse_helios_dataset
 from helios.dataset.sample import image_tiles_to_samples
 from helios.latent_predictor import LatentMIMStyle
+from helios.nn.flexihelios import Encoder, Predictor
 from helios.train.callbacks.speed_monitor import HeliosSpeedMonitorCallback
-from helios.train.decoder import SimpleLatentDecoder
-from helios.train.encoder import PatchEncoder
+from helios.train.loss import LossConfig
 from helios.train.masking import MaskingConfig
 from helios.train.train_module import HeliosTrainModuleConfig
 from olmo_core.distributed.parallel import DataParallelConfig, DataParallelType
@@ -36,61 +36,15 @@ logger = logging.getLogger(__name__)
 ## OLD LOSS FUNCTION Keeping so pipeline runs until we have new integration
 
 
-def patch_disc_loss(
-    pred: torch.Tensor,
-    target: torch.Tensor,
-    tau: float = 0.2,
-    pred2unit: bool = True,
-) -> torch.Tensor:
-    """Patch discriminator loss.
-
-    Args:
-        pred: Predicted patches.
-        target: Target patches.
-        tau: Temperature parameter for the loss.
-        pred2unit: Whether to normalize the predicted patches to unit length.
-
-    Returns:
-        Loss tensor.
-    """
-    # Input shape: (B, N, C)
-    # Target shape: (B, N, C)
-    # B is batch size
-    # N is number of patches
-    # C is embedding dimension
-    #
-    B, N, C = pred.shape
-
-    if pred2unit:
-        pred_mu = pred.mean(1, keepdims=True)
-        pred_std = pred.std(1, keepdims=True)
-        pred = (pred - pred_mu) / (pred_std + 1e-4)
-
-    pred = torch.nn.functional.normalize(pred, p=2, dim=-1)
-    target = torch.nn.functional.normalize(target, p=2, dim=-1)
-
-    # n is batch dimension p is patch index from pred q is patch index from target, d is embedding dimension
-    scores = torch.einsum("npd,nqd->npq", pred, target) / tau
-
-    labels = torch.arange(N, dtype=torch.long, device=pred.device)[None].repeat(B, 1)
-    # Target is the index of the patch in the target so we are aiming to make the scores from the same patch similar and different patches dissimilar
-    loss = torch.nn.functional.cross_entropy(
-        scores.flatten(0, 1),
-        labels.flatten(0, 1),
-    ) * (tau * 2)
-
-    return loss
-
-
 if __name__ == "__main__":
     # Variables to be changed per user
-    workdir = UPath("/Users/henryh/Desktop/eai-repos/helios-repos/helios/workdir")
+    workdir = UPath("/tmp/helios/workdir")
     WANDB_USERNAME = "henryhzog"
     WANDB_PROJECT = "helios-test"
     # PER EXPERIMENT Variables
     GLOBAL_BATCH_SIZE = 8
     RANK_BATCH_SIZE = 4
-    MAX_DURATION = Duration.epochs(4)
+    MAX_DURATION = Duration.epochs(10)
     NUM_WORKERS = 0
     NUM_THREADS = 0
     METRICS_COLLECT_INTERVAL = 1
@@ -112,32 +66,65 @@ if __name__ == "__main__":
     logger.setLevel(logging.DEBUG)
 
     # Variable masking is not used
-    encoder = PatchEncoder(
-        in_channels=13,
-        embed_dim=64,
-        patch_size=16,
-        depth=1,
-        num_heads=1,
+    from helios.constants import S2_BANDS
+
+    # The indexes need to be compatible with pytorch indexing
+    modalities_to_channel_groups_dict = {
+        "s2": {
+            "S2_RGB": [S2_BANDS.index(b) for b in ["B02", "B03", "B04"]],
+            "S2_Red_Edge": [S2_BANDS.index(b) for b in ["B05", "B06", "B07"]],
+            "S2_NIR_10m": [S2_BANDS.index(b) for b in ["B08"]],
+            "S2_NIR_20m": [S2_BANDS.index(b) for b in ["B8A"]],
+            "S2_SWIR": [S2_BANDS.index(b) for b in ["B11", "B12"]],
+        },
+        # "latlon": {
+        #     "latlon": [0, 1],
+        # },
+    }
+    # Log the type of band indexes
+    # for modality, channel_groups in modalities_to_channel_groups_dict.items():
+    #     for group_name, band_indices in channel_groups.items():
+    #         logger.debug(
+    #             f"Band indices for {modality} {group_name}: type={type(band_indices[0])}, indices={band_indices}"
+    #         )
+    # exit(0)
+    encoder = Encoder(
+        embedding_size=16,
+        max_patch_size=8,
+        num_heads=2,
+        depth=2,
         mlp_ratio=1.0,
+        drop_path=0.1,
+        max_sequence_length=12,
+        base_patch_size=8,
+        use_channel_embs=True,
+        modalities_to_channel_groups_dict=modalities_to_channel_groups_dict,
     )
-    decoder = SimpleLatentDecoder(
-        embed_dim=64,
+    decoder = Predictor(
+        encoder_embedding_size=16,
+        decoder_embedding_size=16,
+        depth=2,
         mlp_ratio=1.0,
-        dropout=0.1,
+        num_heads=2,
+        max_sequence_length=12,
+        max_patch_size=8,
+        modalities_to_channel_groups_dict=modalities_to_channel_groups_dict,
     )
     model = LatentMIMStyle(encoder, decoder)
 
     device = get_default_device()
+    logger.info(f"Using device: {device}")
     # Ideally though this should be handled by the Model COnfig and build
     model = model.to(device)
     checkpointer_config = CheckpointerConfig(work_dir=workdir)
     optim_config = AdamWConfig()
     masking_config = MaskingConfig(strategy_config={"type": "random"})
+    loss_config = LossConfig(loss_config={"type": "patch_discrimination"})
     train_module_config = HeliosTrainModuleConfig(
         optim=optim_config,
         masking_config=masking_config,
+        loss_config=loss_config,
         rank_batch_size=RANK_BATCH_SIZE,
-        loss_fn=patch_disc_loss,
     )
     train_module = train_module_config.build(model=model)
     dp_process_group = train_module.dp_process_group

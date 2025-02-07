@@ -5,6 +5,8 @@ from copy import deepcopy
 
 import torch
 import torch.nn as nn
+from helios.nn.flexihelios import TokensAndMasks
+from helios.train.masking import MaskedHeliosSample
 
 
 class LatentMIMStyle(nn.Module):
@@ -24,8 +26,13 @@ class LatentMIMStyle(nn.Module):
         for p in self.target_encoder.parameters():
             p.requires_grad = False
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self,
+        x: MaskedHeliosSample,
+        patch_size: int,
+    ) -> TokensAndMasks:
         """Forward pass for the Latent MIM Style."""
-        latent = self.encoder(x)
-        decoded = self.decoder(latent)
+        # TODO: Input And outputs here are not consistent between encoder and decoder need a tokensandmaks++
+        latent = self.encoder(x, patch_size=patch_size)
+        decoded = self.decoder(latent, timestamps=x.timestamps, patch_size=patch_size)
         return decoded

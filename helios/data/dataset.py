@@ -261,7 +261,8 @@ class HeliosDataset(Dataset):
         image = load_image_for_sample(sample_s2, sample)
         s2_data = rearrange(image, "t c h w -> c t h w")
         dt = pd.to_datetime(timestamps)
-        time_data = np.array([dt.day, dt.month, dt.year])  # [3, T]
+        # Month is 0 indexed
+        time_data = np.array([dt.day, dt.month - 1, dt.year])  # [3, T]
         # Get coordinates at projection units, and then transform to latlon
         grid_resolution = sample.grid_tile.resolution_factor * BASE_RESOLUTION
         x, y = (
@@ -273,8 +274,9 @@ class HeliosDataset(Dataset):
         )
         lon, lat = transformer.transform(x, y)
         latlon_data = np.array([lat, lon])
+        # TODO: Add normalization and better way of doing dtype
         return HeliosSample(
-            s2=s2_data,
+            s2=(s2_data / 10000).astype(np.float32),  # make it a float
             latlon=latlon_data,
             timestamps=time_data,
         )

@@ -6,17 +6,14 @@ from typing import NamedTuple
 import torch
 import torch.nn.functional as F
 from einops import rearrange, repeat
-from torch import Tensor, nn
-
 from helios.constants import BASE_GSD
 from helios.nn.attention import Block
-from helios.nn.encodings import (
-    get_1d_sincos_pos_encoding,
-    get_2d_sincos_pos_encoding_with_resolution,
-    get_month_encoding_table,
-)
+from helios.nn.encodings import (get_1d_sincos_pos_encoding,
+                                 get_2d_sincos_pos_encoding_with_resolution,
+                                 get_month_encoding_table)
 from helios.nn.flexi_patch_embed import FlexiPatchEmbed
 from helios.train.masking import MaskedHeliosSample, MaskValue
+from torch import Tensor, nn
 
 logger = logging.getLogger(__name__)
 
@@ -117,8 +114,15 @@ class FlexiHeliosPatchEmbeddings(nn.Module):
         height = input_data.height
         width = input_data.width
         # perhaps return a dictionary instead of an un-named tuple
+        if height < patch_size or width < patch_size:
+            raise ValueError(
+                f"Patch size is larger than the input data height or width. Patch size: {patch_size} height: {height} width: {width}"
+            )
         new_height, new_width = height // patch_size, width // patch_size
-
+        logger.info(
+            f"Patchifying input data with patch size: {patch_size} height: {height} \
+            width: {width} new height: {new_height} new width: {new_width}"
+        )
         output_dict = {}
         # We will do channel groups for now
         for (
@@ -138,6 +142,12 @@ class FlexiHeliosPatchEmbeddings(nn.Module):
 
                 if self.is_any_data_seen_by_encoder(modality_mask):
                     modality_data = getattr(input_data, modality)
+                    logger.info(
+                        f"type modality dataf for {modality} {modality_data.dtype}"
+                    )
+                    logger.info(
+                        f"Channel band indices for {modality} {channel_group}: type={type(channel_band_idxs[0])}, indices={channel_band_idxs}"
+                    )
                     modality_data = modality_data[:, :, :, :, channel_band_idxs]
                     patchified_data = self.per_modality_embeddings[modality][
                         channel_group
@@ -210,16 +220,18 @@ class FlexiHeliosCompositeEncodings(nn.Module):
         else:
             args = {"requires_grad": False}
 
-        self.per_modality_channel_embeddings = {
-            modality: nn.Parameter(
-                torch.zeros(
-                    len(channel_groups_dict.keys()),
-                    self.embedding_dim_per_embedding_type,
-                ),
-                **args,
-            )
-            for modality, channel_groups_dict in self.modalities_to_channel_groups_dict.items()
-        }
+        self.per_modality_channel_embeddings = nn.ParameterDict(
+            {
+                modality: nn.Parameter(
+                    torch.zeros(
+                        len(channel_groups_dict.keys()),
+                        self.embedding_dim_per_embedding_type,
+                    ),
+                    **args,
+                )
+                for modality, channel_groups_dict in self.modalities_to_channel_groups_dict.items()
+            }
+        )
 
         self.apply(self._init_weights)
 
@@ -291,6 +303,7 @@ class FlexiHeliosCompositeEncodings(nn.Module):
             gsd_ratio = self.calculate_gsd_ratio(input_res, patch_size)
 
             current_device = modality_tokens.device
+
             spatial_embed = get_2d_sincos_pos_encoding_with_resolution(
                 grid_size=h,
                 res=torch.ones(b, device=current_device) * gsd_ratio,
@@ -306,6 +319,12 @@ class FlexiHeliosCompositeEncodings(nn.Module):
             spatial_embed = repeat(
                 spatial_embed, "b h w  d -> b h w t c_g d", c_g=c_g, t=t
             )
+            logger.info(
+                f"modality_channel_embed device: {modality_channel_embed.device}"
+            )
+            logger.info(f"modality_pos_embed device: {modality_pos_embed.device}")
+            logger.info(f"modality_month_embed device: {modality_month_embed.device}")
+            logger.info(f"spatial_embed device: {spatial_embed.device}")
             modality_embed = torch.cat(
                 [
                     modality_channel_embed,
@@ -977,7 +996,7 @@ class Predictor(FlexiHeliosBase):
         x: TokensAndMasks,
         timestamps: Tensor,
         patch_size: int,
-        input_res: int,
+        input_res: int = BASE_GSD,
     ) -> TokensAndMasks:
         """Generate predictions from encoded token representations.
 
@@ -1053,7 +1072,6 @@ class Predictor(FlexiHeliosBase):
 
 if __name__ == "__main__":
     import rasterio
-
     from helios.constants import S2_BANDS
 
     # Each band set is stored at different resolutions for monthly so that has to happen for us to load in

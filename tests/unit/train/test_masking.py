@@ -1,7 +1,6 @@
 """Test masking."""
 
 import torch
-
 from helios.data.dataset import HeliosSample
 from helios.train.masking import MaskValue, RandomMaskingStrategy
 
@@ -30,7 +29,7 @@ def test_random_masking() -> None:
         encode_ratio=encode_ratio,
         decode_ratio=decode_ratio,
     )
-
+    # TODO: Add assert that checks input output shapes
     # check that each modality has the right masking ratio
     for modality_name in masked_sample._fields:
         if modality_name.endswith("mask"):
