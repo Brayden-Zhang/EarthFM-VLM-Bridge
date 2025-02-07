@@ -158,7 +158,7 @@ class HeliosDataLoader(DataLoaderBase):
             )
         return np.memmap(self._global_indices_file, mode="r", dtype=np.uint32)
 
-    def _iter_batches(self) -> Iterable[dict[str, Any]]:
+    def _iter_batches(self) -> Iterable[HeliosSample]:
         """Iterate over the dataset in batches."""
         return torch.utils.data.DataLoader(
             _IterableDatasetWrapper(self),
