@@ -53,8 +53,8 @@ class HeliosDataLoader(DataLoaderBase):
             dp_rank=dp_rank,
             fs_local_rank=fs_local_rank,
         )
-        assert isinstance(self.dataset, HeliosDataset)  # type: ignore
         self.dataset = dataset
+        assert isinstance(self.dataset, HeliosDataset)  # type: ignore
         self.collator = collator
         self.seed = seed
         self.shuffle = shuffle
@@ -62,6 +62,8 @@ class HeliosDataLoader(DataLoaderBase):
         self.num_workers = num_workers
         self.prefetch_factor = prefetch_factor
         self.target_device_type = target_device_type
+
+        self._global_indices: np.ndarray | None = None
 
     @property
     def total_batches(self) -> int:
@@ -119,11 +121,13 @@ class HeliosDataLoader(DataLoaderBase):
                     )
                 else:
                     global_indices = self._build_global_indices()
-                    assert len(global_indices) < np.iinfo(np.unit32).max
+                    assert (
+                        len(global_indices) < np.iinfo(np.int32).max
+                    )  # Note: OLMo uses uint32
                     with memmap_to_write(
                         self._global_indices_file,
                         shape=global_indices.shape,
-                        dtype=np.uint32,
+                        dtype=np.int32,
                     ) as global_indices_mmap:
                         global_indices_mmap[:] = global_indices
                     logger.info(
@@ -137,10 +141,10 @@ class HeliosDataLoader(DataLoaderBase):
         """Reshuffle the data."""
         del kwargs
         if epoch is None:
-            epoch = 1 if self.epoch is None else self.epoch + 1  # type: ignore
+            epoch = 1 if self._epoch is None else self._epoch + 1  # type: ignore
         if epoch <= 0:
             raise ValueError(f"'epoch' must be at least 1, got {epoch}")
-        self.epoch = epoch
+        self._epoch = epoch
         # Since epoch has been updated, we need to create new global indices
         self.build_and_save_global_indices(in_memory=in_memory)
 
@@ -168,7 +172,7 @@ class HeliosDataLoader(DataLoaderBase):
         )
 
     @property
-    def worker_info(self) -> torch.utils.data.worker.WorkerInfo | None:
+    def worker_info(self):  # type: ignore
         """Get worker info."""
         return torch.utils.data.get_worker_info()
 
@@ -206,7 +210,7 @@ class HeliosDataLoader(DataLoaderBase):
             "dataset_fingerprint": self.dataset.fingerprint,
             "batches_processed": self.batches_processed,  # type: ignore
             "seed": self.seed,
-            "epoch": self.epoch,
+            "epoch": self._epoch,
         }
 
     def load_state_dict(self, state_dict: dict[str, Any]) -> None:
@@ -232,7 +236,7 @@ class HeliosDataLoader(DataLoaderBase):
             self.seed = state_dict["seed"]
 
         self.batches_processed = state_dict["batches_processed"]
-        self.epoch = state_dict["epoch"] or self.epoch  # type: ignore
+        self._epoch = state_dict["epoch"] or self._epoch  # type: ignore
 
     def _format_fname_from_fields(self, prefix: str, **fields: Any) -> str:
         parts = [prefix]
@@ -298,7 +302,7 @@ class _IterableDatasetWrapper(torch.utils.data.IterableDataset[dict[str, Any]]):
         return self.data_loader.dataset
 
     @property
-    def worker_info(self) -> torch.utils.data.worker.WorkerInfo | None:
+    def worker_info(self):  # type: ignore
         """Get worker info."""
         return torch.utils.data.get_worker_info()
 

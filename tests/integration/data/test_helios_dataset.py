@@ -40,13 +40,13 @@ def create_geotiff(
             dst.write(data[band - 1], band)
 
 
-def test_helios_dataset(tmp_path: Path) -> None:
-    """Test the HeliosDataset class."""
+def prepare_dataset(data_path: Path) -> HeliosDataset:
+    """Prepare the dataset."""
     # Create three S2 tiles corresponding to its bandsets & resolutions
     crs = "EPSG:32610"
-    create_geotiff(tmp_path / "s2_10m.tif", 256, 256, 10, crs, 4 * 12)
-    create_geotiff(tmp_path / "s2_20m.tif", 128, 128, 20, crs, 6 * 12)
-    create_geotiff(tmp_path / "s2_40m.tif", 64, 64, 40, crs, 3 * 12)
+    create_geotiff(data_path / "s2_10m.tif", 256, 256, 10, crs, 4 * 12)
+    create_geotiff(data_path / "s2_20m.tif", 128, 128, 20, crs, 6 * 12)
+    create_geotiff(data_path / "s2_40m.tif", 64, 64, 40, crs, 3 * 12)
 
     images = []
     # Create a list of ModalityImage objects for the year 2020
@@ -69,19 +69,24 @@ def test_helios_dataset(tmp_path: Path) -> None:
                     images=images,
                     center_time=datetime(2020, 6, 30),
                     band_sets={
-                        BandSet(["B02", "B03", "B04", "B08"], 16): tmp_path
+                        BandSet(["B02", "B03", "B04", "B08"], 16): data_path
                         / "s2_10m.tif",
                         BandSet(
                             ["B05", "B06", "B07", "B8A", "B11", "B12"], 32
-                        ): tmp_path / "s2_20m.tif",
-                        BandSet(["B01", "B09", "B10"], 64): tmp_path / "s2_40m.tif",
+                        ): data_path / "s2_20m.tif",
+                        BandSet(["B01", "B09", "B10"], 64): data_path / "s2_40m.tif",
                     },
                 )
             },
         )
     ]
+    dataset = HeliosDataset(*samples, path=data_path)
+    return dataset
 
-    dataset = HeliosDataset(*samples, path=tmp_path)
+
+def test_helios_dataset(tmp_path: Path) -> None:
+    """Test the HeliosDataset class."""
+    dataset = prepare_dataset(tmp_path)
     dataset.prepare()
 
     assert len(dataset) == 1
