@@ -15,8 +15,9 @@ from helios.types import ArrayTensor
 class MaskValue(Enum):
     """Masks can take 3 possible values.
 
-    This enum records those values and describes
-    what they represent.
+    ONLINE_ENCODER: The token is seen by the online encoder
+    TARGET_ENCODER_ONLY: The token is seen by the target encoder only
+    DECODER_ONLY: The token is seen by the decoder only
     """
 
     ONLINE_ENCODER = 0
@@ -36,16 +37,18 @@ class MaskedHeliosSample(NamedTuple):
     Args:
         s2: ArrayTensor  # [B, len(S2_bands), T H, W]
         s2_mask: ArrayTensor
-        s2_latlon: ArrayTensor  # [B, 2]
-        s2_latlon_mask: ArrayTensor
-        s2_timestamps: ArrayTensor  # [B, D=3, T], where D=[day, month, year]
+        latlon: ArrayTensor  # [B, 2]
+        latlon_mask: ArrayTensor
+        timestamps: ArrayTensor  # [B, D=3, T], where D=[day, month, year]
     """
 
     s2: ArrayTensor  # [B, len(S2_bands), T H, W]
     s2_mask: ArrayTensor
     latlon: ArrayTensor  # [B, 2]
     latlon_mask: ArrayTensor
-    timestamps: ArrayTensor  # [B, D=3, T], where D=[day, month, year]
+    timestamps: (
+        ArrayTensor  # [B, D=3, T], where D=[day, month, year] (months are zero indexed)
+    )
 
     def as_dict(self) -> dict[str, Any]:
         """Convert the namedtuple to a dictionary.
@@ -58,6 +61,21 @@ class MaskedHeliosSample(NamedTuple):
             val = getattr(self, field)
             return_dict[field] = val
         return return_dict
+
+    @property
+    def height(self) -> int:
+        """Get the height of the data."""
+        return self.s2.shape[2]
+
+    @property
+    def width(self) -> int:
+        """Get the width of the data."""
+        return self.s2.shape[3]
+
+    @staticmethod
+    def get_masked_modality_name(modality: str) -> str:
+        """Get the masked modality name."""
+        return f"{modality}_mask"
 
 
 class MaskingStrategy(ABC):
