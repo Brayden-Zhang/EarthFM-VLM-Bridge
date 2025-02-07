@@ -1,7 +1,5 @@
 """Constants shared across the helios package."""
 
-from typing import Literal
-
 NAIP_BANDS = ["R", "G", "B", "IR"]
 
 S2_BANDS = [
@@ -25,13 +23,5 @@ TIMESTAMPS = ["day", "month", "year"]
 
 WORLDCOVER_BANDS = ["B1"]
 
-VARIATION_TYPES = Literal[
-    "space_time_varying", "time_varying", "space_varying", "static"
-]
 
-DATA_SOURCE_TO_VARIATION_TYPE = {
-    "sentinel2": "space_time_varying",
-    "worldcover": "space_varying",
-    "naip": "space_varying",
-    "openstreetmap": "space_varying",  # How do we want to use open Streetmap
-}
+BASE_GSD = 10  # What unit is this in?
