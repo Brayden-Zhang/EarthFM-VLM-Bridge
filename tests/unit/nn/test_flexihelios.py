@@ -8,6 +8,7 @@ from helios.nn.flexihelios import Encoder, FlexiHeliosBase, Predictor, TokensAnd
 from helios.train.masking import MaskValue
 
 
+# TODO: Add tests for when the inputs are completely masked or different dims or something
 class TestFlexiHeliosBase:
     """Unit tests for the FlexiHeliosBase class."""
 

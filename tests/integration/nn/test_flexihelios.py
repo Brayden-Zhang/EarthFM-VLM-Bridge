@@ -81,7 +81,10 @@ class TestEncoder:
         Returns:
             Encoder: Test encoder instance with small test config
         """
-        modalities_dict = {"s2": {"rgb": [0, 1, 2], "nir": [3]}}
+        modalities_dict = {
+            "s2": {"rgb": [0, 1, 2], "nir": [3]},
+            "latlon": {"pos": [0, 1]},
+        }
         return Encoder(
             embedding_size=16,
             max_patch_size=8,
@@ -101,14 +104,19 @@ class TestEncoder:
         Args:
             encoder: Test encoder instance
         """
-        s2_tokens = torch.randn(1, 2, 2, 3, 2, 16)
-        s2_mask = torch.zeros(1, 2, 2, 3, 2, dtype=torch.long)
+        num_latlon_channels = len(
+            encoder.modalities_to_channel_groups_dict["latlon"].keys()
+        )
+        num_s2_channels = len(encoder.modalities_to_channel_groups_dict["s2"].keys())
+        B, H, W, T, C, D = 1, 2, 2, 3, num_s2_channels, 16
+        s2_tokens = torch.randn(B, H, W, T, C, D)
+        s2_mask = torch.zeros(B, H, W, T, C, dtype=torch.long)
 
         # Mask the first and second "positions" in this 2x2 grid.
         s2_mask[0, 0, 0, 0] = 1  # mask first token
         s2_mask[0, 0, 1, 0] = 1  # mask second token
-        latlon = torch.randn(1, 2, 1, 1, 2, 2)
-        latlon_mask = torch.randint(0, 2, (1, 2, 1, 1, 2)).float()
+        latlon = torch.randn(B, num_latlon_channels, D)
+        latlon_mask = torch.randint(0, 2, (B, num_latlon_channels), dtype=torch.float32)
 
         # Construct the TokensAndMasks namedtuple with mock modality data + mask.
         x = TokensAndMasks(
@@ -158,7 +166,7 @@ class TestEncoder:
         s2 = torch.randn(B, H, W, T, C)
         s2_mask = torch.zeros(B, H, W, T, num_channel_groups, dtype=torch.long)
         latlon = torch.randn(B, 2)
-        latlon_mask = torch.ones(B, 2, dtype=torch.float32)
+        latlon_mask = torch.randint(0, 2, (B, 2), dtype=torch.float32)
         days = torch.randint(0, 25, (B, 1, T), dtype=torch.long)
         months = torch.randint(0, 12, (B, 1, T), dtype=torch.long)
         years = torch.randint(2018, 2020, (B, 1, T), dtype=torch.long)
@@ -195,6 +203,18 @@ class TestEncoder:
         assert (
             output.s2_mask.shape == expected_mask_shape
         ), f"Expected output s2_mask shape {expected_mask_shape}, got {output.s2_mask.shape}"
+        assert output.latlon.shape == (
+            B,
+            1,
+            expected_embedding_size,
+        ), f"Expected output latlon shape {latlon.shape}, got {output.latlon.shape}"
+        assert (
+            output.latlon_mask.shape
+            == (
+                B,
+                1,
+            )
+        ), f"Expected output latlon_mask shape {latlon_mask.shape}, got {output.latlon_mask.shape}"
 
     def test_forward_exit_config_exists(self, encoder: Encoder) -> None:
         """Test full forward pass with a token exit configuration.
@@ -210,7 +230,7 @@ class TestEncoder:
         s2 = torch.randn(B, H, W, T, C)
         s2_mask = torch.zeros(B, H, W, T, num_channel_groups, dtype=torch.long)
         latlon = torch.randn(B, 2)
-        latlon_mask = torch.ones(B, 2, dtype=torch.float32)
+        latlon_mask = torch.zeros((B, 2), dtype=torch.float32)
         # Generate valid timestamps with month in [1, 12]
         days = torch.randint(0, 25, (B, 1, T), dtype=torch.long)
         months = torch.randint(0, 12, (B, 1, T), dtype=torch.long)
@@ -222,9 +242,7 @@ class TestEncoder:
         patch_size = 4
         input_res = 1
 
-        # Token exit configuration: for our modality "s2" with two channel groups "rgb" and "nir",
-        # we set "rgb" tokens to exit after block 1 and "nir" tokens to exit at block 0.
-        token_exit_cfg = {"rgb": 1, "nir": 0}
+        token_exit_cfg = {"rgb": 1, "nir": 0, "pos": 1}
         exit_after_n_layers = 1
 
         output = encoder.forward(
@@ -254,6 +272,65 @@ class TestEncoder:
         assert (
             output.s2_mask.shape == expected_mask_shape
         ), f"Expected output s2_mask shape {expected_mask_shape}, got {output.s2_mask.shape}"
+
+    def test_entire_modality_masked(self, encoder: Encoder) -> None:
+        """Test that when an entire modality is masked."""
+        B, H, W, T, C = 1, 8, 8, 4, 4  # 4 channels: first 3 for 'rgb', last for 'nir'
+        num_channel_groups = 2  # "rgb" and "nir"
+        s2 = torch.randn(B, H, W, T, C)
+        latlon = torch.randn(B, 2)
+        # Mask the entirety of each modality
+        s2_mask = torch.ones(B, H, W, T, num_channel_groups, dtype=torch.long)
+        # Make 1 token in 1 channel group in S2 visible
+        s2_mask[0, 0, 0, 0, 0] = 0
+        latlon_mask = torch.ones(B, 2, dtype=torch.float32)
+        days = torch.randint(0, 25, (B, 1, T), dtype=torch.long)
+        months = torch.randint(0, 12, (B, 1, T), dtype=torch.long)
+        years = torch.randint(2018, 2020, (B, 1, T), dtype=torch.long)
+        timestamps = torch.cat([days, months, years], dim=1)  # Shape: (B, 3, T)
+
+        x = MaskedHeliosSample(s2, s2_mask, latlon, latlon_mask, timestamps)
+
+        patch_size = 4
+        input_res = 1
+
+        output = encoder.forward(
+            x, patch_size, input_res, exit_after_n_layers=None, token_exit_cfg=None
+        )
+
+        # After patchification the spatial dimensions reduce.
+        expected_H = H // patch_size
+        expected_W = W // patch_size
+        expected_embedding_size = encoder.embedding_size
+        # Expected output shape [B, new_H, new_W, T, num_channel_groups, embedding_size]
+        expected_shape = (
+            B,
+            expected_H,
+            expected_W,
+            T,
+            num_channel_groups,
+            expected_embedding_size,
+        )
+        assert (
+            output.s2.shape == expected_shape
+        ), f"Expected output s2 shape {expected_shape}, got {output.s2.shape}"
+
+        expected_mask_shape = (B, expected_H, expected_W, T, num_channel_groups)
+        assert (
+            output.s2_mask.shape == expected_mask_shape
+        ), f"Expected output s2_mask shape {expected_mask_shape}, got {output.s2_mask.shape}"
+        assert output.latlon.shape == (
+            B,
+            1,
+            expected_embedding_size,
+        ), f"Expected output latlon shape {latlon.shape}, got {output.latlon.shape}"
+        assert (
+            output.latlon_mask.shape
+            == (
+                B,
+                1,
+            )
+        ), f"Expected output latlon_mask shape {latlon_mask.shape}, got {output.latlon_mask.shape}"
 
 
 class TestPredictor:

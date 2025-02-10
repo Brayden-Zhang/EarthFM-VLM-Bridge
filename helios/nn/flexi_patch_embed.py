@@ -22,7 +22,7 @@ class FlexiPatchEmbed(nn.Module):
         self,
         patch_size: int | tuple[int, int],
         in_chans: int = 3,
-        embed_dim: int = 128,
+        embedding_size: int = 128,
         norm_layer: nn.Module | None = None,
         bias: bool = True,
         patch_size_seq: Sequence[int] = (1, 2, 3, 4, 5, 6),
@@ -37,7 +37,7 @@ class FlexiPatchEmbed(nn.Module):
         Args:
             patch_size: Base patch size. i.e the size of the parameter buffer
             in_chans: Number of input image channels
-            embed_dim: Network embedding dimension size
+            embedding_size: Network embedding dimension size
             norm_layer: Optional normalization layer
             bias: Whether to use bias in convolution
             patch_size_seq: List of patch sizes to randomly sample from
@@ -46,16 +46,18 @@ class FlexiPatchEmbed(nn.Module):
         """
         super().__init__()
 
+        self.embedding_size = embedding_size
+
         self.patch_size = self.to_2tuple(patch_size)
 
         self.proj = nn.Conv2d(
             in_chans,
-            embed_dim,
-            kernel_size=self.patch_size,
-            stride=self.patch_size,
+            embedding_size,
+            kernel_size=patch_size,
+            stride=patch_size,
             bias=bias,
         )
-        self.norm = norm_layer(embed_dim) if norm_layer else nn.Identity()
+        self.norm = norm_layer(embedding_size) if norm_layer else nn.Identity()
 
         # Flexi specific attributes
         self.interpolation = interpolation

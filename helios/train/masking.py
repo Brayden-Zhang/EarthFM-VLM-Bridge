@@ -80,6 +80,11 @@ class MaskedHeliosSample(NamedTuple):
         """Get the width of the data."""
         return self.s2.shape[2]
 
+    @property
+    def time(self) -> int:
+        """Get the number of time steps in the data."""
+        return self.timestamps.shape[2]
+
     @staticmethod
     def get_masked_modality_name(modality: str) -> str:
         """Get the masked modality name."""
