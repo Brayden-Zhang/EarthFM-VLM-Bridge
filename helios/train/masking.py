@@ -86,18 +86,35 @@ class MaskedHeliosSample(NamedTuple):
         return f"{modality}_mask"
 
     @classmethod
-    def from_heliossample(cls, sample: HeliosSample) -> "MaskedHeliosSample":
+    def from_heliossample(
+        cls,
+        sample: HeliosSample,
+        modalities_to_channel_groups_dict: dict[str, dict[str, list[int]]],
+    ) -> "MaskedHeliosSample":
         """Transforms a HelioSample into a MaskedHeliosSample.
 
         This function assumes modalities are uniformly missing.
         """
         masked_sample_dict = {}
         for key, t in sample.as_dict(ignore_nones=False).items():
+            # Todo how do we handle timestamps
             if t is None:
                 masked_sample_dict[key] = torch.empty(sample.shape(key))
+                masked_sample_dict[f"{key}_mask"] = (
+                    torch.ones(
+                        sample.shape(key, len(modalities_to_channel_groups_dict[key]))
+                    )
+                    * MaskValue.MISSING.value
+                )
             else:
                 masked_sample_dict[key] = t
-        # TODO: masks
+                masked_sample_dict[f"{key}_mask"] = (
+                    torch.ones(
+                        sample.shape(key, len(modalities_to_channel_groups_dict[key]))
+                    )
+                    * MaskValue.ONLINE_ENCODER.value
+                )
+
         return MaskedHeliosSample(**masked_sample_dict)
 
 

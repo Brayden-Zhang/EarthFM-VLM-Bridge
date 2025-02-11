@@ -47,7 +47,7 @@ class HeliosSample(NamedTuple):
     latlon: ArrayTensor | None = None  # [B, 2]
     timestamps: ArrayTensor | None = None  # [B, D=3, T], where D=[day, month, year]
 
-    def shape(self, attribute: str) -> Sequence[int]:
+    def shape(self, attribute: str, num_channels: int | None = None) -> Sequence[int]:
         """Returns the expected shape of an attribute.
 
         This is useful if you want to know what the shape of a
@@ -60,13 +60,25 @@ class HeliosSample(NamedTuple):
         attribute_to_shape = {
             "s2": b
             + [
-                len(self.attribute_to_bands()["s2"]),
+                len(self.attribute_to_bands()["s2"])
+                if num_channels is None
+                else num_channels,
                 self.t,
                 self.h,
                 self.w,
             ],
-            "latlon": b + [len(self.attribute_to_bands()["latlon"])],
-            "timestamps": b + [len(self.attribute_to_bands()["timestamps"])],
+            "latlon": b
+            + [
+                len(self.attribute_to_bands()["latlon"])
+                if num_channels is None
+                else num_channels
+            ],
+            "timestamps": b
+            + [
+                len(self.attribute_to_bands()["timestamps"])
+                if num_channels is None
+                else num_channels
+            ],
         }
 
         return attribute_to_shape[attribute]
