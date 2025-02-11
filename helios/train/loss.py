@@ -52,18 +52,7 @@ class PatchDiscriminationLoss(Loss):
 
     @staticmethod
     def _flatten(x: Tensor) -> Tensor:
-        if x.dim() == 6:
-            # (B, C_G, T, P_H, P_W, D)
-            return rearrange(x, "b c t h w d -> b (h w t c) d")
-        elif x.dim() == 5:
-            # (B, C_G, P_H, P_W, D)
-            return rearrange(x, "b c h w d -> b (h w c) d")
-        elif x.dim() == 4:
-            # (B, C_G, T, D)
-            return rearrange(x, "b c t d -> b (t c) d")
-        elif x.dim() == 3:
-            # (B, C_G, D)
-            return x
+        return rearrange(x, "b ... d -> b (...) d")
 
     @staticmethod
     def _expand_and_reciprocate(t: Tensor) -> Tensor:
@@ -90,30 +79,18 @@ class PatchDiscriminationLoss(Loss):
         """
         # TODO: How will we deal with only training with some subset of modalities? If we use passed in modalities channels dict to define which modalities is one way but using class directly implies all used
         all_preds = torch.cat(
-            [
-                self._flatten(getattr(predictions, d))
-                for d in predictions.data_fields
-                # TODO: This is a hack to exclude latlon
-                if not d.startswith("latlon")
-            ],
+            [self._flatten(getattr(predictions, d)) for d in predictions.data_fields],
             dim=1,
         )
         all_masks = torch.cat(
             [
                 self._flatten(getattr(predictions, f"{d}_mask").unsqueeze(dim=-1))
                 for d in predictions.data_fields
-                # TODO: This is a hack to exclude latlon
-                if not d.startswith("latlon")
             ],
             dim=1,
         )[:, :, 0]
         all_targets = torch.cat(
-            [
-                self._flatten(getattr(targets, d))
-                for d in predictions.data_fields
-                # TODO: This is a hack to exclude latlon
-                if not d.startswith("latlon")
-            ],
+            [self._flatten(getattr(targets, d)) for d in predictions.data_fields],
             dim=1,
         )
         pred = all_preds[all_masks == MaskValue.DECODER_ONLY.value].unsqueeze(dim=0)

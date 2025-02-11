@@ -8,20 +8,22 @@ from helios.nn.flexihelios import Encoder, FlexiHeliosBase, Predictor, TokensAnd
 from helios.train.masking import MaskValue
 
 
+# TODO: Add tests for when the inputs are completely masked or different dims or something
 class TestFlexiHeliosBase:
     """Unit tests for the FlexiHeliosBase class."""
 
     @pytest.fixture
-    def flexi_helios_base(self) -> FlexiHeliosBase:
+    def flexi_helios_base(
+        self, modalities_to_channel_groups_dict: dict[str, dict[str, list[int]]]
+    ) -> FlexiHeliosBase:
         """Create encoder fixture for testing."""
-        modalities_dict = dict({"s2": dict({"rgb": [0, 1, 2], "nir": [3]})})
         flexi_helios_base = FlexiHeliosBase(
             embedding_size=8,
             num_heads=2,
             mlp_ratio=4.0,
             depth=2,
             drop_path=0.1,
-            modalities_to_channel_groups_dict=modalities_dict,
+            modalities_to_channel_groups_dict=modalities_to_channel_groups_dict,
             max_sequence_length=12,
             base_patch_size=4,
             use_channel_embs=True,
@@ -35,14 +37,14 @@ class TestFlexiHeliosBase:
         B, D = 2, 4
         s2_tokens = torch.randn(B, 2, 1, 1, 2, D)
         s2_mask = torch.randint(0, 2, (B, 2, 1, 1, 2)).float()
-        latlon = torch.randn(B, 2, 1, 1, 2, 2)
-        latlon_mask = torch.randint(0, 2, (B, 2, 1, 1, 2)).float()
+        latlon = torch.randn(B, 1, D)
+        latlon_mask = torch.randint(0, 2, (B, 1)).float()
         x = TokensAndMasks(
             s2=s2_tokens, s2_mask=s2_mask, latlon=latlon, latlon_mask=latlon_mask
         )
         tokens, masks = flexi_helios_base.collapse_and_combine_hwtc(x)
-        assert tokens.shape == (B, 4, D)
-        assert masks.shape == (B, 4)
+        assert tokens.shape == (B, 5, D)
+        assert masks.shape == (B, 5)
 
     def test_split_and_expand_per_modality(self) -> None:
         """Test splitting combined tensor back into per-modality tensors."""
