@@ -23,5 +23,11 @@ TIMESTAMPS = ["day", "month", "year"]
 
 WORLDCOVER_BANDS = ["B1"]
 
+MODALITY_NAME_TO_BANDS = {
+    "sentinel2": S2_BANDS,
+    "latlon": LATLON_BANDS,
+    "timestamps": TIMESTAMPS,
+}
+
 
 BASE_GSD = 10  # What unit is this in?

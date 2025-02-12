@@ -6,6 +6,8 @@ Warning: this is only developed for raster data currently.
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from helios.constants import MODALITY_NAME_TO_BANDS
+
 # The highest resolution that we are working at.
 # Everything else is a factor (which is a power of 2) coarser than this resolution.
 BASE_RESOLUTION = 0.625
@@ -80,6 +82,17 @@ class ModalitySpec:
     def get_tile_resolution(self) -> float:
         """Compute the tile resolution."""
         return get_resolution(self.tile_resolution_factor)
+
+    def bandsets_as_indices(self) -> list[list[int]]:
+        """Return the band sets as indices."""
+        modality_bands = MODALITY_NAME_TO_BANDS[self.name]
+
+        band_specs_as_indices = []
+        for band_set in self.band_sets:
+            band_specs_as_indices.append(
+                [modality_bands.index(b_name) for b_name in band_set.bands]
+            )
+        return band_specs_as_indices
 
 
 # Modalities supported by helios
