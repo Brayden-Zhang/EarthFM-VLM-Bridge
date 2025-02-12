@@ -4,7 +4,7 @@ import logging
 
 import torch
 
-from helios.data.constants import Modality
+from helios.data.constants import Modality, MODALITIES
 from helios.data.dataset import HeliosSample
 from helios.train.masking import MaskValue, RandomMaskingStrategy
 
@@ -19,8 +19,8 @@ def test_random_masking() -> None:
     months = torch.randint(1, 13, (b, 1, t), dtype=torch.long)
     years = torch.randint(2018, 2020, (b, 1, t), dtype=torch.long)
     timestamps = torch.cat([days, months, years], dim=1)  # Shape: (B, 3, T)
-    sentinel2_num_channels = Modality.get_modality_from_name("sentinel2").num_channels
-    latlon_num_channels = Modality.get_modality_from_name("latlon").num_channels
+    sentinel2_num_channels = len(MODALITIES.get("sentinel2").get_band_names())
+    latlon_num_channels = len(MODALITIES.get("latlon").get_band_names())
     batch = HeliosSample(
         sentinel2=torch.ones((b, h, w, t, sentinel2_num_channels)),
         latlon=torch.ones((b, latlon_num_channels)),

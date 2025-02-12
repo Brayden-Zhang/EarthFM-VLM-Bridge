@@ -79,6 +79,14 @@ class HeliosSample(NamedTuple):
             else:
                 return_shape += [len(MODALITIES.get(attribute).band_sets)]
             return return_shape
+    
+    @staticmethod
+    def num_bands(attribute: str) -> int:
+        """Get the number of bands for a given attribute."""
+        if attribute == "timestamps":
+            return len(TIMESTAMPS)
+        else:
+            return len(MODALITIES.get(attribute).get_band_names())
 
     def as_dict(self, ignore_nones: bool = True) -> dict[str, ArrayTensor | None]:
         """Convert the namedtuple to a dictionary.
