@@ -83,7 +83,7 @@ class MaskedHeliosSample(NamedTuple):
     @property
     def time(self) -> int:
         """Get the number of time steps in the data."""
-        return self.timestamps.shape[2]
+        return self.timestamps.shape[1]
 
     @staticmethod
     def get_masked_modality_name(modality: str) -> str:
