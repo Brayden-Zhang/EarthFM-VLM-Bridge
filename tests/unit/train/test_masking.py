@@ -11,7 +11,6 @@ from helios.train.masking import MaskValue, RandomMaskingStrategy
 logger = logging.getLogger(__name__)
 
 
-# Should masking return bandsets or full channels? SHould space time masks be prepatchified
 def test_random_masking() -> None:
     """Test random masking ratios."""
     b, h, w, t = 100, 16, 16, 8
