@@ -269,13 +269,11 @@ class GeobenchDataset(Dataset):
 
     @staticmethod
     def collate_fn(
-        batch: Sequence[tuple[HeliosSample, torch.Tensor]],
-    ) -> tuple[HeliosSample, torch.Tensor]:
+        batch: Sequence[tuple[MaskedHeliosSample, torch.Tensor]],
+    ) -> tuple[MaskedHeliosSample, torch.Tensor]:
         """Collate function for DataLoaders."""
         samples, targets = zip(*batch)
         # we assume that the same values are consistently None
-        collated_sample = default_collate(
-            [s.as_dict(ignore_nones=True) for s in samples]
-        )
+        collated_sample = default_collate([s.as_dict() for s in samples])
         collated_target = default_collate([t for t in targets])
-        return HeliosSample(**collated_sample), collated_target
+        return MaskedHeliosSample(**collated_sample), collated_target

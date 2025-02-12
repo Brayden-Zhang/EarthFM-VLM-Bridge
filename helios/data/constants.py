@@ -201,11 +201,7 @@ class Modality:
     @classmethod
     def get_all_modalities(cls) -> list[ModalitySpec]:
         """Get all modalities."""
-        return [
-            cls.S1,
-            cls.S2,
-            cls.NAIP,
-        ]
+        return [cls.S1, cls.S2, cls.NAIP, cls.LATLONS]
 
     @classmethod
     def get_modality_from_name(cls, name: str) -> ModalitySpec:

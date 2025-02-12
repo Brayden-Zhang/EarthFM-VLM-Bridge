@@ -24,8 +24,8 @@ def test_geobench_dataset(geobench_dir: Path) -> None:
         partition="0.01x_train",
     )
     sample, _ = d[0]
-    assert isinstance(sample.s2, torch.Tensor)
-    assert sample.s2.shape == (64, 64, 1, 13)
+    assert isinstance(sample.sentinel2, torch.Tensor)
+    assert sample.sentinel2.shape == (64, 64, 1, 13)
 
 
 def test_geobench_dataset_and_dataloader(geobench_dir: Path) -> None:
@@ -42,5 +42,5 @@ def test_geobench_dataset_and_dataloader(geobench_dir: Path) -> None:
         shuffle=False,
     )
     sample, _ = next(iter(d))
-    assert isinstance(sample.s2, torch.Tensor)
-    assert sample.s2.shape == (1, 64, 64, 1, 13)
+    assert isinstance(sample.sentinel2, torch.Tensor)
+    assert sample.sentinel2.shape == (1, 64, 64, 1, 13)
