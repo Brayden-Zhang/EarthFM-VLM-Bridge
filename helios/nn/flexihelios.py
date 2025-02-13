@@ -27,8 +27,8 @@ class TokensAndMasks(NamedTuple):
     """Output to compute the loss on.
 
     Args:
-        sentinel2: sentinel 2 data of shape (B, P_H, P_W, T, Band_Sets)
-        sentinel2_mask: sentinel 2 mask indicating which tokens are masked/unmasked
+        sentinel2: sentinel 2 data of shape (B, P_H, P_W, T, Band_Sets, D)
+        sentinel2_mask: sentinel 2 mask indicating which tokens are masked/unmasked (B, P_H, P_W, T, Band_Sets)
         latlon: lat lon data containing geographical coordinates
         latlon_mask: lat lon mask indicating which coordinates are masked/unmasked
         timestamps: timestamps of the data
