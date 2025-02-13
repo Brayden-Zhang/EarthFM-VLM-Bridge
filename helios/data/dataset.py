@@ -290,10 +290,11 @@ class HeliosDataset(Dataset):
             if modality == MODALITIES.get("sentinel2"):
                 sample_dict["latlon"] = self._get_latlon(sample).astype(np.float32)
                 sample_dict["timestamps"] = self._get_timestamps(sample).astype(np.int32)
-            if modality == MODALITIES.get("sentinel1"):
-                if modality_data.shape[-2] != 12:
-                    logger.info(f"sample.sentinel1.shape: {modality_data.shape}")
-                    logger.info(f"sample.timestamps: {sample}")
-                    exit(0)
+            # TODO: fix the bug with sentinel1 data (missing bands)
+            # if modality == MODALITIES.get("sentinel1"):
+            #     if modality_data.shape[-2] != 12:
+            #         logger.info(f"sample.sentinel1.shape: {modality_data.shape}")
+            #         logger.info(f"sample.timestamps: {sample}")
+            #         exit(0)
         # TODO: Add normalization and better way of doing dtype
         return HeliosSample(**sample_dict)
