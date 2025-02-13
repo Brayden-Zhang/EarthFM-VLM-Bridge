@@ -1,6 +1,7 @@
 """Parse the Helios dataset."""
 
 import csv
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -8,12 +9,14 @@ from enum import Enum
 from upath import UPath
 
 from helios.data.constants import (
-    ALL_MODALITIES,
     BASE_RESOLUTION,
     BandSet,
+    Modality,
     ModalitySpec,
 )
 from helios.dataset_creation.util import WindowMetadata, get_modality_fname
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -26,6 +29,13 @@ class ModalityImage:
 
     start_time: datetime
     end_time: datetime
+
+    # Add this to see if there are two ModalityImage objects that are the same
+    def __eq__(self, other: object) -> bool:
+        """Check if two ModalityImage objects are the same."""
+        if not isinstance(other, ModalityImage):
+            return False
+        return self.start_time == other.start_time and self.end_time == other.end_time
 
 
 @dataclass(frozen=True)
@@ -178,7 +188,12 @@ def parse_helios_dataset(
     """
     tiles: dict[ModalitySpec, dict[TimeSpan, list[ModalityTile]]] = {}
 
-    for modality in ALL_MODALITIES:
+    for modality in Modality.values():
+        # TODO: there's N/A in the image_idx column for openstreetmap
+        if modality.name == "latlon":
+            continue
+        if modality.name == "openstreetmap":
+            continue
         if modality.is_multitemporal:
             # We need to load the one-year and two-week data separately.
             time_spans = [TimeSpan.YEAR, TimeSpan.TWO_WEEK]
@@ -197,7 +212,7 @@ def parse_helios_dataset(
                 helios_path
                 / f"{tile_resolution}_{modality.name}{time_span.get_suffix()}.csv"  # type: ignore
             )
-
+            logger.info(f"Parsing {modality.name} {time_span} {csv_fname}")
             tiles[modality][time_span] = parse_modality_csv(  # type: ignore
                 helios_path,
                 modality,

@@ -11,14 +11,14 @@ def test_patch_disc_loss() -> None:
     b, t, t_h, t_w, d = 3, 2, 4, 4, 2
 
     preds = TokensAndMasks(
-        s2=torch.ones((b, t, t_h, t_w, d)),
-        s2_mask=torch.ones((b, t, t_h, t_w)) * 2,
+        sentinel2=torch.ones((b, t, t_h, t_w, d)),
+        sentinel2_mask=torch.ones((b, t, t_h, t_w)) * 2,
         latlon=torch.ones((b, 1, d)),
         latlon_mask=torch.ones((b, 1)) * 2,
     )
     targets = TokensAndMasks(
-        s2=torch.ones((b, t, t_h, t_w, d)),
-        s2_mask=torch.zeros((b, t, t_h, t_w)),
+        sentinel2=torch.ones((b, t, t_h, t_w, d)),
+        sentinel2_mask=torch.zeros((b, t, t_h, t_w)),
         latlon=torch.ones((b, 1, d)),
         latlon_mask=torch.zeros((b, 1)),
     )

@@ -193,9 +193,6 @@ class HeliosTrainModule(TrainModule):
         super().__init__()
         self.ema_decay = ema_decay
         self.model = model
-        self.modalities_to_channel_groups_dict = (
-            self.model.encoder.modalities_to_channel_groups_dict
-        )
         self.device = device or get_default_device()
         self.world_mesh = build_device_mesh(dp=dp_config, device_type=self.device.type)
         logger.info(
@@ -372,12 +369,7 @@ class HeliosTrainModule(TrainModule):
         # Move tensors to the right device.
         # we may want to modify this
         batch = batch.to_device(self.device)
-        # TODO: Make ordering of channels consistent in dataset and arhcitecture
-        # TODO: THis isn't integrated well
         kwargs = {"patch_size": 8, "encode_ratio": 0.5, "decode_ratio": 0.5}
-        kwargs["modalities_to_channel_groups_dict"] = (
-            self.modalities_to_channel_groups_dict
-        )
         masked_batch = self.masking_strategy.apply_mask(batch, **kwargs)
 
         # Run Encoder and decoder on the augmented input

@@ -8,7 +8,7 @@ import numpy.typing as npt
 import rasterio
 import rasterio.windows
 
-from helios.data.constants import ALL_MODALITIES, IMAGE_TILE_SIZE, ModalitySpec
+from helios.data.constants import IMAGE_TILE_SIZE, Modality, ModalitySpec
 
 from .parse import GridTile, ModalityTile, TimeSpan
 
@@ -92,7 +92,7 @@ def image_tiles_to_samples(
         )
 
         # Add modalities one by one.
-        for modality in ALL_MODALITIES:
+        for modality in Modality.values():
             # We only use modalities that are at an equal or coarser resolution.
             if modality.tile_resolution_factor < sample.grid_tile.resolution_factor:
                 continue
@@ -128,19 +128,12 @@ def image_tiles_to_samples(
             # image (potentially requiring cropping).
             sample.modalities[modality] = image_tile
 
-        # For now, we skip samples if not all modalities are available.
-        if len(sample.modalities) < len(ALL_MODALITIES):
-            if sample.grid_tile.resolution_factor == 1:
-                logger.debug(
-                    f"skipping sample {sample.grid_tile} since it only has {len(sample.modalities)} modalities"
-                )
-            continue
-
         samples.append(sample)
 
     return samples
 
 
+# TODO: add unit test for this image loader
 def load_image_for_sample(
     image_tile: ModalityTile, sample: SampleInformation
 ) -> npt.NDArray:
@@ -159,15 +152,14 @@ def load_image_for_sample(
             should be loaded or just a portion of it.
 
     Returns:
-        the image as a numpy array TCHW (time is on the first dimension). In the
-            future, this may include vector data too, or that may go in a separate
-            function.
+        the image as a numpy array TCHW (time is on the first dimension).
+        In the future, this may include vector data too, or that may go in a separate
+        function.
     """
     # Compute the factor by which image_tile is bigger (coarser) than the sample.
     factor = (
         image_tile.grid_tile.resolution_factor // sample.grid_tile.resolution_factor
     )
-
     # Read the modality image one band set at a time.
     # For now we resample all bands to the grid resolution of the modality.
     band_set_images = []

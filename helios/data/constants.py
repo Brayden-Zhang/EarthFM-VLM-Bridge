@@ -41,6 +41,8 @@ class BandSet:
     bands: Sequence[str]
 
     # Resolution is BASE_RESOLUTION * resolution_factor.
+    # If resolution == 0, this means the data
+    # does not vary in space (e.g. latlons)
     resolution_factor: int
 
     def __hash__(self) -> int:
@@ -54,33 +56,52 @@ class BandSet:
 
 @dataclass(frozen=True)
 class ModalitySpec:
-    """Specification of one modality."""
+    """Modality specification."""
 
     name: str
-
-    # Resolution by which the grid is defined for this modality.
     tile_resolution_factor: int
-
-    # Band sets in this modality.
     band_sets: Sequence[BandSet]
-
-    # If True, this modality should have two sets of tiles in the raw Helios dataset,
-    # one _monthly for monthly over one-year period, and one _freq for every sample over
-    # two-week period.
     is_multitemporal: bool
 
     def __hash__(self) -> int:
-        """Hash this ModalitySpec."""
+        """Hash this Modality."""
         return hash(self.name)
 
     def get_tile_resolution(self) -> float:
         """Compute the tile resolution."""
         return get_resolution(self.tile_resolution_factor)
 
+    def bandsets_as_indices(self) -> list[list[int]]:
+        """Return band sets as indices."""
+        indices = []
+        offset = 0
+        for band_set in self.band_sets:
+            num_bands = len(band_set.bands)
+            indices.append(list(range(offset, offset + num_bands)))
+            offset += num_bands
+        return indices
 
-# Modalities supported by helios
+    @property
+    def band_order(self) -> list[str]:
+        """Get band order."""
+        return sum((list(band_set.bands) for band_set in self.band_sets), [])
+
+    @property
+    def num_band_sets(self) -> int:
+        """Get the number of band sets."""
+        return len(self.band_sets)
+
+    @property
+    def num_bands(self) -> int:
+        """Get the number of channels.
+
+        The number of channels is the sum of the number of bands in all the band sets.
+        """
+        return sum(len(band_set.bands) for band_set in self.band_sets)
+
+
 class Modality:
-    """Modality information."""
+    """Enum-like access to ModalitySpecs."""
 
     NAIP = ModalitySpec(
         name="naip",
@@ -89,14 +110,14 @@ class Modality:
         is_multitemporal=False,
     )
 
-    S1 = ModalitySpec(
+    SENTINEL1 = ModalitySpec(
         name="sentinel1",
         tile_resolution_factor=16,
         band_sets=[BandSet(["VV", "VH"], 16)],
         is_multitemporal=True,
     )
 
-    S2 = ModalitySpec(
+    SENTINEL2 = ModalitySpec(
         name="sentinel2",
         tile_resolution_factor=16,
         band_sets=[
@@ -129,10 +150,8 @@ class Modality:
         is_multitemporal=False,
     )
 
-    OSM = ModalitySpec(
+    OPENSTREETMAP = ModalitySpec(
         name="openstreetmap",
-        # OpenStreetMap is gridded at 10 m/pixel, but the data itself is rasterized at
-        # 2.5 m/pixel (so each tile contains 1024x1024 instead of 256x256).
         tile_resolution_factor=16,
         band_sets=[
             BandSet(
@@ -174,14 +193,39 @@ class Modality:
         is_multitemporal=False,
     )
 
+    # TODO: decide if we want to include latlon as a modality
+    # The issue is that parse_modality_csv will search for the csv file and relevant ModalityTile
+    LATLON = ModalitySpec(
+        name="latlon",
+        tile_resolution_factor=0,
+        band_sets=[BandSet(["lat", "lon"], 0)],
+        is_multitemporal=False,
+    )
+
     @classmethod
-    def get_all_modalities(cls) -> list[ModalitySpec]:
-        """Get all modalities."""
-        return [
-            cls.S1,
-            cls.S2,
-            cls.NAIP,
-        ]
+    def get(self, name: str) -> ModalitySpec:
+        """Get the ModalitySpec with the specified name."""
+        modality = getattr(Modality, name.upper())
+        assert modality.name == name
+        return modality
+
+    @classmethod
+    def values(self) -> list[ModalitySpec]:
+        """Get all of the ModalitySpecs."""
+        modalities = []
+        for k in dir(Modality):
+            modality = getattr(Modality, k)
+            if not isinstance(modality, ModalitySpec):
+                continue
+            modalities.append(modality)
+        return modalities
 
 
-ALL_MODALITIES = Modality.get_all_modalities()
+# TODO: change this to other name to avoid confusion
+SUPPORTED_MODALITIES = [
+    Modality.SENTINEL1,
+    Modality.SENTINEL2,
+    Modality.WORLDCOVER,
+]
+LATLON = ["lat", "lon"]
+TIMESTAMPS = ["day", "month", "year"]

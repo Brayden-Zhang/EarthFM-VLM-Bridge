@@ -1,43 +1,42 @@
 """Test masking."""
 
+import logging
+
 import torch
 
+from helios.data.constants import Modality
 from helios.data.dataset import HeliosSample
 from helios.train.masking import MaskValue, RandomMaskingStrategy
+
+logger = logging.getLogger(__name__)
 
 
 def test_random_masking() -> None:
     """Test random masking ratios."""
     b, h, w, t = 100, 16, 16, 8
 
-    modalities_dict = dict(
-        {"s2": dict({"rgb": [0, 1, 2], "nir": [3]}), "latlon": dict({"latlon": [0, 1]})}
-    )
-
     days = torch.randint(1, 31, (b, 1, t), dtype=torch.long)
     months = torch.randint(1, 13, (b, 1, t), dtype=torch.long)
     years = torch.randint(2018, 2020, (b, 1, t), dtype=torch.long)
     timestamps = torch.cat([days, months, years], dim=1)  # Shape: (B, 3, T)
-
+    sentinel2_num_bands = Modality.SENTINEL2.num_bands
+    latlon_num_bands = Modality.LATLON.num_bands
     batch = HeliosSample(
-        s2=torch.ones((b, 4, t, h, w)), latlon=torch.ones((b, 2)), timestamps=timestamps
+        sentinel2=torch.ones((b, h, w, t, sentinel2_num_bands)),
+        latlon=torch.ones((b, latlon_num_bands)),
+        timestamps=timestamps,
     )
     encode_ratio, decode_ratio = 0.25, 0.5
     masked_sample = RandomMaskingStrategy().apply_mask(
         batch,
-        patch_size=4,
-        modalities_to_channel_groups_dict=modalities_dict,
         encode_ratio=encode_ratio,
         decode_ratio=decode_ratio,
     )
-    # TODO: Add assert that checks input output shapes
     # check that each modality has the right masking ratio
     for modality_name in masked_sample._fields:
-        # TODO: SKipping lat lon for now
-        if modality_name.startswith("latlon"):
-            continue
         if modality_name.endswith("mask"):
             mask = getattr(masked_sample, modality_name)
+            logger.info(f"Mask name: {modality_name}")
             total_elements = mask.numel()
             num_encoder = len(mask[mask == MaskValue.ONLINE_ENCODER.value])
             num_decoder = len(mask[mask == MaskValue.DECODER_ONLY.value])
@@ -47,3 +46,10 @@ def test_random_masking() -> None:
             assert (
                 num_decoder / total_elements
             ) == decode_ratio, f"{modality_name} has incorrect decode mask ratio"
+            assert (
+                mask.shape
+                == getattr(
+                    batch,
+                    masked_sample.get_unmasked_modality_name(modality_name),
+                ).shape
+            ), f"{modality_name} has incorrect shape"

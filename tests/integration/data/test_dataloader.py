@@ -1,18 +1,21 @@
 """Test the HeliosDataloader class."""
 
+from collections.abc import Callable
 from pathlib import Path
 
 from torch.utils.data import default_collate
 
 from helios.data.dataloader import HeliosDataLoader
 from helios.data.dataset import HeliosDataset
+from helios.dataset.sample import SampleInformation
 
-from .test_helios_dataset import prepare_dataset
 
-
-def test_helios_dataloader(tmp_path: Path) -> None:
+def test_helios_dataloader(
+    tmp_path: Path, prepare_samples: Callable[[Path], list[SampleInformation]]
+) -> None:
     """Test the HeliosDataloader class."""
-    dataset = prepare_dataset(tmp_path)
+    samples = prepare_samples(tmp_path)
+    dataset = HeliosDataset(*samples, path=tmp_path)
     assert isinstance(dataset, HeliosDataset)
     dataloader = HeliosDataLoader(
         dataset=dataset,

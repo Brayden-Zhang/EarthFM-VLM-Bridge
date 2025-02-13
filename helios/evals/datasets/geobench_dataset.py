@@ -12,11 +12,13 @@ from einops import repeat
 from geobench.dataset import Stats
 from torch.utils.data import Dataset, default_collate
 
-from helios.data.dataset import S2_BANDS, HeliosSample
+from helios.data.constants import Modality
+from helios.data.dataset import HeliosSample
+from helios.train.masking import MaskedHeliosSample
 
 torch.multiprocessing.set_sharing_strategy("file_system")
 
-
+# TODO: make sure we can map the S2 band names with what we have in this dataset
 GEOBENCH_S2_BAND_NAMES = [
     "01 - Coastal aerosol",
     "02 - Blue",
@@ -42,7 +44,7 @@ def _geobench_band_index_from_helios_name(helios_name: str) -> int:
 
 
 GEOBENCH_TO_HELIOS_S2_BANDS = [
-    _geobench_band_index_from_helios_name(b) for b in S2_BANDS
+    _geobench_band_index_from_helios_name(b) for b in Modality.SENTINEL2.band_order
 ]
 
 
@@ -221,7 +223,7 @@ class GeobenchDataset(Dataset):
                 )
         return image
 
-    def __getitem__(self, idx: int) -> tuple[HeliosSample, torch.Tensor]:
+    def __getitem__(self, idx: int) -> tuple[MaskedHeliosSample, torch.Tensor]:
         """Return a single GeoBench data instance."""
         sample = self.dataset[idx]
         label = sample.label
@@ -257,7 +259,10 @@ class GeobenchDataset(Dataset):
             GEOBENCH_TO_HELIOS_S2_BANDS,
         ]
         timestamp = repeat(torch.tensor(self.default_day_month_year), "d -> t d", t=1)
-        return HeliosSample(s2=s2.float(), timestamps=timestamp.long()), target
+        masked_sample = MaskedHeliosSample.from_heliossample(
+            HeliosSample(sentinel2=s2.float(), timestamps=timestamp.long())
+        )
+        return masked_sample, target
 
     def __len__(self) -> int:
         """Length of dataset."""
@@ -265,13 +270,11 @@ class GeobenchDataset(Dataset):
 
     @staticmethod
     def collate_fn(
-        batch: Sequence[tuple[HeliosSample, torch.Tensor]],
-    ) -> tuple[HeliosSample, torch.Tensor]:
+        batch: Sequence[tuple[MaskedHeliosSample, torch.Tensor]],
+    ) -> tuple[MaskedHeliosSample, torch.Tensor]:
         """Collate function for DataLoaders."""
         samples, targets = zip(*batch)
         # we assume that the same values are consistently None
-        collated_sample = default_collate(
-            [s.as_dict(ignore_nones=True) for s in samples]
-        )
+        collated_sample = default_collate([s.as_dict() for s in samples])
         collated_target = default_collate([t for t in targets])
-        return HeliosSample(**collated_sample), collated_target
+        return MaskedHeliosSample(**collated_sample), collated_target

@@ -6,7 +6,6 @@ import torch
 from torch.utils.data import DataLoader
 
 from helios.nn.flexihelios import Encoder
-from helios.train.masking import MaskedHeliosSample
 
 logger = logging.getLogger(__name__)
 
@@ -21,14 +20,8 @@ def get_embeddings(
     model = model.eval()
     device = next(model.parameters()).device
     with torch.no_grad():
-        for helios_sample, label in data_loader:
-            masked_helios_sample = MaskedHeliosSample.from_heliossample(
-                helios_sample, model.modalities_to_channel_groups_dict
-            )
+        for masked_helios_sample, label in data_loader:
             with torch.amp.autocast(device_type=device.type, dtype=torch.bfloat16):
-                # TODO: Hacky patch size
-                logger.info(f"Helios sample: {helios_sample}")
-                logger.info(f"Patch size: {model.base_patch_size}")
                 # TODO: Model expects masked helios sample we need to pass empty masks
                 # Likely we want to have a flag that checks for eval mode and passes empty masks
                 batch_embeddings = model(

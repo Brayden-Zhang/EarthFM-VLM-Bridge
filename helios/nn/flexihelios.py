@@ -10,6 +10,7 @@ from einops import rearrange, repeat
 from torch import Tensor, nn
 
 from helios.constants import BASE_GSD
+from helios.data.constants import Modality
 from helios.nn.attention import Block
 from helios.nn.encodings import (
     get_1d_sincos_pos_encoding,
@@ -26,22 +27,22 @@ class TokensAndMasks(NamedTuple):
     """Output to compute the loss on.
 
     Args:
-        s2: sentinel 2 data of shape (B, C_G, T, P_H, P_W)
-        s2_mask: sentinel 2 mask indicating which tokens are masked/unmasked
+        sentinel2: sentinel 2 data of shape (B, P_H, P_W, T, Band_Sets, D)
+        sentinel2_mask: sentinel 2 mask indicating which tokens are masked/unmasked (B, P_H, P_W, T, Band_Sets)
         latlon: lat lon data containing geographical coordinates
         latlon_mask: lat lon mask indicating which coordinates are masked/unmasked
         timestamps: timestamps of the data
     """
 
-    s2: Tensor  # (B, C_G, T, P_H, P_W)
-    s2_mask: Tensor
+    sentinel2: Tensor
+    sentinel2_mask: Tensor
     latlon: Tensor
     latlon_mask: Tensor
 
     @property
     def device(self) -> torch.device:
         """Get the device of the tokens and masks."""
-        return self.s2.device
+        return self.sentinel2.device
 
     # TODO: It seems like we want a lot of our named tuples to have this functionality so we should probably create a utility base class for the named tuples and double subclass
     @classmethod
@@ -64,56 +65,67 @@ class FlexiHeliosPatchEmbeddings(nn.Module):
 
     def __init__(
         self,
-        modalities_to_channel_groups_dict: dict[str, dict[str, list[int]]],
+        supported_modalities: list[str],
         max_patch_size: int,
         embedding_size: int,
     ):
         """Initialize the patch embeddings.
 
         Args:
-            modalities_to_channel_groups_dict: Dictionary mapping modalities to channel groups
+            supported_modalities: Which modalities from Modality this model
+                instantiation supports
             max_patch_size: Maximum size of patches
             embedding_size: Size of embeddings
         """
         super().__init__()
-        self.modalities_to_channel_groups_dict = modalities_to_channel_groups_dict
         self.max_patch_size = max_patch_size
         self.embedding_size = embedding_size
+        self.supported_modalities = supported_modalities
         # TODO: want to be able to remove certain bands and modalities
-        # dict will be modality -> channel_group -> bands
-
-        # I want to be able to easily assign an embeddign to a modality and I want it to be explicit for now
         self.per_modality_embeddings = nn.ModuleDict({})
-        for modality in self.modalities_to_channel_groups_dict.keys():
+        for modality in self.supported_modalities:
             self.per_modality_embeddings[modality] = (
                 self._get_patch_embedding_module_for_modality(modality)
             )
 
+    @staticmethod
+    def _get_embedding_module_name(modality: str, idx: int) -> str:
+        """Get the embedding module name.
+
+        Module Dicts require string keys
+        """
+        return f"{modality}__{idx}"
+
     def _get_patch_embedding_module_for_modality(self, modality: str) -> nn.Module:
         """Get the patch embedding module for a modality."""
-        channel_groups_dict = self.modalities_to_channel_groups_dict[modality]
+        modality_spec = Modality.get(modality)
         # Based on the modality name we choose the way to embed the data
 
         # I likely will need to know about what the embedding strategy is in the forward as well
         # Static modality
-        if modality == "latlon":
+        if modality_spec.get_tile_resolution() == 0:
+            # static in space
             return nn.ModuleDict(
                 {
-                    channel_group: nn.Linear(
-                        len(channel_band_idxs), self.embedding_size
+                    self._get_embedding_module_name(modality, idx): nn.Linear(
+                        len(channel_set_idxs), self.embedding_size
                     )
-                    for channel_group, channel_band_idxs in channel_groups_dict.items()
+                    for idx, channel_set_idxs in enumerate(
+                        modality_spec.bandsets_as_indices()
+                    )
                 }
             )
         else:
             return nn.ModuleDict(
                 {
-                    channel_group: FlexiPatchEmbed(
-                        in_chans=len(channel_band_idxs),
+                    self._get_embedding_module_name(modality, idx): FlexiPatchEmbed(
+                        in_chans=len(channel_set_idxs),
                         embedding_size=self.embedding_size,
                         patch_size=self.max_patch_size,
                     )
-                    for channel_group, channel_band_idxs in channel_groups_dict.items()
+                    for idx, channel_set_idxs in enumerate(
+                        modality_spec.bandsets_as_indices()
+                    )
                 }
             )
 
@@ -122,27 +134,29 @@ class FlexiHeliosPatchEmbeddings(nn.Module):
         self, modality: str, input_data: MaskedHeliosSample, patch_size: int
     ) -> tuple[Tensor, Tensor]:
         """Apply embedding to a modality."""
-        channel_groups_dict = self.modalities_to_channel_groups_dict[modality]
         masked_modality_name = input_data.get_masked_modality_name(modality)
         modality_mask = getattr(input_data, masked_modality_name)
         modality_data = getattr(input_data, modality)
+
+        modality_spec = Modality.get(modality)
+
         modality_tokens, modality_masks = [], []
-        for idx, (channel_group, channel_band_idxs) in enumerate(
-            channel_groups_dict.items()
-        ):
+        for idx, channel_set_indices in enumerate(modality_spec.bandsets_as_indices()):
             modality_specific_kwargs = {}
-            if modality == "latlon":
-                token_mask = modality_mask[:, idx]
+            if modality_spec.get_tile_resolution() == 0:
+                # static in time
+                token_mask = modality_mask[..., idx]
             else:
-                token_mask = modality_mask[:, 0::patch_size, 0::patch_size, :, idx]
+                token_mask = modality_mask[:, 0::patch_size, 0::patch_size, ..., idx]
                 modality_specific_kwargs = {"patch_size": patch_size}
             patchified_dims = token_mask.shape[1:]
             # Now apply the embedding to
             if self.is_any_data_seen_by_encoder(token_mask):
-                patchified_data = modality_data[..., channel_band_idxs]
-                patchified_data = self.per_modality_embeddings[modality][channel_group](
-                    patchified_data, **modality_specific_kwargs
-                )
+                patchified_data = modality_data[..., channel_set_indices]
+
+                patchified_data = self.per_modality_embeddings[modality][
+                    self._get_embedding_module_name(modality, idx)
+                ](patchified_data, **modality_specific_kwargs)
             else:
                 patchified_data = torch.empty(
                     modality_data.shape[0],
@@ -167,7 +181,8 @@ class FlexiHeliosPatchEmbeddings(nn.Module):
     ) -> TokensAndMasks:
         """Return flexibly patchified embeddings for each modality of the input data.
 
-        Given a [B, H, W, (T), C] inputs, returns a [B, H, W, (T), C_G, D] output.
+        Given a [B, H, W, (T), C] inputs, returns a [B, H, W, (T), b_s, D] output.
+
         We assume that the spatial masks are consistent for the given patch size,
         so that if patch_size == 2 then one possible mask would be
         [0, 0, 1, 1]
@@ -177,7 +192,7 @@ class FlexiHeliosPatchEmbeddings(nn.Module):
         for the H, W dimensions
         """
         output_dict = {}
-        for modality in self.modalities_to_channel_groups_dict.keys():
+        for modality in self.supported_modalities:
             modality_tokens, modality_masks = self.apply_embedding_to_modality(
                 modality, input_data, patch_size
             )
@@ -193,7 +208,7 @@ class FlexiHeliosCompositeEncodings(nn.Module):
     def __init__(
         self,
         embedding_size: int,
-        modalities_to_channel_groups_dict: dict[str, dict[str, list[int]]],
+        supported_modalities: list[str],
         max_sequence_length: int,
         base_patch_size: int,
         use_channel_embs: bool = True,
@@ -202,14 +217,15 @@ class FlexiHeliosCompositeEncodings(nn.Module):
 
         Args:
             embedding_size: Size of token embeddings
-            modalities_to_channel_groups_dict: Dictionary mapping modalities to channel groups
+            supported_modalities: Which modalities from Modality this model
+                instantiation supports
             max_sequence_length: Maximum sequence length
             base_patch_size: Base patch size
             use_channel_embs: Whether to use learnable channel embeddings
         """
         super().__init__()
         self.embedding_size = embedding_size
-        self.modalities_to_channel_groups_dict = modalities_to_channel_groups_dict
+        self.supported_modalities = supported_modalities
         self.embedding_size = embedding_size
         self.base_patch_size = base_patch_size
         self.max_sequence_length = (
@@ -240,12 +256,12 @@ class FlexiHeliosCompositeEncodings(nn.Module):
             {
                 modality: nn.Parameter(
                     torch.zeros(
-                        len(channel_groups_dict.keys()),
+                        len(Modality.get(modality).band_sets),
                         self.embedding_dim_per_embedding_type,
                     ),
                     **args,
                 )
-                for modality, channel_groups_dict in self.modalities_to_channel_groups_dict.items()
+                for modality in self.supported_modalities
             }
         )
 
@@ -256,7 +272,8 @@ class FlexiHeliosCompositeEncodings(nn.Module):
             # we use xavier_uniform following official JAX ViT:
             torch.nn.init.xavier_uniform_(m.weight)
             if isinstance(m, nn.Linear) and m.bias is not None:
-                nn.init.constant_(m.bias, 0)
+                # TODO: fix the dtype here
+                nn.init.constant_(m.bias, 0).to(torch.float32)
 
     @staticmethod
     def calculate_gsd_ratio(input_res: float, patch_size: int) -> float:
@@ -284,12 +301,13 @@ class FlexiHeliosCompositeEncodings(nn.Module):
             Tensor with encodings applied based on modality type
         """
         # TODO: Improve this implementation
-        if modality == "latlon":
-            b, c_g, _ = modality_tokens.shape
+        if modality_tokens.ndim == 3:
+            # modality_tokens = [B, Band_Sets, D]; static in space, static in time
+            b, b_s, _ = modality_tokens.shape
             # Static modality only needs channel embeddings
             modality_channel_embed = self.per_modality_channel_embeddings[modality]
             modality_channel_embed = repeat(
-                modality_channel_embed, "c_g d -> b c_g d", b=b
+                modality_channel_embed, "b_s d -> b b_s d", b=b
             )
             modality_channel_embed = F.pad(
                 modality_channel_embed,
@@ -303,24 +321,28 @@ class FlexiHeliosCompositeEncodings(nn.Module):
                 f"timestamps, patch_size and input_res required for modality {modality}"
             )
 
-        b, h, w, t, c_g, _ = modality_tokens.shape
+        if modality_tokens.ndim != 6:
+            raise ValueError(
+                f"Unsupported tokens shape {modality_tokens.shape} for {modality}"
+            )
+        b, h, w, t, b_s, _ = modality_tokens.shape
 
         # Channel embeddings
         modality_channel_embed = self.per_modality_channel_embeddings[modality]
         modality_channel_embed = repeat(
-            modality_channel_embed, "c_g d -> b h w t c_g d", b=b, h=h, w=w, t=t
+            modality_channel_embed, "b_s d -> b h w t b_s d", b=b, h=h, w=w, t=t
         )
 
         # Time position encodings
         modality_pos_embed = repeat(
-            self.pos_embed[:t], "t d -> b h w t c_g d", b=b, h=h, w=w, c_g=c_g
+            self.pos_embed[:t], "t d -> b h w t b_s d", b=b, h=h, w=w, b_s=b_s
         )
 
         # Month encodings
         months = timestamps[:, :, 1]
         month_embed = self.month_embed(months)
         modality_month_embed = repeat(
-            month_embed, "b t d -> b h w t c_g d", h=h, w=w, c_g=c_g
+            month_embed, "b t d -> b h w t b_s d", h=h, w=w, b_s=b_s
         )
 
         # Spatial encodings
@@ -333,7 +355,7 @@ class FlexiHeliosCompositeEncodings(nn.Module):
             device=current_device,
         )
         spatial_embed = rearrange(spatial_embed, "b (h w) d -> b h w d", h=h, w=w)
-        spatial_embed = repeat(spatial_embed, "b h w d -> b h w t c_g d", c_g=c_g, t=t)
+        spatial_embed = repeat(spatial_embed, "b h w d -> b h w t b_s d", b_s=b_s, t=t)
 
         # Combine all encodings
         modality_embed = torch.cat(
@@ -366,21 +388,15 @@ class FlexiHeliosCompositeEncodings(nn.Module):
         Returns:
             Tokens only for each modality
         """
-        # TODO: Improve this implementation
         output_dict = {}
-        for modality in self.modalities_to_channel_groups_dict.keys():
-            if modality == "latlon":
-                output_dict[modality] = self._apply_encodings_per_modality(
-                    modality, per_modality_input_tokens[modality]
-                )
-            else:
-                output_dict[modality] = self._apply_encodings_per_modality(
-                    modality,
-                    per_modality_input_tokens[modality],
-                    timestamps=timestamps,
-                    patch_size=patch_size,
-                    input_res=input_res,
-                )
+        for modality in self.supported_modalities:
+            output_dict[modality] = self._apply_encodings_per_modality(
+                modality,
+                per_modality_input_tokens[modality],
+                timestamps=timestamps,
+                patch_size=patch_size,
+                input_res=input_res,
+            )
         return output_dict
 
 
@@ -399,16 +415,14 @@ class FlexiHeliosBase(nn.Module):
         mlp_ratio: float,
         depth: int,
         drop_path: float,
-        modalities_to_channel_groups_dict: dict[str, dict[str, list[int]]],
+        supported_modalities: list[str],
     ):
         """Initialize the FlexiHeliosBase class."""
         super().__init__()
 
         self.embedding_size = embedding_size
-        self.modalities_to_channel_groups_dict = modalities_to_channel_groups_dict
-        logger.info(
-            f"modalities being used by model: {modalities_to_channel_groups_dict.keys()}"
-        )
+        self.supported_modalities = supported_modalities
+        logger.info(f"modalities being used by model: {supported_modalities}")
 
         self.max_sequence_length = max_sequence_length
         self.base_patch_size = base_patch_size
@@ -431,7 +445,7 @@ class FlexiHeliosBase(nn.Module):
 
         self.composite_encodings = FlexiHeliosCompositeEncodings(
             embedding_size,
-            modalities_to_channel_groups_dict,
+            supported_modalities,
             max_sequence_length,
             base_patch_size,
             use_channel_embs,
@@ -465,7 +479,7 @@ class FlexiHeliosBase(nn.Module):
     def collapse_and_combine_hwtc(self, x: TokensAndMasks) -> tuple[Tensor, Tensor]:
         """Collapse the tokens and masks, respectively, into two tensors."""
         tokens, masks = [], []
-        for modality in self.modalities_to_channel_groups_dict.keys():
+        for modality in self.supported_modalities:
             masked_modality_name = x.get_masked_modality_name(modality)
             x_modality = getattr(x, modality)
             x_modality_mask = getattr(x, masked_modality_name)
@@ -542,7 +556,7 @@ class Encoder(FlexiHeliosBase):
         mlp_ratio: float,
         depth: int,
         drop_path: float,
-        modalities_to_channel_groups_dict: dict[str, dict[str, list[int]]],
+        supported_modalities: list[str],
         max_sequence_length: int,
         base_patch_size: int,
         use_channel_embs: bool = True,
@@ -556,7 +570,7 @@ class Encoder(FlexiHeliosBase):
             mlp_ratio: Ratio for MLP hidden dimension
             depth: Number of transformer layers
             drop_path: Drop path rate
-            modalities_to_channel_groups_dict: Dictionary mapping modalities to channel groups
+            supported_modalities: list documenting supported models of this model instantiation
             max_sequence_length: Maximum sequence length
             base_patch_size: Base patch size
             use_channel_embs: Whether to use learnable channel embeddings
@@ -570,10 +584,10 @@ class Encoder(FlexiHeliosBase):
             base_patch_size=base_patch_size,
             use_channel_embs=use_channel_embs,
             drop_path=drop_path,
-            modalities_to_channel_groups_dict=modalities_to_channel_groups_dict,
+            supported_modalities=supported_modalities,
         )
         self.patch_embeddings = FlexiHeliosPatchEmbeddings(
-            modalities_to_channel_groups_dict,
+            supported_modalities,
             max_patch_size,
             embedding_size,
         )
@@ -588,14 +602,9 @@ class Encoder(FlexiHeliosBase):
         Assumes modality channel groups are in the second to last dimension of the tokens.
         """
         exit_ids_per_modality_dict = {}
-        for (
-            modality,
-            band_groups_dict,
-        ) in self.modalities_to_channel_groups_dict.items():
-            exit_seq_modality = torch.zeros_like(x[modality])
-            for idx, (band_group, _) in enumerate(band_groups_dict.items()):
-                num_exit_layers = token_exit_cfg[band_group]
-                exit_seq_modality[..., idx, :] = num_exit_layers
+        for modality in self.supported_modalities:
+            num_exit_layers = token_exit_cfg[modality]
+            exit_seq_modality = torch.full_like(x[modality], fill_value=num_exit_layers)
             exit_ids_per_modality_dict[modality] = exit_seq_modality
         return exit_ids_per_modality_dict
 
@@ -704,7 +713,7 @@ class Encoder(FlexiHeliosBase):
         original_masks_dict = {}
         modalities_to_dims_dict = {}
         # TODO: add a class method for the named tuple here
-        for modality in self.modalities_to_channel_groups_dict.keys():
+        for modality in self.supported_modalities:
             x_modality = getattr(x, modality)
             tokens_only_dict[modality] = x_modality
             modalities_to_dims_dict[modality] = x_modality.shape
@@ -833,7 +842,7 @@ class Encoder(FlexiHeliosBase):
             )
 
         output_dict = {}
-        for modality in self.modalities_to_channel_groups_dict.keys():
+        for modality in self.supported_modalities:
             x_modality = getattr(patchified_tokens_and_masks, modality)
             masked_modality_name = patchified_tokens_and_masks.get_masked_modality_name(
                 modality
@@ -852,7 +861,7 @@ class Predictor(FlexiHeliosBase):
 
     def __init__(
         self,
-        modalities_to_channel_groups_dict: dict[str, dict[str, list[int]]],
+        supported_modalities: list[str],
         encoder_embedding_size: int = 128,
         decoder_embedding_size: int = 128,
         depth: int = 2,
@@ -867,7 +876,7 @@ class Predictor(FlexiHeliosBase):
         """Initialize the predictor.
 
         Args:
-            modalities_to_channel_groups_dict: Dictionary mapping modalities to channel groups
+            supported_modalities: modalities this model instantiation supports
             encoder_embedding_size: Size of encoder embeddings
             decoder_embedding_size: Size of decoder embeddings
             depth: Number of transformer layers
@@ -888,7 +897,7 @@ class Predictor(FlexiHeliosBase):
             base_patch_size=max_patch_size,
             use_channel_embs=learnable_channel_embeddings,
             drop_path=drop_path,
-            modalities_to_channel_groups_dict=modalities_to_channel_groups_dict,
+            supported_modalities=supported_modalities,
         )
         self.learnable_channel_embeddings = learnable_channel_embeddings
         self.encoder_embedding_size = encoder_embedding_size
@@ -916,7 +925,7 @@ class Predictor(FlexiHeliosBase):
         is the embedding dimension matching self.mask_token's size.
         """
         output_dict = {}
-        for modality in self.modalities_to_channel_groups_dict.keys():
+        for modality in self.supported_modalities:
             x_modality = getattr(tokens_and_masks, modality)
             mask_modality = getattr(
                 tokens_and_masks, tokens_and_masks.get_masked_modality_name(modality)
@@ -1038,7 +1047,7 @@ class Predictor(FlexiHeliosBase):
         tokens_only_dict = {}
         original_masks_dict = {}
         modalities_to_dims_dict = {}
-        for modality in self.modalities_to_channel_groups_dict.keys():
+        for modality in self.supported_modalities:
             x_modality = getattr(x, modality)
             tokens_only_dict[modality] = x_modality
             modalities_to_dims_dict[modality] = x_modality.shape
@@ -1090,7 +1099,7 @@ class Predictor(FlexiHeliosBase):
         """
         # Apply Input Norms and encoder to decoder embeds to each modality
         decoder_emedded_dict = {}
-        for modality in self.modalities_to_channel_groups_dict.keys():
+        for modality in self.supported_modalities:
             x_modality = getattr(x, modality)
             x_modality = self.input_norm(x_modality)
             x_modality = self.encoder_to_decoder_embed(x_modality)
@@ -1108,17 +1117,16 @@ class Predictor(FlexiHeliosBase):
 
         # TODO: Factor this out into a more readable function
         output_dict = {}
-        for (
-            modality,
-            channel_groups_dict,
-        ) in self.modalities_to_channel_groups_dict.items():
+        for modality in self.supported_modalities:
             masked_modality_name = tokens_and_masks.get_masked_modality_name(modality)
             modality_mask = getattr(tokens_and_masks, masked_modality_name)
             # patchify masked data
             per_modality_output_tokens = []
             modality_data = getattr(tokens_and_masks, modality)
             modality_specific_dims = self.grab_modality_specific_dims(modality_data)
-            for idx in range(len(channel_groups_dict)):
+
+            band_sets = Modality.get(modality).band_sets
+            for idx in range(len(band_sets)):
                 if self.is_any_data_to_be_decoded(modality_mask):
                     per_channel_modality_data = modality_data[..., idx, :]
                     output_data = self.to_output_embed(
@@ -1137,153 +1145,3 @@ class Predictor(FlexiHeliosBase):
             output_dict[modality] = torch.stack(per_modality_output_tokens, dim=-2)
             output_dict[masked_modality_name] = modality_mask
         return TokensAndMasks(**output_dict)
-
-
-if __name__ == "__main__":
-    import rasterio
-
-    from helios.constants import S2_BANDS
-
-    # Each band set is stored at different resolutions for monthly so that has to happen for us to load in
-    path_to_example_s2_scene = "gs://ai2-helios/data/20250130-sample-dataset-helios/10_sentinel2_monthly/EPSG:32610_165_-1971_10.tif"
-    other_bands_s2 = "gs://ai2-helios/data/20250130-sample-dataset-helios/10_sentinel2_monthly/EPSG:32610_165_-1971_20.tif"
-    more_bands_s2 = "gs://ai2-helios/data/20250130-sample-dataset-helios/10_sentinel2_monthly/EPSG:32610_165_-1971_40.tif"
-
-    # Read each file and print shapes
-    with rasterio.open(path_to_example_s2_scene) as data:
-        array_10m = data.read()
-
-    with rasterio.open(other_bands_s2) as data:
-        array_20m = data.read()
-        # Convert to torch tensor and add batch dimension
-        array_20m_tensor = torch.from_numpy(array_20m).float().unsqueeze(0)
-        # Interpolate to 256x256
-        array_20m_upsampled = F.interpolate(
-            array_20m_tensor, size=(256, 256), mode="bilinear", align_corners=False
-        ).squeeze(0)
-        array_20m_upsampled = array_20m_upsampled
-
-    with rasterio.open(more_bands_s2) as data:
-        array_40m = data.read()
-        # Convert to torch tensor and add batch dimension
-        array_40m_tensor = torch.from_numpy(array_40m).float().unsqueeze(0)
-        # Interpolate to 256x256
-        array_40m_upsampled = F.interpolate(
-            array_40m_tensor, size=(256, 256), mode="bilinear", align_corners=False
-        ).squeeze(0)
-        array_40m_upsampled = array_40m_upsampled
-    array_10m = torch.from_numpy(array_10m).float()
-    num_timesteps = 12
-    num_bands = len(S2_BANDS)
-    s2_array = torch.cat([array_10m, array_20m_upsampled, array_40m_upsampled], dim=0)
-    s2_array = rearrange(
-        s2_array, "(t c) h w -> h w t c", c=num_bands, t=num_timesteps
-    ).unsqueeze(0)
-    modalities_to_channel_groups_dict = {
-        "s2": {
-            "S2_RGB": [S2_BANDS.index(b) for b in ["B02", "B03", "B04"]],
-            "S2_Red_Edge": [S2_BANDS.index(b) for b in ["B05", "B06", "B07"]],
-            "S2_NIR_10m": [S2_BANDS.index(b) for b in ["B08"]],
-            "S2_NIR_20m": [S2_BANDS.index(b) for b in ["B8A"]],
-            "S2_SWIR": [S2_BANDS.index(b) for b in ["B11", "B12"]],
-        }
-    }
-
-    s2_mask = torch.randint_like(s2_array, 0, 3).float()
-    latlon = torch.randn(1, 2).float()
-    latlon_mask = torch.ones_like(latlon).float()
-    timestamps = (
-        torch.tensor(
-            [
-                # 1
-                [1, 2, 2018],
-                # 2
-                [5, 2, 2018],
-                # 3
-                [15, 5, 2018],
-                # 4
-                [25, 8, 2018],
-                # 5
-                [10, 9, 2018],
-                # 6
-                [20, 10, 2018],
-                # 7
-                [30, 10, 2018],
-                # 8
-                [15, 11, 2018],
-                # 9
-                [25, 1, 2019],
-                # 10
-                [10, 2, 2019],
-                # 11
-                [20, 3, 2019],
-                # 12
-                [30, 4, 2019],
-            ]
-        )
-        .unsqueeze(0)
-        .permute(0, 2, 1)
-    )
-    device = torch.device("cuda")
-    x = MaskedHeliosSample(
-        s2_array,
-        s2_mask,
-        latlon,
-        latlon_mask,
-        timestamps,
-    )
-    max_patch_size = 8
-    embedding_size = 16
-    max_sequence_length = 12  # For now we are not supporting variable time series
-    base_patch_size = 4
-    patch_size = 4
-    use_channel_embs = True
-    input_res = BASE_GSD
-    patch_size = 4
-    exit_after = None
-    token_exit_cfg = None
-    encoder = Encoder(
-        embedding_size=embedding_size,
-        max_patch_size=max_patch_size,
-        num_heads=2,
-        mlp_ratio=4.0,
-        depth=2,
-        drop_path=0.1,
-        modalities_to_channel_groups_dict=modalities_to_channel_groups_dict,
-        max_sequence_length=max_sequence_length,
-        base_patch_size=base_patch_size,
-        use_channel_embs=use_channel_embs,
-    )
-    predictor = Predictor(
-        encoder_embedding_size=embedding_size,
-        decoder_embedding_size=embedding_size,
-        modalities_to_channel_groups_dict=modalities_to_channel_groups_dict,
-        depth=2,
-        mlp_ratio=4.0,
-        num_heads=2,
-        max_sequence_length=max_sequence_length,
-        max_patch_size=max_patch_size,
-        learnable_channel_embeddings=use_channel_embs,
-        output_embedding_size=embedding_size,
-    )
-    encoded_tokens = encoder.forward(
-        x, patch_size, input_res, exit_after, token_exit_cfg
-    )
-
-    print(f"encoded_tokens.s2.shape: {encoded_tokens.s2.shape}")
-
-    decoded_tokens = predictor.forward(
-        encoded_tokens, timestamps, patch_size, input_res
-    )
-    print(f"decoded_tokens.s2.shape: {decoded_tokens.s2.shape}")
-    print(f"decoded_tokens.s2.shape: {decoded_tokens.s2.shape}")
-    print(f"decoded_tokens.s2.shape: {decoded_tokens.s2.shape}")
-    print(f"decoded_tokens.s2.shape: {decoded_tokens.s2.shape}")
-    print(f"decoded_tokens.s2.shape: {decoded_tokens.s2.shape}")
-    print(f"decoded_tokens.s2.shape: {decoded_tokens.s2.shape}")
-    print(f"decoded_tokens.s2.shape: {decoded_tokens.s2.shape}")
-    print(f"decoded_tokens.s2.shape: {decoded_tokens.s2.shape}")
-    print(f"decoded_tokens.s2.shape: {decoded_tokens.s2.shape}")
-    print(f"decoded_tokens.s2.shape: {decoded_tokens.s2.shape}")
-    print(f"decoded_tokens.s2.shape: {decoded_tokens.s2.shape}")
-    print(f"decoded_tokens.s2.shape: {decoded_tokens.s2.shape}")

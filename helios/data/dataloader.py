@@ -9,6 +9,7 @@ from typing import Any
 
 import numpy as np
 import torch
+from einops import rearrange
 from olmo_core.data.data_loader import DataLoaderBase
 from olmo_core.data.utils import get_rng, memmap_to_write
 from olmo_core.distributed.utils import barrier
@@ -244,14 +245,19 @@ class HeliosDataLoader(DataLoaderBase):
     def get_mock_batch(self) -> HeliosSample:
         """Get a mock batch, for dry-run of forward and backward pass."""
         logger.info("Getting mock batch NOT FROM DATASET")
-        mock_s2 = torch.rand(1, 13, 12, 256, 256)
+        mock_sentinel2 = torch.rand(1, 256, 256, 12, 13)
+        mock_sentinel1 = torch.rand(1, 256, 256, 12, 2)
+        mock_worldcover = torch.rand(1, 256, 256, 1)
         mock_latlon = torch.rand(1, 2)
         days = torch.randint(0, 25, (1, 1, 12), dtype=torch.long)
         months = torch.randint(0, 12, (1, 1, 12), dtype=torch.long)
         years = torch.randint(2018, 2020, (1, 1, 12), dtype=torch.long)
-        timestamps = torch.cat([days, months, years], dim=1)  # Shape: (B, 3, T)
+        timestamps = torch.cat([days, months, years], dim=1)
+        timestamps = rearrange(timestamps, "b t c -> b c t")
         return HeliosSample(
-            s2=mock_s2,
+            sentinel2=mock_sentinel2,
+            sentinel1=mock_sentinel1,
+            worldcover=mock_worldcover,
             latlon=mock_latlon,
             timestamps=timestamps,
         )
