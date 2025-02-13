@@ -17,7 +17,6 @@ from upath import UPath
 
 from helios.data.dataloader import HeliosDataLoader
 from helios.data.dataset import HeliosDataset, collate_helios
-from helios.data.constants import SUPPORTED_MODALITIES
 from helios.dataset.parse import parse_helios_dataset
 from helios.dataset.sample import image_tiles_to_samples
 from helios.latent_predictor import LatentMIMStyle

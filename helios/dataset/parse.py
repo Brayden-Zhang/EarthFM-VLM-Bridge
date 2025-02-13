@@ -1,6 +1,7 @@
 """Parse the Helios dataset."""
 
 import csv
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -8,15 +9,16 @@ from enum import Enum
 from upath import UPath
 
 from helios.data.constants import (
-    MODALITIES,
     BASE_RESOLUTION,
+    MODALITIES,
     BandSet,
     Modality,
 )
 from helios.dataset_creation.util import WindowMetadata, get_modality_fname
-import logging
 
 logger = logging.getLogger(__name__)
+
+
 @dataclass(frozen=True)
 class ModalityImage:
     """Information about one image contained within a modality tile.
@@ -27,7 +29,7 @@ class ModalityImage:
 
     start_time: datetime
     end_time: datetime
-    
+
     # Add this to see if there are two ModalityImage objects that are the same
     def __eq__(self, other: object) -> bool:
         """Check if two ModalityImage objects are the same."""

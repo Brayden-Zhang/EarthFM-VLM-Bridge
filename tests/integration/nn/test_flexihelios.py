@@ -28,8 +28,8 @@ def modality_band_set_len_and_total_bands(
     """
     return {
         modality: (
-            len(MODALITIES.get(modality).band_sets),
-            MODALITIES.get(modality).num_channels,
+            len(MODALITIES[modality].band_sets),
+            MODALITIES[modality].num_channels,
         )
         for modality in supported_modalities
     }

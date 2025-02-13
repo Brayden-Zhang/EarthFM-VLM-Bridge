@@ -8,7 +8,7 @@ import numpy.typing as npt
 import rasterio
 import rasterio.windows
 
-from helios.data.constants import MODALITIES, IMAGE_TILE_SIZE, Modality
+from helios.data.constants import IMAGE_TILE_SIZE, MODALITIES, Modality
 
 from .parse import GridTile, ModalityTile, TimeSpan
 
@@ -131,6 +131,7 @@ def image_tiles_to_samples(
         samples.append(sample)
 
     return samples
+
 
 # TODO: add unit test for this image loader
 def load_image_for_sample(
