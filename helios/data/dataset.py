@@ -273,8 +273,8 @@ class HeliosDataset(Dataset):
 
     def _get_timestamps(self, sample: SampleInformation) -> np.ndarray:
         """Get the timestamps of the sample."""
-        sample_s2 = sample.modalities[Modality.S2]
-        timestamps = [i.start_time for i in sample_s2.images]
+        sample_sentinel2 = sample.modalities[MODALITIES.get("sentinel2")]
+        timestamps = [i.start_time for i in sample_sentinel2.images]
         dt = pd.to_datetime(timestamps)
         # Note that month should be 0-indexed
         return np.array([dt.day, dt.month - 1, dt.year]).T
