@@ -17,9 +17,8 @@ from pyproj import Transformer
 from torch.utils.data import Dataset
 from upath import UPath
 
-from helios.constants import LATLON_BANDS, TIMESTAMPS
 from helios.data.constants import (BASE_RESOLUTION, IMAGE_TILE_SIZE,
-                                   MODALITIES, SUPPORTED_MODALITIES, Modality)
+                                   MODALITIES, SUPPORTED_MODALITIES, TIMESTAMPS)
 from helios.dataset.parse import TimeSpan
 from helios.dataset.sample import SampleInformation, load_image_for_sample
 from helios.types import ArrayTensor
@@ -65,29 +64,24 @@ class HeliosSample(NamedTuple):
         else:
             if self.sentinel2 is None:
                 raise ValueError("Sentinel2 is not present in the sample")
-            return_shape = []
+            attribute_shape = []
             if MODALITIES.get(attribute).get_tile_resolution() > 0:
-                return_shape += self.sentinel2.shape[
-                    :-2
-                ]  # get batch size (if has), height, width
+                attribute_shape += self.sentinel2.shape[:-2]  # get batch size (if has), height, width
             if MODALITIES.get(attribute).is_multitemporal:
-                return_shape += [self.sentinel2.shape[-2]]  # number of timesteps
+                attribute_shape += [self.sentinel2.shape[-2]]  # get number of timesteps
             if not mask:
-                # TODO: change it to num_bands instead
-                return_shape += [
-                    len(MODALITIES.get(attribute).get_band_names())
-                ]  # number of bands
+                attribute_shape += [MODALITIES.get(attribute).num_channels]  # get number of bands
             else:
-                return_shape += [len(MODALITIES.get(attribute).band_sets)]
-            return return_shape
+                attribute_shape += [MODALITIES.get(attribute).num_band_sets]  # get number of band sets
+            return attribute_shape
 
     @staticmethod
-    def num_bands(attribute: str) -> int:
-        """Get the number of bands for a given attribute."""
+    def num_channels(attribute: str) -> int:
+        """Get the number of channels for a given attribute."""
         if attribute == "timestamps":
             return len(TIMESTAMPS)
         else:
-            return len(MODALITIES.get(attribute).get_band_names())
+            return MODALITIES.get(attribute).num_channels
 
     def as_dict(self, ignore_nones: bool = True) -> dict[str, ArrayTensor | None]:
         """Convert the namedtuple to a dictionary.
@@ -131,7 +125,6 @@ class HeliosSample(NamedTuple):
 
 def collate_helios(batch: list[HeliosSample]) -> HeliosSample:
     """Collate function."""
-
     # Stack tensors while handling None values
     def stack_or_none(attr: str) -> torch.Tensor | None:
         """Stack the tensors while handling None values."""
@@ -231,31 +224,25 @@ class HeliosDataset(Dataset):
         self, samples: list[SampleInformation]
     ) -> list[SampleInformation]:
         """Filter samples to adjust to the HeliosSample format."""
-        # Right now, only use yearly S1 and S2 data
         logger.info(f"Number of samples before filtering: {len(samples)}")
         filtered_samples = []
+        # For now, we use sentinel2 as the base grid with resolution factor 16
+        # Avoid samples with NAIP which has a resolution factor of 1
+        resolution_factor = MODALITIES.get("sentinel2").tile_resolution_factor
         for sample in samples:
-            # TODO: get rid of naip check here
-            if MODALITIES.get("naip") in sample.modalities:
+            if sample.grid_tile.resolution_factor != resolution_factor:
                 continue
-            # Check if the sample has all the necessary modalities
-            # TODO: get rid of latlon check here
-            if not all(
-                modality in sample.modalities for modality in SUPPORTED_MODALITIES if modality != MODALITIES.get("latlon")
-            ):
-                continue
-            # Check if S1 and S2 all have 12 months of data
-            total_months = 12
+            # Check if all the modalities are available
+            for modality_name in SUPPORTED_MODALITIES:
+                if MODALITIES.get(modality_name) not in sample.modalities:
+                    continue
+            # Check if S1 and S2 all have the same number of months of data
+            sentinel1_months = len(set(sample.modalities[MODALITIES.get("sentinel1")].images))
+            sentinel2_months = len(set(sample.modalities[MODALITIES.get("sentinel2")].images))
             if (
                 sample.time_span != TimeSpan.YEAR
-                or len(sample.modalities[MODALITIES.get("sentinel1")].images)
-                != total_months
-                or len(sample.modalities[MODALITIES.get("sentinel2")].images)
-                != total_months
+                or sentinel1_months != sentinel2_months
             ):
-                logger.info(
-                    f"Sample {sample.grid_tile} has {len(sample.modalities[MODALITIES.get('sentinel1')].images)} months of S1 data and {len(sample.modalities[MODALITIES.get('sentinel2')].images)} months of S2 data"
-                )
                 continue
             filtered_samples.append(sample)
         logger.info(f"Number of samples after filtering: {len(filtered_samples)}")
@@ -293,7 +280,7 @@ class HeliosDataset(Dataset):
         sample_dict = {}
         for modality in sample.modalities:
             # Skip modalities that are not supported right now
-            if modality not in SUPPORTED_MODALITIES:
+            if modality.name not in SUPPORTED_MODALITIES:
                 continue
             sample_modality = sample.modalities[modality]
             image = load_image_for_sample(sample_modality, sample)
@@ -303,12 +290,7 @@ class HeliosDataset(Dataset):
             if modality == MODALITIES.get("sentinel2"):
                 sample_dict["latlon"] = self._get_latlon(sample).astype(np.float32)
                 sample_dict["timestamps"] = self._get_timestamps(sample).astype(np.int32)
-                
-            if modality == MODALITIES.get("sentinel1"):
-                if modality_data.shape[-2] == 11:
-                    logger.info(f"sample: {sample}")
-                    exit(0)
-            # # TODO: fix the normalization
+            # # TODO: fix the normalization for all modalities
             # logger.info(f"modality: {modality}")
             # logger.info(f"modality_data: {modality_data.dtype}")
             # modality_data = (modality_data / 10000).astype(np.float32)

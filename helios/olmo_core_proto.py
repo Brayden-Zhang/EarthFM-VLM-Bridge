@@ -65,29 +65,6 @@ if __name__ == "__main__":
     logger.setLevel(logging.DEBUG)
     logger.info("Starting Helios training")
 
-    # Variable masking is not used
-    from helios.constants import S2_BANDS
-
-    # # The indexes need to be compatible with pytorch indexing
-    # modalities_to_channel_groups_dict = {
-    #     "s2": {
-    #         "S2_RGB": [S2_BANDS.index(b) for b in ["B02", "B03", "B04"]],
-    #         "S2_Red_Edge": [S2_BANDS.index(b) for b in ["B05", "B06", "B07"]],
-    #         "S2_NIR_10m": [S2_BANDS.index(b) for b in ["B08"]],
-    #         "S2_NIR_20m": [S2_BANDS.index(b) for b in ["B8A"]],
-    #         "S2_SWIR": [S2_BANDS.index(b) for b in ["B11", "B12"]],
-    #     },
-    #     # "latlon": {
-    #     #     "latlon": [0, 1],
-    #     # },
-    # }
-    # Log the type of band indexes
-    # for modality, channel_groups in modalities_to_channel_groups_dict.items():
-    #     for group_name, band_indices in channel_groups.items():
-    #         logger.debug(
-    #             f"Band indices for {modality} {group_name}: type={type(band_indices[0])}, indices={band_indices}"
-    #         )
-    # exit(0)
     supported_modalities = ["sentinel2", "latlon"]
     encoder = Encoder(
         embedding_size=16,

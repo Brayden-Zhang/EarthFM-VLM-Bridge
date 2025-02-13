@@ -56,44 +56,6 @@ class BandSet:
         return get_resolution(self.resolution_factor)
 
 
-class ClassRegistry:
-    """A registry to hold and manage modality instances."""
-
-    _registry = {}
-
-    @classmethod
-    def register(cls, name: str, modality: "Modality") -> None:
-        """Register a modality."""
-        cls._registry[name] = modality
-
-    def get(cls, name: str) -> "Modality":
-        """Get a modality by name."""
-        if name not in cls._registry:
-            valid_modalities = list(cls._registry.keys())
-            raise ValueError(
-                f"Unmatched modality name {name}. Valid modalities: {valid_modalities}"
-            )
-        return cls._registry[name]
-
-    @classmethod
-    def get_all(cls) -> list["Modality"]:
-        """Get all modalities."""
-        return list(cls._registry.values())
-
-    @classmethod
-    def get_subset(cls, filter_fn: Callable[["Modality"], bool]) -> list["Modality"]:
-        """Get a subset of modalities that match the filter function."""
-        modalities_subset = []
-        for modality in cls._registry.values():
-            if filter_fn(modality):
-                modalities_subset.append(modality)
-        return modalities_subset
-
-
-# Class registry for modalities
-MODALITIES = ClassRegistry()
-
-
 @dataclass(frozen=True)
 class Modality:
     """Modality specification."""
@@ -102,10 +64,6 @@ class Modality:
     tile_resolution_factor: int
     band_sets: Sequence[BandSet]
     is_multitemporal: bool
-
-    def __post_init__(self) -> None:
-        """Post-initialization hook."""
-        MODALITIES.register(self.name, self)
 
     def __hash__(self) -> int:
         """Hash this Modality."""
@@ -127,6 +85,11 @@ class Modality:
         return band_specs_as_indices
 
     @property
+    def num_band_sets(self) -> int:
+        """Get the number of band sets."""
+        return len(self.band_sets)
+
+    @property
     def num_channels(self) -> int:
         """Get the number of channels.
 
@@ -134,111 +97,64 @@ class Modality:
         """
         return sum(len(band_set.bands) for band_set in self.band_sets)
 
-    # TODO: We can modify this to directly return the number of bands
-    def get_band_names(self) -> list[str]:
-        """Get the combined band names."""
-        band_names = []
-        for band_set in self.band_sets:
-            band_names.extend(band_set.bands)
-        return band_names
 
+MODALITIES = {
+    "naip": Modality(
+        name="naip",
+        tile_resolution_factor=1,
+        band_sets=[BandSet(["R", "G", "B", "IR"], 1)],
+        is_multitemporal=False,
+    ),
+    "sentinel1": Modality(
+        name="sentinel1",
+        tile_resolution_factor=16,
+        band_sets=[BandSet(["VV", "VH"], 16)],
+        is_multitemporal=True,
+    ),
+    "sentinel2": Modality(
+        name="sentinel2",
+        tile_resolution_factor=16,
+        band_sets=[
+            # 10 m/pixel bands.
+            BandSet(["B02", "B03", "B04", "B08"], 16),
+            # 20 m/pixel bands.
+            BandSet(["B05", "B06", "B07", "B8A", "B11", "B12"], 32),
+            # 60 m/pixel bands that we store at 40 m/pixel.
+            BandSet(["B01", "B09", "B10"], 64),
+        ],
+        is_multitemporal=True,
+    ),
+    "landsat": Modality(
+        name="landsat",
+        tile_resolution_factor=16,
+        band_sets=[
+            # 15 m/pixel bands that we store at 10 m/pixel.
+            BandSet(["B8"], 16),
+            # 30 m/pixel bands that we store at 20 m/pixel.
+            BandSet(["B1", "B2", "B3", "B4", "B5", "B6", "B7", "B9", "B10", "B11"], 16),
+        ],
+        is_multitemporal=True,
+    ),
+    "worldcover": Modality(
+        name="worldcover",
+        tile_resolution_factor=16,
+        band_sets=[BandSet(["B1"], 16)],
+        is_multitemporal=False,
+    ),
+    "openstreetmap": Modality(
+        name="openstreetmap",
+        tile_resolution_factor=16,
+        band_sets=[BandSet(["aerialway_pylon", "aerodrome", "airstrip", "amenity_fuel", "building", "chimney", "communications_tower", "crane", "flagpole", "fountain", "generator_wind", "helipad", "highway", "leisure", "lighthouse", "obelisk", "observatory", "parking", "petroleum_well", "power_plant", "power_substation", "power_tower", "river", "runway", "satellite_dish", "silo", "storage_tank", "taxiway", "water_tower", "works"], 4)],
+        is_multitemporal=False,
+    ),
+    "latlon": Modality(
+        name="latlon",
+        tile_resolution_factor=0,
+        band_sets=[BandSet(["lat", "lon"], 0)],
+        is_multitemporal=False,
+    ),
+}
 
-# Registering modalities
-Modality(
-    name="naip",
-    tile_resolution_factor=1,
-    band_sets=[BandSet(["R", "G", "B", "IR"], 1)],
-    is_multitemporal=False,
-)
-
-Modality(
-    name="sentinel1",
-    tile_resolution_factor=16,
-    band_sets=[BandSet(["VV", "VH"], 16)],
-    is_multitemporal=True,
-)
-
-Modality(
-    name="sentinel2",
-    tile_resolution_factor=16,
-    band_sets=[
-        BandSet(["B02", "B03", "B04", "B08"], 16),
-        BandSet(["B05", "B06", "B07", "B8A", "B11", "B12"], 32),
-        BandSet(["B01", "B09", "B10"], 64),
-    ],
-    is_multitemporal=True,
-)
-
-Modality(
-    name="landsat",
-    tile_resolution_factor=16,
-    band_sets=[
-        BandSet(["B8"], 16),
-        BandSet(["B1", "B2", "B3", "B4", "B5", "B6", "B7", "B9", "B10", "B11"], 32),
-    ],
-    is_multitemporal=True,
-)
-
-Modality(
-    name="worldcover",
-    tile_resolution_factor=16,
-    band_sets=[BandSet(["B1"], 16)],
-    is_multitemporal=False,
-)
-
-Modality(
-    name="latlon",
-    tile_resolution_factor=0,
-    band_sets=[BandSet(["lat", "lon"], 0)],
-    is_multitemporal=False,
-)
-
-Modality(
-    name="openstreetmap",
-    tile_resolution_factor=16,
-    band_sets=[
-        BandSet(
-            [
-                "aerialway_pylon",
-                "aerodrome",
-                "airstrip",
-                "amenity_fuel",
-                "building",
-                "chimney",
-                "communications_tower",
-                "crane",
-                "flagpole",
-                "fountain",
-                "generator_wind",
-                "helipad",
-                "highway",
-                "leisure",
-                "lighthouse",
-                "obelisk",
-                "observatory",
-                "parking",
-                "petroleum_well",
-                "power_plant",
-                "power_substation",
-                "power_tower",
-                "river",
-                "runway",
-                "satellite_dish",
-                "silo",
-                "storage_tank",
-                "taxiway",
-                "water_tower",
-                "works",
-            ],
-            4,
-        )
-    ],
-    is_multitemporal=False,
-)
-
-# Accessing modalities
-ALL_MODALITIES = MODALITIES.get_all()
 # TODO: should latlon be a modality?
-SUPPORTED_MODALITIES = MODALITIES.get_subset(
-    lambda x: x.name in ["sentinel1", "sentinel2", "worldcover", "latlon"]
-)
+SUPPORTED_MODALITIES = ["sentinel1", "sentinel2", "worldcover", "latlon"]
+TIMESTAMPS = ["day", "month", "year"]

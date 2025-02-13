@@ -8,7 +8,7 @@ import numpy.typing as npt
 import rasterio
 import rasterio.windows
 
-from helios.data.constants import ALL_MODALITIES, IMAGE_TILE_SIZE, Modality
+from helios.data.constants import MODALITIES, IMAGE_TILE_SIZE, Modality
 
 from .parse import GridTile, ModalityTile, TimeSpan
 
@@ -92,7 +92,7 @@ def image_tiles_to_samples(
         )
 
         # Add modalities one by one.
-        for modality in ALL_MODALITIES:
+        for modality in MODALITIES:
             # We only use modalities that are at an equal or coarser resolution.
             if modality.tile_resolution_factor < sample.grid_tile.resolution_factor:
                 continue
@@ -127,14 +127,6 @@ def image_tiles_to_samples(
             # The ImageTile object includes all the information needed to load the
             # image (potentially requiring cropping).
             sample.modalities[modality] = image_tile
-
-        # # For now, we skip samples if not all modalities are available.
-        # if len(sample.modalities) < len(ALL_MODALITIES):
-        #     if sample.grid_tile.resolution_factor == 1:
-        #         logger.debug(
-        #             f"skipping sample {sample.grid_tile} since it only has {len(sample.modalities)} modalities"
-        #         )
-        #     continue
 
         samples.append(sample)
 

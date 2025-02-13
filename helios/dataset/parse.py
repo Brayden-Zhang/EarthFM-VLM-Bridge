@@ -8,7 +8,6 @@ from enum import Enum
 from upath import UPath
 
 from helios.data.constants import (
-    ALL_MODALITIES,
     BASE_RESOLUTION,
     BandSet,
     Modality,
@@ -27,6 +26,13 @@ class ModalityImage:
 
     start_time: datetime
     end_time: datetime
+    
+    # Add this to see if there are two ModalityImage objects that are the same
+    def __eq__(self, other: object) -> bool:
+        """Check if two ModalityImage objects are the same."""
+        if not isinstance(other, ModalityImage):
+            return False
+        return self.start_time == other.start_time and self.end_time == other.end_time
 
 
 @dataclass(frozen=True)
@@ -179,7 +185,7 @@ def parse_helios_dataset(
     """
     tiles: dict[Modality, dict[TimeSpan, list[ModalityTile]]] = {}
 
-    for modality in ALL_MODALITIES:
+    for modality in MODALITIES.values():
         if modality.name == "latlon":
             continue
         # TODO: there's N/A in the image_idx column for openstreetmap
