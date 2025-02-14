@@ -11,11 +11,10 @@ import numpy as np
 import torch
 from class_registry import ClassRegistry
 from einops import rearrange, repeat
-from olmo_core.config import Config
-
 from helios.data.constants import Modality
 from helios.data.dataset import HeliosSample
 from helios.types import ArrayTensor
+from olmo_core.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +52,10 @@ class MaskedHeliosSample(NamedTuple):
 
     sentinel2: ArrayTensor
     sentinel2_mask: ArrayTensor
+    sentinel1: ArrayTensor
+    sentinel1_mask: ArrayTensor
+    worldcover: ArrayTensor
+    worldcover_mask: ArrayTensor
     latlon: ArrayTensor  # [B, 2]
     latlon_mask: ArrayTensor
     timestamps: (
@@ -229,6 +232,51 @@ class RandomMaskingStrategy(MaskingStrategy):
         else:
             return space_time_mask
 
+    # TODO: We should be able to do this agnostic of dimensionality
+    @staticmethod
+    def _create_mask_per_space_modality(
+        b: int,
+        h: int,
+        w: int,
+        encode_ratio: float,
+        decode_ratio: float,
+        num_bands: int,
+        return_tensor_device: torch.device | None = None,
+    ) -> ArrayTensor:
+        """Create a mask for a space modality."""
+        num_tokens_per_instance = int(h * w * num_bands)
+        num_encode_tokens = int(num_tokens_per_instance * encode_ratio)
+        num_decode_tokens = int(num_tokens_per_instance * decode_ratio)
+        num_target_encode_tokens = int(
+            num_tokens_per_instance - (num_encode_tokens + num_decode_tokens)
+        )
+
+        # we do this as a numpy array to take advantage of
+        # numpy's permuted function
+        flat_mask_tokens = np.concatenate(
+            (
+                np.ones(num_target_encode_tokens, dtype=np.int_),
+                np.ones(num_decode_tokens, dtype=np.int_) * 2,
+                np.zeros(num_encode_tokens, dtype=np.int_),
+            )
+        )
+        b_flat_tokens = repeat(flat_mask_tokens, "t -> b t", b=b)
+        # hopefully this will allow for reproducibility, since random is seeded
+        rng = np.random.default_rng(random.randint(0, 100))
+        b_flat_tokens = rng.permuted(b_flat_tokens, axis=1)
+        space_time_mask = rearrange(
+            b_flat_tokens,
+            "b (h w c) -> b h w c",
+            h=h,
+            w=w,
+            c=num_bands,
+        )
+
+        if return_tensor_device:
+            return torch.as_tensor(space_time_mask, device=return_tensor_device)
+        else:
+            return space_time_mask
+
     def apply_mask(self, batch: HeliosSample, **kwargs: Any) -> MaskedHeliosSample:
         """Apply random masking to the input data.
 
@@ -256,9 +304,6 @@ class RandomMaskingStrategy(MaskingStrategy):
 
         output_dict = {}
         for modality_name in batch._fields:
-            # TODO: remove this later after integrating S1 and WorldCover into MaskedHelios
-            if modality_name == "sentinel1" or modality_name == "worldcover":
-                continue
             modality = getattr(batch, modality_name)
             if modality_name == "timestamps":
                 output_dict[modality_name] = modality
@@ -269,11 +314,21 @@ class RandomMaskingStrategy(MaskingStrategy):
             else:
                 return_device = None
             logger.info(f"Modality name: {modality_name} shape: {modality.shape}")
-            # TODO: Make this decions based on modlaity spec
+            # TODO: Make this decions based on modlaity spec and all the varying dimesnions agnostic
             num_bands = Modality.get(modality_name).num_bands
-            if len(modality.shape) == 5:
-                b, h, w, t, c = modality.shape
-
+            if modality.ndim == 4:
+                b, h, w, _ = modality.shape
+                mask = self._create_mask_per_space_modality(
+                    b,
+                    h,
+                    w,
+                    encode_ratio,
+                    decode_ratio,
+                    num_bands,
+                    return_device,
+                )
+            elif modality.ndim == 5:
+                b, h, w, t, _ = modality.shape
                 mask = self._create_mask_per_space_time_modality(
                     b,
                     h,
@@ -284,7 +339,7 @@ class RandomMaskingStrategy(MaskingStrategy):
                     num_bands,
                     return_device,
                 )
-            elif len(modality.shape) == 2:
+            elif modality.ndim == 2:
                 b = modality.shape[0]
                 mask = self._create_mask_per_static_modality(
                     b,

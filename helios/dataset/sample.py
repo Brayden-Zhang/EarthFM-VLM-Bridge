@@ -7,7 +7,6 @@ import numpy as np
 import numpy.typing as npt
 import rasterio
 import rasterio.windows
-
 from helios.data.constants import IMAGE_TILE_SIZE, Modality, ModalitySpec
 
 from .parse import GridTile, ModalityTile, TimeSpan
@@ -210,9 +209,16 @@ def load_image_for_sample(
                     )
 
                 # Uncouple time / channel dimensions.
-                image = image.reshape(
-                    -1, len(band_set.bands), desired_subtile_size, desired_subtile_size
+                shape = (
+                    -1,
+                    len(band_set.bands),
+                    desired_subtile_size,
+                    desired_subtile_size,
                 )
+                logger.info(
+                    f"reshaping image from {image.shape} to {shape} for {fname}"
+                )
+                image = image.reshape(shape)
 
                 band_set_images.append(image)
 
