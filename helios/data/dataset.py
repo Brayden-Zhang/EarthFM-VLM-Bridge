@@ -5,6 +5,7 @@ import logging
 import tempfile
 from collections.abc import Sequence
 from math import floor
+from dataclasses import dataclass
 from pathlib import Path
 from random import choice
 from typing import NamedTuple
@@ -14,6 +15,7 @@ import pandas as pd
 import torch
 from einops import rearrange
 from olmo_core.aliases import PathOrStr
+from olmo_core.config import Config
 from olmo_core.distributed.utils import get_fs_local_rank
 from pyproj import Transformer
 from torch.utils.data import Dataset
@@ -29,8 +31,12 @@ from helios.data.constants import (
 )
 from helios.data.normalize import NORMALIZE_STRATEGY, Normalizer, Strategy
 from helios.data.utils import convert_to_db
-from helios.dataset.parse import ModalityTile
-from helios.dataset.sample import SampleInformation, load_image_for_sample
+from helios.dataset.parse import ModalityTile, parse_helios_dataset
+from helios.dataset.sample import (
+    SampleInformation,
+    image_tiles_to_samples,
+    load_image_for_sample,
+)
 from helios.types import ArrayTensor
 
 logger = logging.getLogger(__name__)
@@ -287,7 +293,7 @@ class HeliosDataset(Dataset):
 
     def __init__(
         self,
-        *samples: SampleInformation,
+        *samples: SampleInformation | None,
         path: UPath,
         supported_modalities: list[ModalitySpec],
         dtype: np.dtype = np.float32,
@@ -301,12 +307,16 @@ class HeliosDataset(Dataset):
 
         Args:
             samples: The samples to include in the dataset.
-            path: The path to the dataset root directory.
-            supported_modalities: The modalities to include in the dataset.
+            path: The path to the raw dataset (tile directory).
             dtype: The dtype of the data.
         """
+        # Check if samples are directly provided, if not, get from tile directory
+        if samples is None:
+            samples = self._get_samples()
+        if len(samples) == 0:
+            raise ValueError("No samples provided")
+        self.samples = self._filter_samples(samples)  # type: ignore
         self.supported_modalities = supported_modalities
-        self.samples = self._filter_samples(list(samples))
         self.path = path
         self.dtype = dtype
         # Initialize both normalizers for different modalities
@@ -315,50 +325,6 @@ class HeliosDataset(Dataset):
         self._fs_local_rank = get_fs_local_rank()
         self._work_dir: Path | None = None  # type: ignore
         self._work_dir_set = False
-
-    def _filter_samples(
-        self, samples: list[SampleInformation]
-    ) -> list[SampleInformation]:
-        """Filter samples to adjust to the HeliosSample format."""
-        logger.info(f"Number of samples before filtering: {len(samples)}")
-        filtered_samples = []
-        # For now, we use sentinel2 as the base grid with resolution factor 16
-        # Avoid samples with NAIP which has a resolution factor of 1
-        resolution_factor = Modality.SENTINEL2.tile_resolution_factor
-        for sample in samples:
-            if sample.grid_tile.resolution_factor != resolution_factor:
-                continue
-            # Check if all the modalities are available that are read in
-            if not all(
-                modality in sample.modalities
-                for modality in self.supported_modalities
-                if not modality.ignore_when_parsing
-            ):
-                continue
-            # check if sample modalities have s1 and s2
-            has_s1 = Modality.SENTINEL1 in sample.modalities
-            has_s2 = Modality.SENTINEL2 in sample.modalities
-            if has_s1:
-                sentinel1_months = len(
-                    set(sample.modalities[Modality.SENTINEL1].images)
-                )
-                if sentinel1_months != 12:
-                    continue
-            if has_s2:
-                sentinel2_months = len(
-                    set(sample.modalities[Modality.SENTINEL2].images)
-                )
-                if sentinel2_months != 12:
-                    continue
-            if has_s1 and has_s2:
-                # Check if S1 and S2 all have the same 12 months of data
-                if sentinel1_months != sentinel2_months:
-                    continue
-            if sample.time_span != TimeSpan.YEAR:
-                continue
-            filtered_samples.append(sample)
-        logger.info(f"Number of samples after filtering: {len(filtered_samples)}")
-        return filtered_samples
 
     @property
     def fingerprint_version(self) -> str:
@@ -408,6 +374,59 @@ class HeliosDataset(Dataset):
     def prepare(self) -> None:
         """Prepare the dataset."""
         len(self)
+
+    def _get_samples(self) -> list[SampleInformation]:
+        """Get the samples from the raw dataset (tile directory)."""
+        # Parse the tile directory
+        tiles = parse_helios_dataset(self.path)
+        logger.info(f"Total tiles: {len(tiles)}")
+        samples = image_tiles_to_samples(tiles)
+        logger.info(f"Total samples: {len(samples)}")
+        return samples
+
+    def _filter_samples(
+        self, samples: list[SampleInformation]
+    ) -> list[SampleInformation]:
+        """Filter samples to adjust to the HeliosSample format."""
+        logger.info(f"Number of samples before filtering: {len(samples)}")
+        filtered_samples = []
+        # For now, we use sentinel2 as the base grid with resolution factor 16
+        # Avoid samples with NAIP which has a resolution factor of 1
+        resolution_factor = Modality.SENTINEL2.tile_resolution_factor
+        for sample in samples:
+            if sample.grid_tile.resolution_factor != resolution_factor:
+                continue
+            # Check if all the modalities are available that are read in
+            if not all(
+                modality in sample.modalities
+                for modality in self.supported_modalities
+                if not modality.ignore_when_parsing
+            ):
+                continue
+            # check if sample modalities have s1 and s2
+            has_s1 = Modality.SENTINEL1 in sample.modalities
+            has_s2 = Modality.SENTINEL2 in sample.modalities
+            if has_s1:
+                sentinel1_months = len(
+                    set(sample.modalities[Modality.SENTINEL1].images)
+                )
+                if sentinel1_months != 12:
+                    continue
+            if has_s2:
+                sentinel2_months = len(
+                    set(sample.modalities[Modality.SENTINEL2].images)
+                )
+                if sentinel2_months != 12:
+                    continue
+            if has_s1 and has_s2:
+                # Check if S1 and S2 all have the same 12 months of data
+                if sentinel1_months != sentinel2_months:
+                    continue
+            if sample.time_span != TimeSpan.YEAR:
+                continue
+            filtered_samples.append(sample)
+        logger.info(f"Number of samples after filtering: {len(filtered_samples)}")
+        return filtered_samples
 
     def _get_latlon(self, sample: SampleInformation) -> np.ndarray:
         """Get the latlon of the sample."""
@@ -477,3 +496,25 @@ class HeliosDataset(Dataset):
                 sample_dict["timestamps"] = self._get_timestamps(sample)
 
         return HeliosSample(**sample_dict)
+
+
+@dataclass
+class HeliosDatasetConfig(Config):
+    """Configuration for the HeliosDataset."""
+
+    samples: list[SampleInformation]
+    path: UPath
+    dtype: np.dtype = np.float32
+
+    def validate(self) -> None:
+        """Validate the configuration.
+
+        Raises:
+            ValueError: If the configuration is invalid.
+        """
+        if self.path is None:
+            raise ValueError("Tile directory is not set")
+
+    def build(self) -> "HeliosDataset":
+        """Build the dataset."""
+        return HeliosDataset(*self.samples, path=self.path, dtype=self.dtype)
