@@ -510,8 +510,8 @@ class HeliosDataset(Dataset):
 class HeliosDatasetConfig(Config):
     """Configuration for the HeliosDataset."""
 
-    samples: list[SampleInformation]
     tile_path: UPath
+    samples: list[SampleInformation] | None = None
     dtype: np.dtype = np.float32
 
     def validate(self) -> None:
@@ -520,9 +520,16 @@ class HeliosDatasetConfig(Config):
         Raises:
             ValueError: If the configuration is invalid.
         """
+        # Check if not or not exists
         if self.tile_path is None:
             raise ValueError("Tile directory is not set")
+        if not self.tile_path.exists():
+            raise ValueError("Tile directory does not exist")
 
     def build(self) -> "HeliosDataset":
         """Build the dataset."""
-        return HeliosDataset(*self.samples, tile_path=self.tile_path, dtype=self.dtype)
+        return HeliosDataset(
+            *(self.samples or []),
+            tile_path=self.tile_path,
+            dtype=self.dtype,
+        )

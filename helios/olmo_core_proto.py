@@ -19,8 +19,8 @@ from olmo_core.utils import get_default_device
 from upath import UPath
 
 from helios.data.constants import Modality
-from helios.data.dataloader import HeliosDataLoader
-from helios.data.dataset import HeliosDataset, collate_helios
+from helios.data.dataloader import HeliosDataLoaderConfig
+from helios.data.dataset import HeliosDatasetConfig, collate_helios
 from helios.latent_predictor import LatentMIMStyle
 from helios.nn.flexihelios import Encoder, Predictor
 from helios.train.callbacks.speed_monitor import HeliosSpeedMonitorCallback
@@ -120,13 +120,13 @@ if __name__ == "__main__":
     train_module = train_module_config.build(model=model)
     dp_process_group = train_module.dp_process_group
 
-    # Prepare samples from Helios dataset
-    dataloader = HeliosDataLoader(
-        dataset=HeliosDataset(
-            tile_path=UPath("/weka/dfive-default/helios/dataset/20250212/"),
-            dtype=np.dtype("float32"),
-        ),
-        collator=collate_helios,
+    dataset_config = HeliosDatasetConfig(
+        tile_path=UPath("/weka/dfive-default/helios/dataset/20250212/"),
+        dtype=np.dtype("float32"),
+    )
+    dataset_config.validate()
+    dataset = dataset_config.build()
+    dataloader_config = HeliosDataLoaderConfig(
         global_batch_size=GLOBAL_BATCH_SIZE,
         dp_world_size=get_world_size(dp_process_group),
         dp_rank=get_rank(dp_process_group),
@@ -134,6 +134,11 @@ if __name__ == "__main__":
         work_dir=workdir,
         num_threads=NUM_THREADS,
         num_workers=NUM_WORKERS,
+    )
+    dataloader_config.validate()
+    dataloader = dataloader_config.build(
+        dataset=dataset,
+        collator=collate_helios,
     )
 
     run_name = f"test-debug-{str(uuid.uuid4())[:8]}"
