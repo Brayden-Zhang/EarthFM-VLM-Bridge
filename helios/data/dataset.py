@@ -22,6 +22,22 @@ from pyproj import Transformer
 from torch.utils.data import Dataset
 from upath import UPath
 
+
+from helios.data.constants import (
+    BASE_RESOLUTION,
+    IMAGE_TILE_SIZE,
+    SUPPORTED_MODALITIES,
+    TIMESTAMPS,
+    Modality,
+    ModalitySpec,
+    TimeSpan,
+)
+from helios.data.normalize import NORMALIZE_STRATEGY, Normalizer, Strategy
+from helios.data.utils import convert_to_db
+from helios.dataset.parse import ModalityTile
+from helios.dataset.sample import SampleInformation, load_image_for_sample
+from helios.types import ArrayTensor
+
 logger = logging.getLogger(__name__)
 
 
@@ -68,19 +84,17 @@ class HeliosSample(NamedTuple):
                 raise ValueError("Sentinel2 is not present in the sample")
             attribute_shape = []
             if Modality.get(attribute).get_tile_resolution() > 0:
-                attribute_shape += self.sentinel2.shape[
-                    :-2
-                ]  # add batch size (if has), height, width
+                # Add batch size (if has), height, width
+                attribute_shape += self.sentinel2.shape[:-2]
             if Modality.get(attribute).is_multitemporal:
-                attribute_shape += [self.sentinel2.shape[-2]]  # add number of timesteps
+                # Add number of timesteps
+                attribute_shape += [self.sentinel2.shape[-2]]
             if not mask:
-                attribute_shape += [
-                    Modality.get(attribute).num_bands
-                ]  # add number of bands
+                # Add number of bands
+                attribute_shape += [Modality.get(attribute).num_bands]
             else:
-                attribute_shape += [
-                    Modality.get(attribute).num_band_sets
-                ]  # add number of band sets
+                # Add number of band sets
+                attribute_shape += [Modality.get(attribute).num_band_sets]
             return attribute_shape
 
     @staticmethod
@@ -179,6 +193,9 @@ class HeliosDataset(Dataset):
         self.samples = self._filter_samples(list(samples))
         self.path = path
         self.dtype = dtype
+        # Initialize both normalizers for different modalities
+        self.normalizer_predefined = Normalizer(Strategy.PREDEFINED)
+        self.normalizer_computed = Normalizer(Strategy.COMPUTED)
         self._fs_local_rank = get_fs_local_rank()
         self._work_dir: Path | None = None  # type: ignore
         self._work_dir_set = False
@@ -304,16 +321,28 @@ class HeliosDataset(Dataset):
 
     @classmethod
     def load_sample(
-        self, sample_modality: ModalityTile, sample: SampleInformation, dtype: np.dtype
+        self, sample_modality: ModalityTile, sample: SampleInformation
     ) -> np.ndarray:
         """Load the sample."""
         image = load_image_for_sample(sample_modality, sample)
+
         if image.ndim == 4:
             modality_data = rearrange(image, "t c h w -> h w t c")
         else:
             modality_data = rearrange(image, "c h w -> h w c")
         # TODO: THere should be a dict per modality
         return modality_data.astype(dtype)
+a
+
+    def normalize_image(self, modality: ModalitySpec, image: np.ndarray) -> np.ndarray:
+        """Normalize the image."""
+        if NORMALIZE_STRATEGY[modality] == Strategy.PREDEFINED:
+            return self.normalizer_predefined.normalize(modality, image)
+        elif NORMALIZE_STRATEGY[modality] == Strategy.COMPUTED:
+            return self.normalizer_computed.normalize(modality, image)
+        else:
+            raise ValueError("Unknown normalization strategy!")
+
 
     def __getitem__(self, index: int) -> HeliosSample:
         """Get the item at the given index."""
@@ -321,24 +350,16 @@ class HeliosDataset(Dataset):
         sample_dict = {}
         for modality in sample.modalities:
             sample_modality = sample.modalities[modality]
-            image = self.load_sample(sample_modality, sample, self.dtype)
-            sample_dict[modality.name] = image
-            # Get latlon and timestamps from s2
+            image = self.load_sample(sample_modality, sample)
+            # Convert Sentinel1 data to dB
+            if modality == Modality.SENTINEL1:
+                image = convert_to_db(image)
+            # Normalize data and convert to dtype
+            image = self.normalize_image(modality, image)
+            sample_dict[modality.name] = image.astype(self.dtype)
+            # Get latlon and timestamps from Sentinel2 data
             if modality == Modality.SENTINEL2:
-                if image.shape[-2] != 12:
-                    logger.info(f"sample.sentinel2.shape: {image.shape}")
-                    logger.info(f"sample: {sample}")
-                    exit(0)
-                if Modality.LATLON in self.supported_modalities:
-                    sample_dict["latlon"] = self._get_latlon(sample).astype(np.float32)
-                sample_dict["timestamps"] = self._get_timestamps(sample).astype(
-                    np.int32
-                )
-            # TODO: fix the bug with sentinel1 data (missing bands)
-            # if modality == Modality.SENTINEL1:
-            #     if modality_data.shape[-2] != 12:
-            #         logger.info(f"sample.sentinel1.shape: {modality_data.shape}")
-            #         logger.info(f"sample.timestamps: {sample}")
-            #         exit(0)
-        # TODO: Add normalization
+                sample_dict["latlon"] = self._get_latlon(sample).astype(self.dtype)
+                sample_dict["timestamps"] = self._get_timestamps(sample)
+
         return HeliosSample(**sample_dict)

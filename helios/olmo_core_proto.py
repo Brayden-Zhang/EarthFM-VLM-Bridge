@@ -126,7 +126,9 @@ if __name__ == "__main__":
 
     # Prepare samples from Helios dataset
     tile_path = UPath("/weka/dfive-default/helios/dataset/20250212/")
+
     tiles = parse_helios_dataset(tile_path, supported_modalities=supported_modalities)
+
     logger.info(f"Tiles: {len(tiles)}")
     samples = image_tiles_to_samples(tiles, supported_modalities=supported_modalities)
     logger.info(f"Samples: {len(samples)}")

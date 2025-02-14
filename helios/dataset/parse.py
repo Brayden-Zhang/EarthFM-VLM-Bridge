@@ -4,11 +4,18 @@ import csv
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum
 
 from upath import UPath
 
-from helios.data.constants import BASE_RESOLUTION, BandSet, Modality, ModalitySpec
+
+from helios.data.constants import (
+    BASE_RESOLUTION,
+    SUPPORTED_MODALITIES,
+    BandSet,
+    ModalitySpec,
+    TimeSpan,
+)
+
 from helios.dataset_creation.util import WindowMetadata, get_modality_fname
 
 logger = logging.getLogger(__name__)
@@ -71,29 +78,6 @@ class ModalityTile:
         for band_set in self.band_sets:
             bands.extend(band_set.bands)
         return bands
-
-
-class TimeSpan(str, Enum):
-    """Enum to distinguish data that is valid for different time ranges."""
-
-    # Only one data point (not time series).
-    STATIC = "static"
-
-    # Monthly over one year.
-    YEAR = "year"
-
-    # Every data point in a two-week period.
-    TWO_WEEK = "two_week"
-
-    def get_suffix(self) -> str:
-        """Returns the suffix used for this timespan in raw Helios dataset."""
-        if self == TimeSpan.STATIC:
-            return ""
-        if self == TimeSpan.YEAR:
-            return "_monthly"
-        if self == TimeSpan.TWO_WEEK:
-            return "_freq"
-        raise ValueError("invalid TimeSpan")
 
 
 def parse_modality_csv(
@@ -160,10 +144,10 @@ def parse_modality_csv(
             time=tile.center_time,
         )
         for band_set in modality.band_sets:
-            modality_folder_name = f"{modality.get_tile_resolution()}_{modality.name}{time_span.get_suffix()}"
             fname = get_modality_fname(
                 helios_path,
-                modality_folder_name,
+                modality,
+                time_span,
                 window_metadata,
                 band_set.get_resolution(),
                 "tif",
@@ -194,6 +178,7 @@ def parse_helios_dataset(
         # TODO: there's N/A in the image_idx column for openstreetmap
         if modality.name == "openstreetmap":
             continue
+
         if modality.is_multitemporal:
             # We need to load the one-year and two-week data separately.
             time_spans = [TimeSpan.YEAR, TimeSpan.TWO_WEEK]
