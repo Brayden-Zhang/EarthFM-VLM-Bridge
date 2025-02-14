@@ -4,8 +4,6 @@ import logging
 from collections.abc import Callable
 from pathlib import Path
 
-import numpy as np
-
 from helios.data.constants import Modality
 from helios.data.dataset import HeliosDataset, HeliosSample
 from helios.dataset.parse import ModalityTile
@@ -41,7 +39,7 @@ class TestHeliosDataset:
         samples = prepare_samples(tmp_path)
         sample: SampleInformation = samples[0]
         sample_modality: ModalityTile = sample.modalities[Modality.SENTINEL2]
-        image = HeliosDataset.load_sample(sample_modality, sample, dtype=np.uint16)
+        image = HeliosDataset.load_sample(sample_modality, sample)
         sentinel2_bandset_indices = Modality.SENTINEL2.bandsets_as_indices()
         # checking that sample data is loaded in the order corresponding to the bandset indices
         # These are manually extracted values from each band and dependent on the seed (call with conftest.py)
