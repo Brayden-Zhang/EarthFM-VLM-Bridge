@@ -913,7 +913,7 @@ class Predictor(FlexiHeliosBase):
         self.apply(self._init_weights)
 
     def add_masks(self, tokens_and_masks: TokensAndMasks) -> dict[str, Tensor]:
-        """Replace tokens that should be decoded (MaskValue.DECODER_ONLY) with the learnable mask token.
+        """Replace tokens that should be decoded (MaskValue.DECODER) with the learnable mask token.
 
         in a dimension-agnostic way using einops. We assume the final dimension of each token tensor
         is the embedding dimension matching self.mask_token's size.
@@ -926,7 +926,7 @@ class Predictor(FlexiHeliosBase):
             )
 
             # A boolean mask: True where tokens must be replaced by the mask token
-            kept_mask = mask_modality == MaskValue.DECODER_ONLY.value
+            kept_mask = mask_modality == MaskValue.DECODER.value
 
             # Build the einops pattern and dimension dict
             spatial_dims = x_modality.shape[
@@ -977,10 +977,10 @@ class Predictor(FlexiHeliosBase):
             mask.int(), dim=1, descending=True, stable=True
         )
         tokens = tokens.gather(1, indices[:, :, None].expand_as(tokens))
-        binarized_decoder_only_mask = sorted_mask == MaskValue.DECODER_ONLY.value
+        binarized_decoder_mask = sorted_mask == MaskValue.DECODER.value
         binarized_online_encoder_mask = sorted_mask == MaskValue.ONLINE_ENCODER.value
         # cut off to the length of the longest sequence
-        max_length_to_be_decoded = binarized_decoder_only_mask.sum(-1).max()
+        max_length_to_be_decoded = binarized_decoder_mask.sum(-1).max()
         max_length_of_unmasked_tokens = binarized_online_encoder_mask.sum(-1).max()
         # x will be the query tokens, and y will be the key / value tokens
         x = tokens[:, :max_length_to_be_decoded]
@@ -990,7 +990,7 @@ class Predictor(FlexiHeliosBase):
         # x tokens to add back into the token list. TODO is this even necessary? it could
         # get padded with noise tokens since we don't care about reconstruction at all
         # for a whole bunch of tokens
-        x_mask = binarized_decoder_only_mask[:, :max_length_to_be_decoded].to(
+        x_mask = binarized_decoder_mask[:, :max_length_to_be_decoded].to(
             dtype=org_mask_dtype
         )
         # the y mask is going to be used to determine which of the y values take. True values
@@ -1071,7 +1071,7 @@ class Predictor(FlexiHeliosBase):
 
     def is_any_data_to_be_decoded(self, modality_mask: Tensor) -> bool:
         """Check if any data is to be decoded for a given modality."""
-        return modality_mask.max() == MaskValue.DECODER_ONLY.value
+        return modality_mask.max() == MaskValue.DECODER.value
 
     def forward(
         self,

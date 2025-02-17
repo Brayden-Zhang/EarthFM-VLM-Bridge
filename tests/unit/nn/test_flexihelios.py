@@ -263,7 +263,7 @@ class TestPredictor:
         sentinel2_tokens = torch.randn(B, H, W, T, C_G, D)
 
         sentinel2_mask = torch.zeros(B, H, W, T, C_G).float()
-        sentinel2_mask[0, 0, 0, 0, 0] = MaskValue.DECODER_ONLY.value
+        sentinel2_mask[0, 0, 0, 0, 0] = MaskValue.DECODER.value
         latlon = torch.randn(B, 1, D)
         latlon_mask = torch.randint(0, 2, (B, 1)).float()
 

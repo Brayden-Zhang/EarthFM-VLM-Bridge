@@ -442,7 +442,7 @@ class TestPredictor:
 
         sentinel2_mask = torch.full(
             (B, H, W, T, sentinel2_num_band_sets),
-            fill_value=MaskValue.DECODER_ONLY.value,
+            fill_value=MaskValue.DECODER.value,
             dtype=torch.float32,
         )
         sentinel2_mask[:, :, :, :, 0] = MaskValue.ONLINE_ENCODER.value
@@ -512,14 +512,14 @@ class TestPredictor:
 
         sentinel2_mask = torch.full(
             (B, H, W, T, sentinel2_num_band_sets),
-            fill_value=MaskValue.DECODER_ONLY.value,
+            fill_value=MaskValue.DECODER.value,
             dtype=torch.float32,
         )
         # Create dummy latitude and longitude data (and its mask)
         latlon = torch.randn(B, latlon_num_band_sets, embedding_dim)
         latlon_mask = torch.full(
             (B, latlon_num_band_sets),
-            fill_value=MaskValue.DECODER_ONLY.value,
+            fill_value=MaskValue.DECODER.value,
             dtype=torch.float32,
         )
 

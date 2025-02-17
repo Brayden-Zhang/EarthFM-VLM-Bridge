@@ -39,7 +39,7 @@ def test_random_masking() -> None:
             logger.info(f"Mask name: {modality_name}")
             total_elements = mask.numel()
             num_encoder = len(mask[mask == MaskValue.ONLINE_ENCODER.value])
-            num_decoder = len(mask[mask == MaskValue.DECODER_ONLY.value])
+            num_decoder = len(mask[mask == MaskValue.DECODER.value])
             assert (
                 num_encoder / total_elements
             ) == encode_ratio, f"{modality_name} has incorrect encode mask ratio"

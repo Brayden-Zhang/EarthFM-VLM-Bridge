@@ -492,7 +492,7 @@ class HeliosTrainModule(TrainModule):
 
             with torch.no_grad():
                 target_output = self.model.target_encoder.forward(
-                    batch, patch_size=patch_size
+                    batch.unmask(), patch_size=patch_size
                 )
 
             loss = self.loss_fn(decoded, target_output)
