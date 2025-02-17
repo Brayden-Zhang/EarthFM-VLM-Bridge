@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from logging import getLogger
 from typing import Any, cast
 
+import numpy as np
 import torch
 import torch.distributed as dist
 import torch.distributed.checkpoint.state_dict as dist_cp_sd
@@ -368,9 +369,16 @@ class HeliosTrainModule(TrainModule):
 
         # Move tensors to the right device.
         # we may want to modify this
-        batch = batch.to_device(self.device)
-        kwargs = {"patch_size": 8, "encode_ratio": 0.5, "decode_ratio": 0.5}
-        masked_batch = self.masking_strategy.apply_mask(batch, **kwargs)
+        max_patch_size = 8
+        token_budget = 1500
+        h_w_to_sample = list(range(1, 13))
+
+        patch_size = np.random.choice(max_patch_size)
+        subsampled_batch = batch.subset(patch_size, token_budget, h_w_to_sample)
+
+        subsampled_batch = subsampled_batch.to_device(self.device)
+        kwargs = {"patch_size": patch_size, "encode_ratio": 0.5, "decode_ratio": 0.5}
+        masked_batch = self.masking_strategy.apply_mask(subsampled_batch, **kwargs)
 
         # Run Encoder and decoder on the augmented input
         decoded, loss = self.model_forward(masked_batch)
