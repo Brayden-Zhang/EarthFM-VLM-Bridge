@@ -8,7 +8,7 @@ from typing import NamedTuple
 import torch
 import torch.nn.functional as F
 from einops import rearrange, repeat
-from olmo.core.config import Config
+from olmo_core.config import Config
 from torch import Tensor, nn
 
 from helios.constants import BASE_GSD
