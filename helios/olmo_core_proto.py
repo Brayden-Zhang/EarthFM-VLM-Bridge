@@ -1,6 +1,7 @@
 """Trying to prototype fitting everything into olmo core."""
 
 import logging
+import shutil
 import uuid
 
 import numpy as np
@@ -34,6 +35,9 @@ logger = logging.getLogger(__name__)
 if __name__ == "__main__":
     # Variables to be changed per user
     workdir = UPath("/temp/helios/workdir")  # nosec
+    if workdir.exists():
+        shutil.rmtree(workdir)
+
     WANDB_USERNAME = "eai-ai2"  # nosec
     WANDB_PROJECT = "helios-debug"
     # PER EXPERIMENT Variables
@@ -46,13 +50,17 @@ if __name__ == "__main__":
     CANCEL_CHECK_INTERVAL = 1
     SAVE_FOLDER = workdir / "save_folder"
     LOAD_STRATEGY = LoadStrategy.if_available
+
+    # Model Variables
     SUPPORTED_MODALITIES = [
         Modality.SENTINEL2,
         Modality.LATLON,
         Modality.SENTINEL1,
         # Modality.WORLDCOVER,
     ]
+    PATCH_SIZE = 8
 
+    #################### Setup environment ####################
     dp_config = None
     # for distributed training use torchrun
     # Uncomment this line to use distributed training
@@ -77,8 +85,6 @@ if __name__ == "__main__":
         max_sequence_length=12,
         use_channel_embs=True,
     )
-    # Build the encoder for later evaluation
-    encoder = encoder_config.build()
     decoder_config = PredictorConfig(
         encoder_embedding_size=16,
         decoder_embedding_size=16,
@@ -89,9 +95,10 @@ if __name__ == "__main__":
         max_patch_size=8,
         supported_modalities=SUPPORTED_MODALITIES,
     )
-    model_config = LatentPredictorConfig(
+    model_config = LatentMIMConfig(
         encoder_config=encoder_config,
         decoder_config=decoder_config,
+        patch_size=PATCH_SIZE,
     )
     model_config.validate()
     model = model_config.build()
@@ -194,11 +201,12 @@ if __name__ == "__main__":
         GeobenchDataset(geobench_dir, "m-eurosat", "valid", "default"),
         collate_fn=GeobenchDataset.collate_fn,
     )
-    # TODO: this should use target encoder
     train_embeddings, train_labels = get_embeddings(
-        data_loader=train_loader, model=encoder
+        data_loader=train_loader, model=model.target_encoder
     )
-    val_embeddings, test_labels = get_embeddings(data_loader=val_loader, model=encoder)
+    val_embeddings, test_labels = get_embeddings(
+        data_loader=val_loader, model=model.target_encoder
+    )
     val_result = run_knn(
         eval_type="KNN-20",
         train_embeddings=train_embeddings,

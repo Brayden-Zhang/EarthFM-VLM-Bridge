@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import torch.nn as nn
 from olmo_core.config import Config
 
-from helios.nn.flexihelios import Encoder, Predictor, TokensAndMasks
+from helios.nn.flexihelios import EncoderConfig, PredictorConfig, TokensAndMasks
 from helios.train.masking import MaskedHeliosSample
 
 
@@ -51,28 +51,39 @@ class LatentMIM(nn.Module):
 class LatentMIMConfig(Config):
     """Configuration for the Latent Predictor."""
 
-    encoder: "Encoder"
-    decoder: "Predictor"
+    encoder_config: "EncoderConfig"
+    decoder_config: "PredictorConfig"
     patch_size: int = 8
 
     def validate(self) -> None:
         """Validate the configuration."""
-        if self.encoder.supported_modalities != self.decoder.supported_modalities:
+        if (
+            self.encoder_config.supported_modalities
+            != self.decoder_config.supported_modalities
+        ):
             raise ValueError("Encoder and decoder must support the same modalities")
-        if self.encoder.max_patch_size != self.decoder.max_patch_size:
-            raise ValueError("Encoder and decoder must have the same max patch size")
-        if self.encoder.max_sequence_length != self.decoder.max_sequence_length:
+        if self.encoder_config.base_patch_size != self.decoder_config.base_patch_size:
+            raise ValueError("Encoder and decoder must have the same base patch size")
+        if (
+            self.encoder_config.max_sequence_length
+            != self.decoder_config.max_sequence_length
+        ):
             raise ValueError(
                 "Encoder and decoder must have the same max sequence length"
             )
-        if self.encoder.embedding_size != self.decoder.encoder_embedding_size:
+        if (
+            self.encoder_config.embedding_size
+            != self.decoder_config.encoder_embedding_size
+        ):
             raise ValueError("Encoder embedding size must be consistent!")
 
     def build(self) -> "LatentMIM":
         """Build the Latent Predictor."""
         self.validate()
+        encoder = self.encoder_config.build()
+        decoder = self.decoder_config.build()
         return LatentMIM(
-            encoder=self.encoder,
-            decoder=self.decoder,
+            encoder=encoder,
+            decoder=decoder,
             patch_size=self.patch_size,
         )
