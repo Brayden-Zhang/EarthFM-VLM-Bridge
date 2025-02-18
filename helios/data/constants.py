@@ -97,6 +97,7 @@ class ModalitySpec:
     tile_resolution_factor: int
     band_sets: Sequence[BandSet]
     is_multitemporal: bool
+    ignore_when_parsing: bool  # If true this modality is not parsed from the csv file and not loaded form a file
 
     def __hash__(self) -> int:
         """Hash this Modality."""
@@ -163,6 +164,7 @@ class Modality:
         tile_resolution_factor=1,
         band_sets=[BandSet(["R", "G", "B", "IR"], 1)],
         is_multitemporal=False,
+        ignore_when_parsing=False,
     )
 
     SENTINEL1 = ModalitySpec(
@@ -170,6 +172,7 @@ class Modality:
         tile_resolution_factor=16,
         band_sets=[BandSet(["vv", "vh"], 16)],
         is_multitemporal=True,
+        ignore_when_parsing=False,
     )
 
     SENTINEL2 = ModalitySpec(
@@ -184,6 +187,7 @@ class Modality:
             BandSet(["B01", "B09", "B10"], 64),
         ],
         is_multitemporal=True,
+        ignore_when_parsing=False,
     )
 
     LANDSAT = ModalitySpec(
@@ -196,6 +200,7 @@ class Modality:
             BandSet(["B1", "B2", "B3", "B4", "B5", "B6", "B7", "B9", "B10", "B11"], 16),
         ],
         is_multitemporal=True,
+        ignore_when_parsing=False,
     )
 
     WORLDCOVER = ModalitySpec(
@@ -203,6 +208,7 @@ class Modality:
         tile_resolution_factor=16,
         band_sets=[BandSet(["B1"], 16)],
         is_multitemporal=False,
+        ignore_when_parsing=False,
     )
 
     OPENSTREETMAP = ModalitySpec(
@@ -246,6 +252,7 @@ class Modality:
             )
         ],
         is_multitemporal=False,
+        ignore_when_parsing=False,
     )
 
     LATLON = ModalitySpec(
@@ -253,6 +260,7 @@ class Modality:
         tile_resolution_factor=0,
         band_sets=[BandSet(["lat", "lon"], 0)],
         is_multitemporal=False,
+        ignore_when_parsing=True,
     )
 
     @classmethod

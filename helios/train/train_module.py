@@ -194,6 +194,8 @@ class HeliosTrainModule(TrainModule):
         super().__init__()
         self.ema_decay = ema_decay
         self.model = model
+        num_params = sum(p.numel() for p in self.model.parameters())
+        logger.info(f"number of parameters: {num_params:,d}")
         self.device = device or get_default_device()
         self.world_mesh = build_device_mesh(dp=dp_config, device_type=self.device.type)
         logger.info(
