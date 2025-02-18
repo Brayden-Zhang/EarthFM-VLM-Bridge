@@ -255,7 +255,7 @@ class HeliosDataLoader(DataLoaderBase):
             mock_sentinel1 = torch.rand(1, 256, 256, 12, 2)
             output_dict["sentinel1"] = mock_sentinel1
         if Modality.WORLDCOVER in self.dataset.supported_modalities:
-            mock_worldcover = torch.rand(1, 256, 256,1, 1)
+            mock_worldcover = torch.rand(1, 256, 256, 1, 1)
             output_dict["worldcover"] = mock_worldcover
         if Modality.LATLON in self.dataset.supported_modalities:
             mock_latlon = torch.rand(1, 2)

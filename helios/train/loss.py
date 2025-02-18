@@ -9,10 +9,11 @@ import torch
 import torch.nn.functional as F
 from class_registry import ClassRegistry
 from einops import rearrange
-from helios.nn.flexihelios import TokensAndMasks
-from helios.train.masking import MaskedHeliosSample, MaskValue
 from olmo_core.config import Config
 from torch import Tensor
+
+from helios.nn.flexihelios import TokensAndMasks
+from helios.train.masking import MaskedHeliosSample, MaskValue
 
 logger = logging.getLogger(__name__)
 
