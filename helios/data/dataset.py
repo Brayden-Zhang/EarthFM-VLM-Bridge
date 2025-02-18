@@ -227,11 +227,11 @@ class HeliosSample(NamedTuple):
             sampled_hw_p, max_tokens_per_instance
         )
         sampled_hw = sampled_hw_p * patch_size
-
-        start_h = np.random.choice(self.height - sampled_hw_p + 1)
-        start_w = np.random.choice(self.width - sampled_hw_p + 1)
+        max_start_h = self.height - sampled_hw + 1
+        start_h = np.random.choice(max_start_h)
+        # TODO: FORCE h == w for now other option is to update 2d pos encoding
+        start_w = start_h  # np.random.choice(self.width - sampled_hw_p + 1)
         start_t = np.random.choice(self.time - max_t + 1)
-
         new_data_dict: dict[str, ArrayTensor] = {}
         for attribute, modality in self.as_dict(ignore_nones=True).items():
             assert modality is not None
