@@ -171,25 +171,15 @@ class HeliosSample(NamedTuple):
             if attribute == "timestamps":
                 continue
             modality_spec = Modality.get(attribute)
-            if (modality_spec.get_tile_resolution() > 0) and (
-                modality_spec.is_multitemporal
-            ):
+            if modality_spec.is_spacetime_varying:
                 # for now, lets assume fixed resolution
                 time_multiply_tokens += (h_w_p**2) * modality_spec.num_band_sets
-            elif (modality_spec.get_tile_resolution() > 0) and (
-                not modality_spec.is_multitemporal
-            ):
+            elif modality_spec.is_space_only_varying:
                 # for now, lets assume fixed resolution
                 used_tokens += (h_w_p**2) * modality_spec.num_band_sets
-            elif (modality_spec.get_tile_resolution() == 0) and (
-                not modality_spec.is_multitemporal
-            ):
-                # only time varying
+            elif modality_spec.is_time_only_varying:
                 time_multiply_tokens += modality_spec.num_band_sets
-            elif (modality_spec.get_tile_resolution() == 0) and (
-                not modality_spec.is_multitemporal
-            ):
-                # static in both space and time
+            elif modality_spec.is_static_in_space_and_time:
                 used_tokens += modality_spec.num_band_sets
         if time_multiply_tokens == 0:
             # no time-varying inputs, so our return value of t
@@ -245,9 +235,7 @@ class HeliosSample(NamedTuple):
                 continue
 
             modality_spec = Modality.get(attribute)
-            if (modality_spec.get_tile_resolution() > 0) and (
-                modality_spec.is_multitemporal
-            ):
+            if modality_spec.is_spacetime_varying:
                 # for now, lets assume fixed resolution
                 new_data_dict[attribute] = modality[
                     :,
@@ -255,22 +243,14 @@ class HeliosSample(NamedTuple):
                     start_w : start_w + sampled_hw,
                     start_t : start_t + max_t,
                 ]
-            elif (modality_spec.get_tile_resolution() > 0) and (
-                not modality_spec.is_multitemporal
-            ):
+            elif modality_spec.is_space_only_varying:
                 # for now, lets assume fixed resolution
                 new_data_dict[attribute] = modality[
                     :, start_h : start_h + sampled_hw, start_w : start_w + sampled_hw
                 ]
-            elif (modality_spec.get_tile_resolution() == 0) and (
-                not modality_spec.is_multitemporal
-            ):
-                # only time varying
+            elif modality_spec.is_time_only_varying:
                 new_data_dict[attribute] = modality[:, start_t : start_t + max_t]
-            elif (modality_spec.get_tile_resolution() == 0) and (
-                not modality_spec.is_multitemporal
-            ):
-                # static in both space and time
+            elif modality_spec.is_static_in_space_and_time:
                 new_data_dict[attribute] = modality
         return HeliosSample(**new_data_dict)
 
