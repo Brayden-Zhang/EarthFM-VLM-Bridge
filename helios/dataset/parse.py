@@ -14,7 +14,8 @@ from helios.data.constants import (
     ModalitySpec,
     TimeSpan,
 )
-from helios.dataset_creation.util import WindowMetadata, get_modality_fname
+
+from .util import WindowMetadata, get_modality_fname
 
 logger = logging.getLogger(__name__)
 

@@ -8,9 +8,9 @@ import numpy.typing as npt
 import rasterio
 import rasterio.windows
 
-from helios.data.constants import IMAGE_TILE_SIZE, Modality, ModalitySpec
+from helios.data.constants import IMAGE_TILE_SIZE, Modality, ModalitySpec, TimeSpan
 
-from .parse import GridTile, ModalityTile, TimeSpan
+from .parse import GridTile, ModalityTile
 
 logger = logging.getLogger(__name__)
 
