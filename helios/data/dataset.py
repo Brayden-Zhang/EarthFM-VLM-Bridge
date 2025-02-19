@@ -495,6 +495,7 @@ class HeliosDataset(Dataset):
             if modality == Modality.SENTINEL2:
                 sample_dict["latlon"] = self._get_latlon(sample).astype(self.dtype)
                 sample_dict["timestamps"] = self._get_timestamps(sample)
+
         return HeliosSample(**sample_dict)
 
 
