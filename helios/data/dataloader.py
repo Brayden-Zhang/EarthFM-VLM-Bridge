@@ -389,10 +389,10 @@ class HeliosDataLoaderConfig(Config):
         self, dataset: HeliosDataset, collator: Callable = default_collate
     ) -> "HeliosDataLoader":
         """Build the HeliosDataLoader."""
+        self.validate()
+
         if not isinstance(dataset, HeliosDataset):
             raise ValueError("Dataset must be a HeliosDataset")
-
-        self.validate()
         dataset.prepare()
 
         return HeliosDataLoader(

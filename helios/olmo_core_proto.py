@@ -23,7 +23,7 @@ from helios.data.constants import Modality
 from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig, collate_helios
 from helios.nn.flexihelios import EncoderConfig, PredictorConfig
-from helios.nn.latent_predictor import LatentPredictorConfig
+from helios.nn.latent_mim import LatentMIMConfig
 from helios.train.callbacks.speed_monitor import HeliosSpeedMonitorCallback
 from helios.train.loss import LossConfig
 from helios.train.masking import MaskingConfig
@@ -40,7 +40,8 @@ if __name__ == "__main__":
 
     WANDB_USERNAME = "eai-ai2"  # nosec
     WANDB_PROJECT = "helios-debug"
-    # PER EXPERIMENT Variables
+
+    # Training Variables
     GLOBAL_BATCH_SIZE = 1
     RANK_BATCH_SIZE = 1
     MAX_DURATION = Duration.epochs(10)
@@ -51,14 +52,16 @@ if __name__ == "__main__":
     SAVE_FOLDER = workdir / "save_folder"
     LOAD_STRATEGY = LoadStrategy.if_available
 
-    # Model Variables
+    # Other Variables
+    TILE_PATH = UPath("/weka/dfive-default/helios/dataset/20250212/")
+    DTYPE = np.dtype("float32")
     SUPPORTED_MODALITIES = [
         Modality.SENTINEL2,
         Modality.LATLON,
         Modality.SENTINEL1,
         # Modality.WORLDCOVER,
     ]
-    PATCH_SIZE = 8
+    MAX_PATCH_SIZE = 8  # NOTE: actual patch_size <= max_patch_size
     ENCODE_RATIO = 0.5
     DECODE_RATIO = 0.5
 
@@ -80,7 +83,7 @@ if __name__ == "__main__":
     encoder_config = EncoderConfig(
         supported_modalities=SUPPORTED_MODALITIES,
         embedding_size=16,
-        base_patch_size=8,
+        max_patch_size=MAX_PATCH_SIZE,
         num_heads=2,
         depth=2,
         mlp_ratio=1.0,
@@ -95,15 +98,12 @@ if __name__ == "__main__":
         mlp_ratio=1.0,
         num_heads=2,
         max_sequence_length=12,
-        max_patch_size=8,
         supported_modalities=SUPPORTED_MODALITIES,
     )
     model_config = LatentMIMConfig(
         encoder_config=encoder_config,
         decoder_config=decoder_config,
-        patch_size=PATCH_SIZE,
     )
-    model_config.validate()
     model = model_config.build()
 
     device = get_default_device()
@@ -137,10 +137,10 @@ if __name__ == "__main__":
 
     #################### Configs for dataloader ####################
     dataset_config = HeliosDatasetConfig(
-        tile_path=UPath("/weka/dfive-default/helios/dataset/20250212/"),
-        dtype=np.dtype("float32"),
+        tile_path=TILE_PATH,
+        supported_modalities=SUPPORTED_MODALITIES,
+        dtype=DTYPE,
     )
-    dataset_config.validate()
     dataset = dataset_config.build()
     dataloader_config = HeliosDataLoaderConfig(
         global_batch_size=GLOBAL_BATCH_SIZE,
@@ -151,7 +151,6 @@ if __name__ == "__main__":
         num_threads=NUM_THREADS,
         num_workers=NUM_WORKERS,
     )
-    dataloader_config.validate()
     dataloader = dataloader_config.build(
         dataset=dataset,
         collator=collate_helios,

@@ -658,12 +658,14 @@ class Encoder(FlexiHeliosBase):
             drop_path=drop_path,
             supported_modalities=supported_modalities,
         )
+        self.max_patch_size = max_patch_size
+        self.embedding_size = embedding_size
         self.patch_embeddings = FlexiHeliosPatchEmbeddings(
             self.supported_modality_names,
-            max_patch_size,
-            embedding_size,
+            self.max_patch_size,
+            self.embedding_size,
         )
-        self.norm = nn.LayerNorm(embedding_size)
+        self.norm = nn.LayerNorm(self.embedding_size)
         self.apply(self._init_weights)
 
     def create_token_exit_ids(
@@ -1202,7 +1204,6 @@ class EncoderConfig(Config):
     supported_modalities: list[ModalitySpec]
     embedding_size: int = 16
     # This is the base patch size for the patch embedder
-    # The actual patch size applied can be different
     max_patch_size: int = 8
     num_heads: int = 2
     mlp_ratio: float = 1.0
@@ -1217,7 +1218,7 @@ class EncoderConfig(Config):
             raise ValueError("At least one modality must be added!")
         else:
             for modality in self.supported_modalities:
-                if modality not in Modality.names():
+                if modality not in Modality.values():
                     raise ValueError(f"Modality {modality} is not supported")
 
     def build(self) -> "Encoder":
@@ -1257,7 +1258,7 @@ class PredictorConfig(Config):
             raise ValueError("At least one modality must be added!")
         else:
             for modality in self.supported_modalities:
-                if modality not in Modality.names():
+                if modality not in Modality.values():
                     raise ValueError(f"Modality {modality} is not supported")
 
     def build(self) -> "Predictor":

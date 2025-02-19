@@ -495,7 +495,7 @@ class HeliosTrainModule(TrainModule):
     ) -> tuple[torch.Tensor | None, torch.Tensor | None]:
         """Run a forward pass."""
         with self._model_forward_context():
-            decoded = self.model.forward(batch, patch_size=patch_size)
+            decoded = self.model.forward(batch, patch_size)
             with torch.no_grad():
                 logger.info("target encoder running here")
                 target_output = self.model.target_encoder.forward(

@@ -17,14 +17,12 @@ class LatentMIM(nn.Module):
         self,
         encoder: nn.Module,
         decoder: nn.Module,
-        patch_size: int = 8,
     ):
         """Initialize the Latent MIM Style.
 
         Args:
             encoder: The encoder to use.
             decoder: The decoder to use.
-            patch_size: The patch size to use.
         """
         super().__init__()
         self.encoder = encoder
@@ -32,18 +30,12 @@ class LatentMIM(nn.Module):
         self.target_encoder = deepcopy(self.encoder)
         for p in self.target_encoder.parameters():
             p.requires_grad = False
-        self.patch_size = patch_size
 
-    def forward(
-        self,
-        x: MaskedHeliosSample,
-    ) -> TokensAndMasks:
+    def forward(self, x: MaskedHeliosSample, patch_size: int) -> TokensAndMasks:
         """Forward pass for the Latent MIM Style."""
         # TODO: Input And outputs here are not consistent between encoder and decoder need a tokensandmaks++
-        latent = self.encoder(x, patch_size=self.patch_size)
-        decoded = self.decoder(
-            latent, timestamps=x.timestamps, patch_size=self.patch_size
-        )
+        latent = self.encoder(x, patch_size=patch_size)
+        decoded = self.decoder(latent, timestamps=x.timestamps, patch_size=patch_size)
         return decoded
 
 
@@ -53,7 +45,6 @@ class LatentMIMConfig(Config):
 
     encoder_config: "EncoderConfig"
     decoder_config: "PredictorConfig"
-    patch_size: int = 8
 
     def validate(self) -> None:
         """Validate the configuration."""
@@ -83,5 +74,4 @@ class LatentMIMConfig(Config):
         return LatentMIM(
             encoder=encoder,
             decoder=decoder,
-            patch_size=self.patch_size,
         )
