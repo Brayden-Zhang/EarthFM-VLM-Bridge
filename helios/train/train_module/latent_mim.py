@@ -108,7 +108,7 @@ class LatentMIMTrainModule(HeliosTrainModule):
         device: torch.device | None = None,
         state_dict_save_opts: dist_cp_sd.StateDictOptions | None = None,
         state_dict_load_opts: dist_cp_sd.StateDictOptions | None = None,
-        ema_decay: float = 0.99,
+        ema_decay: float = 0.999,
     ):
         """Initialize the training module.
 
