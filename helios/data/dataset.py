@@ -116,6 +116,11 @@ class HeliosSample(NamedTuple):
                 return_dict[field] = val
         return return_dict
 
+    @property
+    def modalities(self) -> list[str]:
+        """Get the modalities present in the sample."""
+        return list(self.as_dict(ignore_nones=False).keys())
+
     def to_device(self, device: torch.device) -> "HeliosSample":
         """Move all tensors to the specified device.
 
@@ -258,25 +263,21 @@ class HeliosSample(NamedTuple):
 
 
 def collate_helios(batch: list[HeliosSample]) -> HeliosSample:
-    """Collate function."""
+    """Collate function that automatically handles any modalities present in the samples."""
 
     # Stack tensors while handling None values
-    def stack_or_none(attr: str) -> torch.Tensor | None:
+    def stack(attr: str) -> torch.Tensor | None:
         """Stack the tensors while handling None values."""
-        if getattr(batch[0], attr) is None:
-            # TODO: THis will need to updated to handle sometimes missing modalities
-            return None
         return torch.stack(
             [torch.from_numpy(getattr(sample, attr)) for sample in batch], dim=0
         )
 
-    return HeliosSample(
-        sentinel2=stack_or_none("sentinel2"),
-        sentinel1=stack_or_none("sentinel1"),
-        worldcover=stack_or_none("worldcover"),
-        latlon=stack_or_none("latlon"),
-        timestamps=stack_or_none("timestamps"),
-    )
+    # TODO: Gets all non-None modalities ASSUMES ALL SAMPLES HAVE THE SAME MODALITIES
+    sample_fields = batch[0].modalities
+
+    # Create a dictionary of stacked tensors for each field
+    collated_dict = {field: stack(field) for field in sample_fields}
+    return HeliosSample(**collated_dict)
 
 
 class HeliosDataset(Dataset):
@@ -530,14 +531,6 @@ class HeliosDataset(Dataset):
             if modality == Modality.SENTINEL2:
                 sample_dict["latlon"] = self._get_latlon(sample).astype(self.dtype)
                 sample_dict["timestamps"] = self._get_timestamps(sample)
-
-        for modality, data in sample_dict.items():
-            if data is None:
-                logger.info(f"{modality} is None")
-                raise ValueError(f"{modality} is None")
-            if modality == Modality.WORLDCOVER:
-                logger.info(f"{modality.name} shape: {data.shape}")
-        logger.info(f"Sample dict: {sample_dict.keys()}")
         return HeliosSample(**sample_dict)
 
 
@@ -591,6 +584,20 @@ class HeliosDatasetConfig(Config):
         )
         """Build the dataset."""
         self.validate()
+        return HeliosDataset(
+            tile_path=self.tile_path,
+            supported_modalities=self.supported_modalities,
+            samples=self.samples,
+            dtype=self.dtype,
+        )
+        return HeliosDataset(
+            tile_path=self.tile_path,
+            supported_modalities=self.supported_modalities,
+            samples=self.samples,
+            dtype=self.dtype,
+        )
+            dtype=self.dtype,
+        )
         return HeliosDataset(
             tile_path=self.tile_path,
             supported_modalities=self.supported_modalities,
