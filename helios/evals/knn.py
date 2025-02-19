@@ -1,8 +1,12 @@
 """KNN evals of Helios models."""
 
+import logging
+
 import torch
 import torch.nn as nn
 from sklearn.metrics import accuracy_score, f1_score
+
+logger = logging.getLogger(__name__)
 
 
 def run_knn(
@@ -70,6 +74,7 @@ def _run_knn_for_k(
     cos = nn.CosineSimilarity(dim=-1)
     all_preds = []
     for idx in range(test_embeddings.shape[0]):
+        test_embedding = test_embeddings[idx].unsqueeze(dim=0)
         test_embedding = (
             test_embeddings[idx].unsqueeze(dim=0).repeat(train_embeddings.shape[0], 1)
         )
