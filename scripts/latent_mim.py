@@ -1,8 +1,8 @@
 """Trying to prototype fitting everything into olmo core."""
 
 import logging
-import shutil
 import uuid
+from os import environ
 
 import numpy as np
 from olmo_core.distributed.utils import get_fs_local_rank, get_rank, get_world_size
@@ -32,12 +32,15 @@ logger = logging.getLogger(__name__)
 if __name__ == "__main__":
     # Variables to be changed per user
     workdir = UPath("/temp/helios/workdir")  # nosec
-    if workdir.exists():
-        shutil.rmtree(workdir)
+    # This allows pre-emptible jobs to save their workdir in the output folder
+    if environ.get("USE_OUTPUT_FOLDER"):
+        workdir = UPath(environ["USE_OUTPUT_FOLDER"]) / "helios" / "workdir"
+    # elif workdir.exists():
+    #     shutil.rmtree(workdir)
 
     WANDB_USERNAME = "eai-ai2"  # nosec
     WANDB_PROJECT = "helios-debug"
-    run_name = f"helios-beaker-without-worldcover-{str(uuid.uuid4())[:8]}"
+    run_name = f"helios-beaker-test-pre-empt-{str(uuid.uuid4())[:8]}"
     # PER EXPERIMENT Variables
     LR = 0.0001
     GLOBAL_BATCH_SIZE = 32
@@ -64,7 +67,7 @@ if __name__ == "__main__":
     TOKEN_BUDGET = 1500
     H_W_TO_SAMPLE_MIN = 2
     H_W_TO_SAMPLE_MAX = 13
-    WARMUP_STEPS = 5
+    WARMUP_STEPS = 30
     #################### Setup environment ####################
     dp_config = None
     # for distributed training use torchrun
@@ -136,6 +139,7 @@ if __name__ == "__main__":
         loss_config=loss_config,
         rank_batch_size=RANK_BATCH_SIZE,
         max_grad_norm=1.0,
+        scheduler=scheduler,
     )
     train_module = train_module_config.build(model=model)
     dp_process_group = train_module.dp_process_group
