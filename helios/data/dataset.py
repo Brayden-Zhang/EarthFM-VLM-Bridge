@@ -521,7 +521,6 @@ class HeliosDataset(Dataset):
         try:
             return self.normalizer_computed.normalize(modality, image)
         except Exception:
-            logger.warning(f"Failed to normalize {modality} using computed strategy")
             return self.normalizer_predefined.normalize(modality, image)
 
     def __getitem__(self, index: int) -> HeliosSample:
