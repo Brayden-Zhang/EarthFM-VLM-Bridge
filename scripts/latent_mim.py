@@ -5,10 +5,6 @@ import uuid
 from os import environ
 
 import numpy as np
-from olmo_core.distributed.parallel.data_parallel import (
-    DataParallelConfig,
-    DataParallelType,
-)
 from olmo_core.distributed.utils import get_fs_local_rank, get_rank, get_world_size
 from olmo_core.optim import AdamWConfig
 from olmo_core.optim.scheduler import ConstantWithWarmup
@@ -82,7 +78,8 @@ if __name__ == "__main__":
     DECODER_NUM_HEADS = 8
     MLP_RATIO = 4.0
 
-    # Downstream evaluation
+    LOSS_TYPE = "patch_discrimination"
+
     EVAL_INTERVAL = 20
     EVAL_TASKS = ["m-eurosat"]
 
@@ -90,7 +87,7 @@ if __name__ == "__main__":
     dp_config = None
     # for distributed training use torchrun
     # Uncomment this line to use distributed training
-    dp_config = DataParallelConfig(name=DataParallelType.ddp)
+    # dp_config = DataParallelConfig(name=DataParallelType.ddp)
     # for distributed training use torchrun
     if dp_config is not None:
         prepare_training_environment(seed=42)
@@ -148,7 +145,7 @@ if __name__ == "__main__":
     )
     loss_config = LossConfig(
         loss_config={
-            "type": "patch_discrimination",
+            "type": LOSS_TYPE,
         }
     )
     scheduler = ConstantWithWarmup(warmup_steps=WARMUP_STEPS)
