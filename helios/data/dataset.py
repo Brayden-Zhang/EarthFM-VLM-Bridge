@@ -128,7 +128,7 @@ class HeliosSample(NamedTuple):
     @property
     def modalities(self) -> list[str]:
         """Get the modalities present in the sample."""
-        return list(self.as_dict(ignore_nones=False).keys())
+        return list(self.as_dict(ignore_nones=True).keys())
 
     def to_device(self, device: torch.device) -> "HeliosSample":
         """Move all tensors to the specified device.
@@ -273,8 +273,10 @@ def collate_helios(batch: list[HeliosSample]) -> HeliosSample:
     """Collate function that automatically handles any modalities present in the samples."""
 
     # Stack tensors while handling None values
-    def stack(attr: str) -> torch.Tensor | None:
+    def stack_or_none(attr: str) -> torch.Tensor | None:
         """Stack the tensors while handling None values."""
+        if getattr(batch[0], attr) is None:
+            return None
         return torch.stack(
             [torch.from_numpy(getattr(sample, attr)) for sample in batch], dim=0
         )
@@ -283,7 +285,7 @@ def collate_helios(batch: list[HeliosSample]) -> HeliosSample:
     sample_fields = batch[0].modalities
 
     # Create a dictionary of stacked tensors for each field
-    collated_dict = {field: stack(field) for field in sample_fields}
+    collated_dict = {field: stack_or_none(field) for field in sample_fields}
     return HeliosSample(**collated_dict)
 
 
@@ -412,9 +414,9 @@ class HeliosDataset(Dataset):
 
     def _get_samples(self) -> list[SampleInformation]:
         """Get the samples from the raw dataset (image tile directory)."""
-        tiles = parse_helios_dataset(self.tile_path)
+        tiles = parse_helios_dataset(self.tile_path, self.supported_modalities)
         logger.info(f"Total tiles: {len(tiles)}")
-        samples = image_tiles_to_samples(tiles)
+        samples = image_tiles_to_samples(tiles, self.supported_modalities)
         logger.info(f"Total samples: {len(samples)}")
         logger.info("Distribution of samples before filtering:\n")
         self._log_modality_distribution(samples)
@@ -469,7 +471,6 @@ class HeliosDataset(Dataset):
             filtered_samples.append(sample)
         logger.info(f"Number of samples after filtering: {len(filtered_samples)}")
         logger.info("Distribution of samples after filtering:")
-        filtered_samples = filtered_samples[:2]
         self._log_modality_distribution(filtered_samples)
         return filtered_samples
 
@@ -526,8 +527,6 @@ class HeliosDataset(Dataset):
         """Get the item at the given index."""
         sample = self.samples[index]
         sample_dict = {}
-        if Modality.WORLDCOVER not in sample.modalities:
-            raise ValueError("Worldcover is not present in the sample")
         for modality in sample.modalities:
             sample_modality = sample.modalities[modality]
             image = self.load_sample(sample_modality, sample)

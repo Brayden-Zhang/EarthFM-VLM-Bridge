@@ -1,12 +1,13 @@
 """Trying to prototype fitting everything into olmo core."""
 
 import logging
-import shutil
 import uuid
+from os import environ
 
 import numpy as np
 from olmo_core.distributed.utils import get_fs_local_rank, get_rank, get_world_size
 from olmo_core.optim import AdamWConfig
+from olmo_core.optim.scheduler import ConstantWithWarmup
 from olmo_core.train import prepare_training_environment, teardown_training_environment
 from olmo_core.train.callbacks import GPUMemoryMonitorCallback, WandBCallback
 from olmo_core.train.checkpoint import CheckpointerConfig
@@ -31,17 +32,19 @@ logger = logging.getLogger(__name__)
 if __name__ == "__main__":
     # Variables to be changed per user
     workdir = UPath("/temp/helios/workdir")  # nosec
-    if workdir.exists():
-        shutil.rmtree(workdir)
+    # This allows pre-emptible jobs to save their workdir in the output folder
+    if environ.get("USE_OUTPUT_FOLDER"):
+        workdir = UPath(environ["USE_OUTPUT_FOLDER"]) / "helios" / "workdir"
 
     WANDB_USERNAME = "eai-ai2"  # nosec
     WANDB_PROJECT = "helios-debug"
+    run_name = f"helios-test-no-worldcover-2M-{str(uuid.uuid4())[:8]}"
     # PER EXPERIMENT Variables
-    LR = 1e-4
+    LR = 0.0001
     GLOBAL_BATCH_SIZE = 32
     RANK_BATCH_SIZE = 32
-    MAX_DURATION = Duration.epochs(10)
-    NUM_WORKERS = 0
+    MAX_DURATION = Duration.epochs(50)
+    NUM_WORKERS = 16
     NUM_THREADS = 0
     METRICS_COLLECT_INTERVAL = 1
     CANCEL_CHECK_INTERVAL = 1
@@ -62,7 +65,14 @@ if __name__ == "__main__":
     TOKEN_BUDGET = 1500
     H_W_TO_SAMPLE_MIN = 2
     H_W_TO_SAMPLE_MAX = 13
-
+    WARMUP_STEPS = 2
+    ENCODER_EMBEDDING_SIZE = 256
+    DECODER_EMBEDDING_SIZE = 256
+    ENCODER_DEPTH = 4
+    DECODER_DEPTH = 4
+    ENCODER_NUM_HEADS = 8
+    DECODER_NUM_HEADS = 8
+    MLP_RATIO = 4.0
     #################### Setup environment ####################
     dp_config = None
     # for distributed training use torchrun
@@ -80,21 +90,21 @@ if __name__ == "__main__":
     # TODO: build encoder_small, encoder_base, encoder_large, etc. Same for decoder
     encoder_config = EncoderConfig(
         supported_modalities=SUPPORTED_MODALITIES,
-        embedding_size=16,
+        embedding_size=ENCODER_EMBEDDING_SIZE,
         max_patch_size=MAX_PATCH_SIZE,
-        num_heads=2,
-        depth=2,
-        mlp_ratio=1.0,
+        num_heads=ENCODER_NUM_HEADS,
+        depth=ENCODER_DEPTH,
+        mlp_ratio=MLP_RATIO,
         drop_path=0.1,
         max_sequence_length=12,
         use_channel_embs=True,
     )
     decoder_config = PredictorConfig(
-        encoder_embedding_size=16,
-        decoder_embedding_size=16,
-        depth=2,
-        mlp_ratio=1.0,
-        num_heads=2,
+        encoder_embedding_size=ENCODER_EMBEDDING_SIZE,
+        decoder_embedding_size=DECODER_EMBEDDING_SIZE,
+        depth=DECODER_DEPTH,
+        mlp_ratio=MLP_RATIO,
+        num_heads=DECODER_NUM_HEADS,
         max_sequence_length=12,
         supported_modalities=SUPPORTED_MODALITIES,
     )
@@ -127,11 +137,14 @@ if __name__ == "__main__":
             "type": "patch_discrimination",
         }
     )
+    scheduler = ConstantWithWarmup(warmup_steps=WARMUP_STEPS)
     train_module_config = LatentMIMTrainModuleConfig(
         optim=optim_config,
         masking_config=masking_config,
         loss_config=loss_config,
         rank_batch_size=RANK_BATCH_SIZE,
+        max_grad_norm=1.0,
+        scheduler=scheduler,
     )
     train_module = train_module_config.build(model=model)
     dp_process_group = train_module.dp_process_group
@@ -158,7 +171,6 @@ if __name__ == "__main__":
     )
 
     #################### Configs for trainer ####################
-    run_name = f"test-debug-{str(uuid.uuid4())[:8]}"
     wandb_callback = WandBCallback(
         name=run_name,
         project=WANDB_PROJECT,

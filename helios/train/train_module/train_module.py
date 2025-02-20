@@ -1,7 +1,6 @@
 """Training and optimizer abstraction for Helios."""
 
 import contextlib
-import math
 from collections.abc import Generator
 from dataclasses import dataclass
 from logging import getLogger
@@ -10,7 +9,6 @@ from typing import Any, cast
 import torch
 import torch.distributed as dist
 import torch.distributed.checkpoint.state_dict as dist_cp_sd
-import torch.nn as nn
 from olmo_core.config import Config, DType
 from olmo_core.distributed.parallel import (
     DataParallelConfig,
@@ -31,7 +29,6 @@ from olmo_core.train.train_module.transformer import (
 from olmo_core.utils import gc_cuda, get_default_device
 from torch.distributed.checkpoint.metadata import Metadata
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
-from torch.distributed.tensor import DTensor
 from torch.optim import Optimizer
 
 logger = getLogger(__name__)
@@ -433,44 +430,9 @@ class HeliosTrainModule(TrainModule):
         foreach: bool | None = None,
     ) -> torch.Tensor:
         """Clip the gradients."""
-        logger.info("clip grad norm has not been adapted for helios")
         if isinstance(self.model, FSDP):
             return self.model.clip_grad_norm_(max_grad_norm)
-
-        # Adapted from https://github.com/pytorch/torchtitan/blob/2a4437014e66bcf88a3f0419b816266e6326d539/torchtitan/utils.py#L348
-
-        parameters = [p for p in self.model.parameters()]
-        grads = [p.grad for p in parameters if p.grad is not None]
-
-        total_norm = nn.utils.get_total_norm(
-            grads, norm_type=norm_type, error_if_nonfinite=False, foreach=foreach
+        # Pipeline parallel grad clipping required nightly torch
+        return torch.nn.utils.clip_grad_norm_(
+            self.model.parameters(), max_grad_norm, norm_type=norm_type, foreach=foreach
         )
-
-        # If total_norm is a DTensor, the placements must be `torch.distributed._tensor.ops.math_ops._NormPartial`.
-        # We can simply reduce the DTensor to get the total norm in this tensor's process group
-        # and then convert it to a local tensor.
-        # NOTE: It has two purposes:
-        #       1. to make sure the total norm is computed correctly when PP is used (see below)
-        #       2. to return a reduced total_norm tensor whose .item() would return the correct value
-        if isinstance(total_norm, DTensor):
-            # Will reach here if any non-PP parallelism is used.
-            # If only using PP, total_norm will be a local tensor.
-            total_norm = total_norm.full_tensor()
-
-        if self.train_pp_schedule is not None:
-            pp_mesh = self.train_pp_schedule.pp_mesh
-            if math.isinf(norm_type):
-                dist.all_reduce(
-                    total_norm, op=dist.ReduceOp.MAX, group=pp_mesh.get_group()
-                )
-            else:
-                total_norm **= norm_type
-                dist.all_reduce(
-                    total_norm, op=dist.ReduceOp.SUM, group=pp_mesh.get_group()
-                )
-                total_norm **= 1.0 / norm_type
-
-        torch.nn.utils.clip_grads_with_norm_(
-            parameters, max_grad_norm, total_norm, foreach=foreach
-        )
-        return total_norm
