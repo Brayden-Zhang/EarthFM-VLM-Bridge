@@ -181,11 +181,7 @@ class LatentMIMTrainModule(HeliosTrainModule):
         decoded, loss = self.model_forward(masked_batch, patch_size)
 
         self.trainer.record_metric(
-<<<<<<< HEAD
-            TRAIN_PATCH_DISC_LOSS_METRIC,
-=======
             f"train/{self.base_loss.name}",  # get loss name
->>>>>>> add name to loss
             loss / get_world_size(self.dp_process_group),
             ReduceType.mean,
         )
