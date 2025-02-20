@@ -19,7 +19,7 @@ from helios.evals.knn import run_knn
 logger = logging.getLogger(__name__)
 
 
-# Default metric name for classification
+# Geobench classification
 METRIC_NAME = "f1"
 NAME_PREFIX = "Geobench"
 GEOBENCH_DIR = UPath("/weka/dfive-default/presto-geobench/dataset/geobench")
@@ -41,51 +41,55 @@ class DownstreamEvaluator:
         self.trainer = trainer
         self.device = device
 
-    def val(self) -> float:
-        """Validate the model on the downstream task."""
-        train_ds = GeobenchDataset(GEOBENCH_DIR, self.task, "train", "default")
-        train_loader = DataLoader(train_ds, collate_fn=GeobenchDataset.collate_fn)
-        val_loader = DataLoader(
-            GeobenchDataset(GEOBENCH_DIR, self.task, "valid", "default"),
+    def _get_data_loader(self, split: str) -> DataLoader:
+        """Get the data loader for the given split."""
+        return DataLoader(
+            GeobenchDataset(GEOBENCH_DIR, self.task, split, "default"),
             collate_fn=GeobenchDataset.collate_fn,
         )
-        train_embeddings, train_labels = get_embeddings(
-            data_loader=train_loader,
+
+    def _get_embeddings(self, data_loader: DataLoader) -> tuple:
+        """Get the embeddings for the given data loader."""
+        return get_embeddings(
+            data_loader=data_loader,
             model=self.trainer.train_module.model.target_encoder,
             patch_size=self.trainer.train_module.model.encoder.max_patch_size,
         )
-        val_embeddings, test_labels = get_embeddings(
-            data_loader=val_loader,
-            model=self.trainer.train_module.model.target_encoder,
-            patch_size=self.trainer.train_module.model.encoder.max_patch_size,
-        )
-        val_result = run_knn(
-            eval_type="KNN-20",
-            train_embeddings=train_embeddings,
-            train_labels=train_labels,
-            test_embeddings=val_embeddings,
-            test_labels=test_labels,
-            num_classes=train_ds.num_classes,
-            is_multilabel=train_ds.is_multilabel,
-            device=self.device,
-        )
-        logger.info(
-            f"Downstream evaluator {self.name} {METRIC_NAME} score: {val_result}"
-        )
-        return val_result
+
+    def val(self) -> float:
+        """Validate the model on the downstream task."""
+        try:
+            train_loader = self._get_data_loader("train")
+            val_loader = self._get_data_loader("valid")
+
+            train_embeddings, train_labels = self._get_embeddings(train_loader)
+            test_embeddings, test_labels = self._get_embeddings(val_loader)
+
+            val_result = run_knn(
+                eval_type="KNN-20",
+                train_embeddings=train_embeddings,
+                train_labels=train_labels,
+                test_embeddings=test_embeddings,
+                test_labels=test_labels,
+                num_classes=train_loader.dataset.num_classes,
+                is_multilabel=train_loader.dataset.is_multilabel,
+                device=self.device,
+            )
+            logger.info(
+                f"Downstream evaluator {self.name} {METRIC_NAME} score: {val_result}"
+            )
+            return val_result
+        except Exception as e:
+            logger.error(f"Error during evaluation: {e}")
+            return 0
 
 
 @dataclass
 class DownstreamEvaluatorCallback(Callback):
     """Runs in-loop evaluations periodically during training."""
 
-    # The evaluators to run
     evaluators: list[DownstreamEvaluator] = field(default_factory=list)
-
-    # The interval (in steps) with which to run the evaluators
     eval_interval: int = 10
-
-    # The duration to run each evaluator for
     eval_duration: Duration = field(default_factory=lambda: Duration.epochs(10))
 
     def post_step(self) -> None:
@@ -94,16 +98,16 @@ class DownstreamEvaluatorCallback(Callback):
             return
 
         for evaluator in self.evaluators:
-            logger.info(f"Running {evaluator.name} evals...")
+            logger.info(f"Running {evaluator.name} evaluations...")
             start_time = time.monotonic()
-            # Run validation
             val_result = evaluator.val()
             self.trainer.record_metric(
                 f"eval/{evaluator.name}/{METRIC_NAME}", val_result
             )
             logger.info(
-                f"Finished {evaluator.name} evals in {time.monotonic() - start_time:.1f} seconds. {METRIC_NAME}: {val_result}"
+                f"Finished {evaluator.name} evaluations in {time.monotonic() - start_time:.1f} seconds."
             )
+            logger.info(f"Metric {METRIC_NAME}: {val_result}")
 
 
 @dataclass
@@ -115,21 +119,20 @@ class DownstreamEvaluatorCallbackConfig(CallbackConfig):
     eval_duration: Duration = field(default_factory=lambda: Duration.epochs(10))
     enabled: bool = True
 
-    def build(self, trainer: "Trainer") -> Callback | None:
+    def build(self, trainer: Trainer) -> Callback | None:
         """Build the downstream evaluator callback."""
         if not self.enabled:
             return None
 
-        evaluators: list[Evaluator] = []
-        for task in self.tasks:
-            evaluators.append(
-                DownstreamEvaluator(
-                    name=f"{NAME_PREFIX}-{task}",
-                    task=task,
-                    trainer=trainer,
-                    device=trainer.device,
-                )
+        evaluators: list[Evaluator] = [
+            DownstreamEvaluator(
+                name=f"{NAME_PREFIX}-{task}",
+                task=task,
+                trainer=trainer,
+                device=trainer.device,
             )
+            for task in self.tasks
+        ]
 
         return DownstreamEvaluatorCallback(
             evaluators=evaluators,
