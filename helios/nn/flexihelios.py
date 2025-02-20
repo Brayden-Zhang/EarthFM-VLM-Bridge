@@ -351,7 +351,7 @@ class FlexiHeliosCompositeEncodings(nn.Module):
         Returns:
             Tensor with encodings applied based on modality type
         """
-        logger.info(f"Applying encodings to modality {modality}")
+        logger.warning(f"Applying encodings to modality {modality}")
         if modality == Modality.LATLON.name:
             return modality_tokens
         # TODO: Improve this implementation it is quite bad

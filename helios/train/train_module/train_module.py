@@ -33,8 +33,6 @@ from torch.optim import Optimizer
 
 logger = getLogger(__name__)
 
-TRAIN_PATCH_DISC_LOSS_METRIC = "train/patch_disc_loss"
-
 
 @dataclass
 class HeliosTrainModuleConfig(Config):
@@ -55,6 +53,7 @@ class HeliosTrainModuleConfig(Config):
         state_dict_load_opts: Override state dict options for loading.
     """
 
+    # Training settings
     rank_batch_size: int
     optim: OptimConfig
 
@@ -124,7 +123,6 @@ class HeliosTrainModule(TrainModule):
         float8_config: Float8 configuration for the model.
         dp_config: Data parallel configuration for the model.
         ac_config: Activation checkpointing configuration for the model.
-        loss_fn: Loss function to use.
         compile_loss: Whether to compile the loss function.
         autocast_precision: Enable AMP with this data type.
         max_grad_norm: Clip gradient norms to this value.
@@ -170,6 +168,7 @@ class HeliosTrainModule(TrainModule):
             state_dict_load_opts: Override state dict options for loading.
         """
         super().__init__()
+
         self.model = model
         num_params = sum(p.numel() for p in self.model.parameters())
         logger.info(f"number of parameters: {num_params:,d}")
@@ -410,6 +409,7 @@ class HeliosTrainModule(TrainModule):
             yield
 
     def _clear_loss_buffers(self) -> None:
+        """Clear the loss buffers."""
         logger.warning("clear loss buffers not implemented")
         pass
 

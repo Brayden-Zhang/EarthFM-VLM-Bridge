@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 class Loss(ABC):
     """Abstract base class for loss functions."""
 
+    name: str
+
     @staticmethod
     def _flatten(x: Tensor) -> Tensor:
         return rearrange(x, "b ... d -> b (...) d")
@@ -65,6 +67,8 @@ LOSS_REGISTRY = ClassRegistry[Loss]()
 @LOSS_REGISTRY.register("patch_discrimination")
 class PatchDiscriminationLoss(Loss):
     """Loss function for patch discrimination task."""
+
+    name = "Patch Discrimination"
 
     def __init__(
         self,
@@ -147,6 +151,8 @@ class PatchDiscriminationLoss(Loss):
 class L1Loss(Loss):
     """Loss function for L1 (mean average error)."""
 
+    name = "L1"
+
     def compute(
         self, predictions: TokensAndMasks, targets: TokensAndMasks, **kwargs: Any
     ) -> float:
@@ -173,6 +179,8 @@ class L1Loss(Loss):
 class L2Loss(Loss):
     """Loss function for L2 (mean squared error)."""
 
+    name = "L2"
+
     def compute(
         self, predictions: TokensAndMasks, targets: TokensAndMasks, **kwargs: Any
     ) -> float:
@@ -198,6 +206,8 @@ class L2Loss(Loss):
 @LOSS_REGISTRY.register("cross_entropy")
 class CrossEntropyLoss(Loss):
     """Loss function for cross entropy."""
+
+    name = "Cross Entropy"
 
     def compute(
         self, predictions: TokensAndMasks, targets: TokensAndMasks, **kwargs: Any

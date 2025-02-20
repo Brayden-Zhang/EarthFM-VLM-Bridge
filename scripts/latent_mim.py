@@ -9,7 +9,10 @@ from olmo_core.distributed.utils import get_fs_local_rank, get_rank, get_world_s
 from olmo_core.optim import AdamWConfig
 from olmo_core.optim.scheduler import ConstantWithWarmup
 from olmo_core.train import prepare_training_environment, teardown_training_environment
-from olmo_core.train.callbacks import GPUMemoryMonitorCallback, WandBCallback
+from olmo_core.train.callbacks import (
+    GPUMemoryMonitorCallback,
+    WandBCallback,
+)
 from olmo_core.train.checkpoint import CheckpointerConfig
 from olmo_core.train.common import Duration, LoadStrategy
 from olmo_core.train.config import TrainerConfig
@@ -21,6 +24,7 @@ from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig, collate_helios
 from helios.nn.flexihelios import EncoderConfig, PredictorConfig
 from helios.nn.latent_mim import LatentMIMConfig
+from helios.train.callbacks.evaluator_callback import DownstreamEvaluatorCallbackConfig
 from helios.train.callbacks.speed_monitor import HeliosSpeedMonitorCallback
 from helios.train.loss import LossConfig
 from helios.train.masking import MaskingConfig
@@ -39,6 +43,7 @@ if __name__ == "__main__":
     WANDB_USERNAME = "eai-ai2"  # nosec
     WANDB_PROJECT = "helios-debug"
     run_name = f"helios-test-no-worldcover-2M-{str(uuid.uuid4())[:8]}"
+
     # PER EXPERIMENT Variables
     LR = 0.0001
     GLOBAL_BATCH_SIZE = 32
@@ -73,6 +78,15 @@ if __name__ == "__main__":
     ENCODER_NUM_HEADS = 8
     DECODER_NUM_HEADS = 8
     MLP_RATIO = 4.0
+    MAX_SEQUENCE_LENGTH = 12
+    DROP_PATH = 0.1
+    MAX_GRAD_NORM = 1.0
+
+    LOSS_TYPE = "patch_discrimination"
+
+    EVAL_INTERVAL = 20
+    EVAL_TASKS = ["m-eurosat"]
+
     #################### Setup environment ####################
     dp_config = None
     # for distributed training use torchrun
@@ -87,7 +101,6 @@ if __name__ == "__main__":
     logger.info("Starting Helios training")
 
     #################### Configs for model ####################
-    # TODO: build encoder_small, encoder_base, encoder_large, etc. Same for decoder
     encoder_config = EncoderConfig(
         supported_modalities=SUPPORTED_MODALITIES,
         embedding_size=ENCODER_EMBEDDING_SIZE,
@@ -95,8 +108,8 @@ if __name__ == "__main__":
         num_heads=ENCODER_NUM_HEADS,
         depth=ENCODER_DEPTH,
         mlp_ratio=MLP_RATIO,
-        drop_path=0.1,
-        max_sequence_length=12,
+        drop_path=DROP_PATH,
+        max_sequence_length=MAX_SEQUENCE_LENGTH,
         use_channel_embs=True,
     )
     decoder_config = PredictorConfig(
@@ -105,7 +118,7 @@ if __name__ == "__main__":
         depth=DECODER_DEPTH,
         mlp_ratio=MLP_RATIO,
         num_heads=DECODER_NUM_HEADS,
-        max_sequence_length=12,
+        max_sequence_length=MAX_SEQUENCE_LENGTH,
         supported_modalities=SUPPORTED_MODALITIES,
         learnable_channel_embeddings=True,
     )
@@ -135,7 +148,7 @@ if __name__ == "__main__":
     )
     loss_config = LossConfig(
         loss_config={
-            "type": "patch_discrimination",
+            "type": LOSS_TYPE,
         }
     )
     scheduler = ConstantWithWarmup(warmup_steps=WARMUP_STEPS)
@@ -144,7 +157,7 @@ if __name__ == "__main__":
         masking_config=masking_config,
         loss_config=loss_config,
         rank_batch_size=RANK_BATCH_SIZE,
-        max_grad_norm=1.0,
+        max_grad_norm=MAX_GRAD_NORM,
         scheduler=scheduler,
     )
     train_module = train_module_config.build(model=model)
@@ -176,7 +189,7 @@ if __name__ == "__main__":
         name=run_name,
         project=WANDB_PROJECT,
         entity=WANDB_USERNAME,
-        enabled=True,  # set to False to avoid wandb errors
+        enabled=True,
     )
     # Let us not use garbage collector fallback
     trainer_config = (
@@ -193,7 +206,13 @@ if __name__ == "__main__":
         .with_callback("wandb", wandb_callback)
         .with_callback("speed_monitor", HeliosSpeedMonitorCallback())
         .with_callback("gpu_memory_monitor", GPUMemoryMonitorCallback())
-        # .with_callback("profiler", ProfilerCallback())
+        .with_callback(
+            "downstream_evaluator",
+            DownstreamEvaluatorCallbackConfig(
+                tasks=EVAL_TASKS,
+                eval_interval=EVAL_INTERVAL,
+            ),
+        )
     )
     trainer = trainer_config.build(
         train_module=train_module,
@@ -201,39 +220,4 @@ if __name__ == "__main__":
     )
     trainer.fit()
 
-    #################### Eval ####################
-    # eval. Currently this will fail because by default our model ingests 4 timesteps.
-    # we should update the model architecture to ingest variable numbers of timesteps
-    from torch.utils.data import DataLoader
-
-    from helios.evals.datasets import GeobenchDataset
-    from helios.evals.embeddings import get_embeddings
-    from helios.evals.knn import run_knn
-
-    geobench_dir = UPath("/weka/skylight-default/presto-geobench/dataset/geobench")
-
-    common_args = {"geobench_dir": geobench_dir, "dataset": "m-eurosat"}
-    train_ds = GeobenchDataset(geobench_dir, "m-eurosat", "train", "default")
-    train_loader = DataLoader(train_ds, collate_fn=GeobenchDataset.collate_fn)
-    val_loader = DataLoader(
-        GeobenchDataset(geobench_dir, "m-eurosat", "valid", "default"),
-        collate_fn=GeobenchDataset.collate_fn,
-    )
-    train_embeddings, train_labels = get_embeddings(
-        data_loader=train_loader, model=model.target_encoder, patch_size=MAX_PATCH_SIZE
-    )
-    val_embeddings, test_labels = get_embeddings(
-        data_loader=val_loader, model=model.target_encoder, patch_size=MAX_PATCH_SIZE
-    )
-    val_result = run_knn(
-        eval_type="KNN-20",
-        train_embeddings=train_embeddings,
-        train_labels=train_labels,
-        test_embeddings=val_embeddings,
-        test_labels=test_labels,
-        num_classes=train_ds.num_classes,
-        is_multilabel=train_ds.is_multilabel,
-        device=device,
-    )
-    logger.info(val_result)
     teardown_training_environment()

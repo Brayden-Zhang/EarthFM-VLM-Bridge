@@ -27,8 +27,6 @@ from helios.train.train_module.train_module import (
 
 logger = getLogger(__name__)
 
-TRAIN_PATCH_DISC_LOSS_METRIC = "train/patch_disc_loss"
-
 
 @dataclass
 class LatentMIMTrainModuleConfig(HeliosTrainModuleConfig):
@@ -46,7 +44,7 @@ class LatentMIMTrainModuleConfig(HeliosTrainModuleConfig):
     masking_config: MaskingConfig = field(
         default_factory=lambda: MaskingConfig(strategy_config={"type": "random"})
     )
-    ema_decay: float = 0.999
+    ema_decay: tuple[float, float] = (0.996, 1.0)
     max_grad_norm: float = 1.0
 
     def build(
@@ -153,7 +151,6 @@ class LatentMIMTrainModule(HeliosTrainModule):
         self.base_loss = loss_config.build()
         self.masking_strategy = masking_config.build()
 
-    # TODO: Do we always want tokens and masks?
     def loss_fn(self, pred: Any, targets: Any) -> torch.Tensor:
         """Compute the loss between the predicted and target tensors."""
         return self.base_loss.compute(pred, targets)
@@ -164,11 +161,7 @@ class LatentMIMTrainModule(HeliosTrainModule):
 
     def train_batch(self, batch: HeliosSample, dry_run: bool = False) -> None:
         """Train a batch."""
-        # Record how many instances are going to be skipped (masked out).
-        # if (instance_mask := batch.get("instance_mask")) is not None and not dry_run:
-        #     self.record_metric("train/masked instances", (~instance_mask).sum(), ReduceType.sum)
-
-        # we may want to modify this
+        # Set the maximum number of tokens
         token_budget = self.model.token_budget
         # Smallest h /w must be bigger than the smallest patch size
         h_w_to_sample = list(
@@ -183,7 +176,7 @@ class LatentMIMTrainModule(HeliosTrainModule):
         decoded, loss = self.model_forward(masked_batch, patch_size)
 
         self.trainer.record_metric(
-            TRAIN_PATCH_DISC_LOSS_METRIC,
+            f"train/{self.base_loss.name}",
             loss / get_world_size(self.dp_process_group),
             ReduceType.mean,
         )
@@ -208,11 +201,9 @@ class LatentMIMTrainModule(HeliosTrainModule):
                 )
 
         del batch  # In case this helps with memory utilization.
-
         if dry_run:
             self._clear_loss_buffers()
             return
-
         self._clear_loss_buffers()
 
     def eval_batch(

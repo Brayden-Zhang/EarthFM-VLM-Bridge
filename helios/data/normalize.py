@@ -5,7 +5,7 @@ from enum import Enum
 
 import numpy as np
 
-from helios.data.constants import Modality, ModalitySpec
+from helios.data.constants import ModalitySpec
 
 
 class Strategy(Enum):
@@ -14,14 +14,6 @@ class Strategy(Enum):
     # Whether to use predefined or computed values for normalization
     PREDEFINED = "predefined"
     COMPUTED = "computed"
-
-
-# Normalization strategy for each modality
-NORMALIZE_STRATEGY = {
-    Modality.SENTINEL1: Strategy.PREDEFINED,
-    Modality.SENTINEL2: Strategy.PREDEFINED,
-    Modality.WORLDCOVER: Strategy.PREDEFINED,
-}
 
 
 class Normalizer:

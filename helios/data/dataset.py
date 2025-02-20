@@ -29,7 +29,7 @@ from helios.data.constants import (
     ModalitySpec,
     TimeSpan,
 )
-from helios.data.normalize import NORMALIZE_STRATEGY, Normalizer, Strategy
+from helios.data.normalize import Normalizer, Strategy
 from helios.data.utils import convert_to_db
 from helios.dataset.parse import ModalityTile, parse_helios_dataset
 from helios.dataset.sample import (
@@ -516,12 +516,12 @@ class HeliosDataset(Dataset):
 
     def normalize_image(self, modality: ModalitySpec, image: np.ndarray) -> np.ndarray:
         """Normalize the image."""
-        if NORMALIZE_STRATEGY[modality] == Strategy.PREDEFINED:
-            return self.normalizer_predefined.normalize(modality, image)
-        elif NORMALIZE_STRATEGY[modality] == Strategy.COMPUTED:
+        # Try computed strategy first, if it fails, try predefined strategy
+        # TODO: we can also make modality norm strategy configurable later
+        try:
             return self.normalizer_computed.normalize(modality, image)
-        else:
-            raise ValueError("Unknown normalization strategy!")
+        except Exception:
+            return self.normalizer_predefined.normalize(modality, image)
 
     def __getitem__(self, index: int) -> HeliosSample:
         """Get the item at the given index."""
