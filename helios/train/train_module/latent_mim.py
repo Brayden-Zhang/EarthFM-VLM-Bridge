@@ -109,7 +109,7 @@ class LatentMIMTrainModule(HeliosTrainModule):
         device: torch.device | None = None,
         state_dict_save_opts: dist_cp_sd.StateDictOptions | None = None,
         state_dict_load_opts: dist_cp_sd.StateDictOptions | None = None,
-        ema_decay: float = 0.999,
+        ema_decay: tuple[float, float] = (0.996, 1.0),
     ):
         """Initialize the training module.
 
@@ -131,7 +131,7 @@ class LatentMIMTrainModule(HeliosTrainModule):
             device: The device to train on.
             state_dict_save_opts: Override state dict options for saving.
             state_dict_load_opts: Override state dict options for loading.
-            ema_decay: EMA decay rate for target encoder (default: 0.99).
+            ema_decay: EMA decay rate for target encoder, as a tuple of (start_ema_decay, end_ema_decay)
         """
         super().__init__(
             model=model,
@@ -149,7 +149,7 @@ class LatentMIMTrainModule(HeliosTrainModule):
             state_dict_save_opts=state_dict_save_opts,
             state_dict_load_opts=state_dict_load_opts,
         )
-        self.ema_decay = ema_decay
+        self.start_ema, self.end_ema = ema_decay
         self.base_loss = loss_config.build()
         self.masking_strategy = masking_config.build()
 
@@ -192,14 +192,19 @@ class LatentMIMTrainModule(HeliosTrainModule):
         if loss is not None:
             loss.backward()
         # Update target encoder with EMA this should be a callback
+        cur_ema_value = (
+            self.start_ema
+            + self.trainer.global_step
+            * (self.end_ema - self.start_ema)
+            / self.trainer.max_steps
+        )
         with torch.no_grad():
-            logger.info(f"Using ema decay {self.ema_decay}")
+            logger.info(f"Using ema decay {cur_ema_value}")
             for param, target_param in zip(
                 self.model.encoder.parameters(), self.model.target_encoder.parameters()
             ):
                 target_param.data = (
-                    self.ema_decay * target_param.data
-                    + (1 - self.ema_decay) * param.data
+                    cur_ema_value * target_param.data + (1 - cur_ema_value) * param.data
                 )
 
         del batch  # In case this helps with memory utilization.
