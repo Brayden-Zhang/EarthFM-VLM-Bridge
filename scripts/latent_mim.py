@@ -4,6 +4,22 @@ import logging
 from os import environ
 
 import numpy as np
+from olmo_core.distributed.parallel.data_parallel import (
+    DataParallelConfig,
+    DataParallelType,
+)
+from olmo_core.optim import AdamWConfig
+from olmo_core.optim.scheduler import ConstantWithWarmup
+from olmo_core.train.callbacks import (
+    ConfigSaverCallback,
+    GPUMemoryMonitorCallback,
+    WandBCallback,
+)
+from olmo_core.train.checkpoint import CheckpointerConfig
+from olmo_core.train.common import Duration, LoadStrategy
+from olmo_core.train.config import TrainerConfig
+from upath import UPath
+
 from helios.data.constants import Modality
 from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig
@@ -14,16 +30,6 @@ from helios.train.callbacks import HeliosSpeedMonitorCallback
 from helios.train.loss import LossConfig
 from helios.train.masking import MaskingConfig
 from helios.train.train_module.latent_mim import LatentMIMTrainModuleConfig
-from olmo_core.distributed.parallel.data_parallel import (DataParallelConfig,
-                                                          DataParallelType)
-from olmo_core.optim import AdamWConfig
-from olmo_core.optim.scheduler import ConstantWithWarmup
-from olmo_core.train.callbacks import (ConfigSaverCallback,
-                                       GPUMemoryMonitorCallback, WandBCallback)
-from olmo_core.train.checkpoint import CheckpointerConfig
-from olmo_core.train.common import Duration, LoadStrategy
-from olmo_core.train.config import TrainerConfig
-from upath import UPath
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +84,7 @@ def build_train_module_config(
     """Build the train module config for an experiment."""
     LR = 0.0001
     RANK_BATCH_SIZE = (
-        16 # TODO: maybe this should be computed dynamically and not specified here
+        16  # TODO: maybe this should be computed dynamically and not specified here
     )
     ENCODE_RATIO = 0.5
     DECODE_RATIO = 0.5

@@ -6,17 +6,20 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import cast
 
+from olmo_core.config import Config, StrEnum
+from olmo_core.train import (
+    TrainerConfig,
+    prepare_training_environment,
+    teardown_training_environment,
+)
+from olmo_core.train.callbacks import ConfigSaverCallback, WandBCallback
+from olmo_core.utils import get_default_device, prepare_cli_environment, seed_all
+
 from helios.data.constants import ModalitySpec
 from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig, collate_helios
 from helios.nn.latent_mim import LatentMIMConfig
 from helios.train.train_module.latent_mim import LatentMIMTrainModuleConfig
-from olmo_core.config import Config, StrEnum
-from olmo_core.train import (TrainerConfig, prepare_training_environment,
-                             teardown_training_environment)
-from olmo_core.train.callbacks import ConfigSaverCallback, WandBCallback
-from olmo_core.utils import (get_default_device, prepare_cli_environment,
-                             seed_all)
 
 logger = logging.getLogger(__name__)
 

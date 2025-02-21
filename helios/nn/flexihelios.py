@@ -8,15 +8,18 @@ from typing import Any, NamedTuple
 import torch
 import torch.nn.functional as F
 from einops import rearrange, repeat
-from helios.data.constants import Modality, ModalitySpec
-from helios.nn.attention import Block
-from helios.nn.encodings import (get_1d_sincos_pos_encoding,
-                                 get_2d_sincos_pos_encoding_with_resolution,
-                                 get_month_encoding_table)
-from helios.nn.flexi_patch_embed import FlexiPatchEmbed
-from helios.train.masking import MaskedHeliosSample, MaskValue
 from olmo_core.config import Config
 from torch import Tensor, nn
+
+from helios.data.constants import Modality, ModalitySpec
+from helios.nn.attention import Block
+from helios.nn.encodings import (
+    get_1d_sincos_pos_encoding,
+    get_2d_sincos_pos_encoding_with_resolution,
+    get_month_encoding_table,
+)
+from helios.nn.flexi_patch_embed import FlexiPatchEmbed
+from helios.train.masking import MaskedHeliosSample, MaskValue
 
 logger = logging.getLogger(__name__)
 

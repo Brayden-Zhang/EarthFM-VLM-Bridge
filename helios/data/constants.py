@@ -3,7 +3,6 @@
 Warning: this is only developed for raster data currently.
 """
 
-from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
 
