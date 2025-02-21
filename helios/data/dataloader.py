@@ -10,11 +10,17 @@ from typing import Any
 
 import numpy as np
 import torch
+import torch.distributed as dist
 from einops import rearrange
 from olmo_core.config import Config
 from olmo_core.data.data_loader import DataLoaderBase
 from olmo_core.data.utils import get_rng, memmap_to_write
-from olmo_core.distributed.utils import barrier
+from olmo_core.distributed.utils import (
+    barrier,
+    get_fs_local_rank,
+    get_rank,
+    get_world_size,
+)
 from olmo_core.utils import roundrobin, threaded_generator
 from torch.utils.data import default_collate
 from upath import UPath
@@ -369,11 +375,8 @@ class HeliosDataLoaderConfig(Config):
     """Configuration for the HeliosDataLoader."""
 
     work_dir: UPath
-    global_batch_size: int = 1
-    dp_world_size: int = 1
-    dp_rank: int = 0
-    fs_local_rank: int = 0
-    seed: int = 0
+    global_batch_size: int
+    seed: int
     shuffle: bool = True
     num_threads: int | None = None
     num_workers: int = 0
@@ -386,7 +389,10 @@ class HeliosDataLoaderConfig(Config):
             raise ValueError("Work directory is not set")
 
     def build(
-        self, dataset: HeliosDataset, collator: Callable = default_collate
+        self,
+        dataset: HeliosDataset,
+        collator: Callable,
+        dp_process_group: dist.ProcessGroup | None = None,
     ) -> "HeliosDataLoader":
         """Build the HeliosDataLoader."""
         self.validate()
@@ -399,9 +405,9 @@ class HeliosDataLoaderConfig(Config):
             dataset=dataset,
             work_dir=self.work_dir,
             global_batch_size=self.global_batch_size,
-            dp_world_size=self.dp_world_size,
-            dp_rank=self.dp_rank,
-            fs_local_rank=self.fs_local_rank,
+            dp_world_size=get_world_size(dp_process_group),
+            dp_rank=get_rank(dp_process_group),
+            fs_local_rank=get_fs_local_rank(),
             seed=self.seed,
             shuffle=self.shuffle,
             num_threads=self.num_threads,

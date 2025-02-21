@@ -8,10 +8,11 @@ from olmo_core.config import Config
 
 from helios.data.transform import Transform, TransformConfig
 from helios.nn.flexihelios import EncoderConfig, PredictorConfig, TokensAndMasks
+from helios.nn.utils import DistributedMixins
 from helios.train.masking import MaskedHeliosSample
 
 
-class LatentMIM(nn.Module):
+class LatentMIM(nn.Module, DistributedMixins):
     """Latent MIM Style."""
 
     def __init__(
