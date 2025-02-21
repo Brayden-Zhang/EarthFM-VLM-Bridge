@@ -109,6 +109,32 @@ class TokensAndMasks(NamedTuple):
         """Return a dictionary of the shapes of the fields."""
         return {x: getattr(self, x).shape for x in self._fields}
 
+    @staticmethod
+    def _flatten(x: Tensor) -> Tensor:
+        return rearrange(x, "b ... d -> b (...) d")
+
+    def flatten_tokens_and_masks(self) -> tuple[Tensor, Tensor]:
+        """Return the flattened tokens and masks.
+
+        Tokens will have shape [B, T, D] and masks will have shape [B, T]
+        """
+        flattened_x, flattened_masks = [], []
+        for attr_name in self.modalities:
+            mask_attr_name = self.get_masked_modality_name(attr_name)
+            attr = getattr(self, attr_name)
+            masked_attr = getattr(self, mask_attr_name).unsqueeze(dim=-1)
+            if attr is not None:
+                if masked_attr is not None:
+                    raise ValueError(
+                        f"Can't have present {attr_name} but None {mask_attr_name}"
+                    )
+                flattened_x.append(self._flatten(attr))
+                flattened_masks.append(self._flatten(masked_attr))
+
+        x = torch.cat(flattened_x, dim=1)
+        masks = torch.cat(flattened_masks, dim=1)[:, :, 0]
+        return x, masks
+
 
 class FlexiHeliosPatchEmbeddings(nn.Module):
     """Module that patchifies and encodes the input data."""

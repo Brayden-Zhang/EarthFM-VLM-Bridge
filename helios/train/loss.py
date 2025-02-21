@@ -8,12 +8,11 @@ from typing import Any
 import torch
 import torch.nn.functional as F
 from class_registry import ClassRegistry
-from einops import rearrange
 from olmo_core.config import Config
 from torch import Tensor
 
 from helios.nn.flexihelios import TokensAndMasks
-from helios.train.masking import MaskedHeliosSample, MaskValue
+from helios.train.masking import MaskValue
 
 logger = logging.getLogger(__name__)
 
@@ -23,32 +22,10 @@ class Loss(ABC):
 
     name: str
 
-    @staticmethod
-    def _flatten(x: Tensor) -> Tensor:
-        return rearrange(x, "b ... d -> b (...) d")
-
     @abstractmethod
     def compute(self, predictions: Any, targets: Any, **kwargs: Any) -> float:
         """Compute the loss between predictions and targets."""
         pass
-
-    @classmethod
-    def _flatten_tokens_or_masks(
-        cls, x: TokensAndMasks, is_masks: bool = False
-    ) -> Tensor:
-        flattened_attrs = []
-        for attr_name in x.modalities:
-            if is_masks:
-                attr_name = MaskedHeliosSample.get_masked_modality_name(attr_name)
-            attr = getattr(x, attr_name)
-            if attr is not None:
-                if is_masks:
-                    attr = attr.unsqueeze(dim=-1)
-                flattened_attr = cls._flatten(attr)
-                flattened_attrs.append(flattened_attr)
-
-        flattened_x = torch.cat(flattened_attrs, dim=1)
-        return flattened_x[:, :, 0] if is_masks else flattened_x
 
     @staticmethod
     def _expand_and_reciprocate(t: Tensor) -> Tensor:
@@ -103,9 +80,8 @@ class PatchDiscriminationLoss(Loss):
             The computed loss value.
         """
         # TODO: write a function that deals with this
-        all_preds = self._flatten_tokens_or_masks(predictions)
-        all_masks = self._flatten_tokens_or_masks(predictions, is_masks=True)
-        all_targets = self._flatten_tokens_or_masks(targets)
+        all_preds, all_masks = predictions.flatten_tokens_and_masks()
+        all_targets = targets.flatten_tokens_and_masks()[0]
 
         pred = all_preds[all_masks == MaskValue.DECODER.value].unsqueeze(dim=0)
         target = all_targets[all_masks == MaskValue.DECODER.value].unsqueeze(dim=0)
@@ -166,9 +142,8 @@ class L1Loss(Loss):
         Returns:
             The computed loss value.
         """
-        all_preds = self._flatten_tokens_or_masks(predictions)
-        all_masks = self._flatten_tokens_or_masks(predictions, is_masks=True)
-        all_targets = self._flatten_tokens_or_masks(targets)
+        all_preds, all_masks = predictions.flatten_tokens_and_masks()
+        all_targets = targets.flatten_tokens_and_masks()[0]
         pred = all_preds[all_masks == MaskValue.DECODER.value]
         target = all_targets[all_masks == MaskValue.DECODER.value]
 
@@ -194,9 +169,8 @@ class L2Loss(Loss):
         Returns:
             The computed loss value.
         """
-        all_preds = self._flatten_tokens_or_masks(predictions)
-        all_masks = self._flatten_tokens_or_masks(predictions, is_masks=True)
-        all_targets = self._flatten_tokens_or_masks(targets)
+        all_preds, all_masks = predictions.flatten_tokens_and_masks()
+        all_targets = targets.flatten_tokens_and_masks()[0]
         pred = all_preds[all_masks == MaskValue.DECODER.value]
         target = all_targets[all_masks == MaskValue.DECODER.value]
 
@@ -222,9 +196,8 @@ class CrossEntropyLoss(Loss):
         Returns:
             The computed loss value.
         """
-        all_preds = self._flatten_tokens_or_masks(predictions)
-        all_masks = self._flatten_tokens_or_masks(predictions, is_masks=True)
-        all_targets = self._flatten_tokens_or_masks(targets)
+        all_preds, all_masks = predictions.flatten_tokens_and_masks()
+        all_targets = targets.flatten_tokens_and_masks()[0]
         pred = all_preds[all_masks == MaskValue.DECODER.value]
         target = all_targets[all_masks == MaskValue.DECODER.value]
 

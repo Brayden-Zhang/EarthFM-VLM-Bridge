@@ -3,7 +3,6 @@
 import logging
 
 import torch
-from einops import rearrange
 from torch.utils.data import DataLoader
 
 from helios.nn.flexihelios import Encoder
@@ -40,9 +39,9 @@ def get_embeddings(
                 batch_embeddings = model(
                     masked_helios_sample, patch_size=patch_size
                 )  # (bsz, dim)
-            embeddings.append(
-                rearrange(batch_embeddings.sentinel2.cpu(), "b ... -> b (...)")
-            )
+            logger.warning("Only using S2 tokens when computing embeddings")
+            logger.info(f"S1 in eval: {batch_embeddings.sentinel1_mask}")
+            embeddings.append(batch_embeddings.sentinel2.cpu().flatten(1, -2).mean(1))
             labels.append(label)
 
     embeddings = torch.cat(embeddings, dim=0)  # (N, dim)
