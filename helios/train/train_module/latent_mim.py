@@ -230,10 +230,10 @@ class LatentMIMTrainModule(HeliosTrainModule):
                 target_output = self.model.target_encoder.forward(
                     batch.unmask(),
                     patch_size=patch_size,
-                    token_exit_cfg={
-                        modality: 0
-                        for modality in self.model.encoder.supported_modality_names
-                    },
+                    # token_exit_cfg={
+                    #     modality: 0
+                    #     for modality in self.model.encoder.supported_modality_names
+                    # },
                 )
             loss = self.loss_fn(decoded, target_output)
             return decoded, loss
