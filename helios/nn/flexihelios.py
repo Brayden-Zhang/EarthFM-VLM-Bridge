@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import Any, NamedTuple
 
 import torch
-import torch.nn.functional as F
 from einops import rearrange, repeat
 from olmo_core.config import Config
 from torch import Tensor, nn
@@ -389,47 +388,53 @@ class FlexiHeliosCompositeEncodings(nn.Module):
         Returns:
             Tensor with encodings applied based on modality type
         """
-
         # TODO: Improve this implementation it is quite bad
+
         modality_spec = Modality.get(modality)
-        print ("***** HERE ******")
-        print (modality_spec)
         logger.debug(f"Applying encodings to modality {modality}")
         d = self.embedding_dim_per_embedding_type
-        
+
         if modality_tokens.ndim == 3:
             # modality_tokens = [B, Band_Sets, D]; static in space, static in time
             b, b_s, _ = modality_tokens.shape
-            h = w = t = 1
+            ein_string, ein_dict = "b b_s d", {"b": b, "b_s": b_s}
+        elif modality_tokens.ndim == 4:
+            b, t, b_s, _ = modality_tokens.shape
+            ein_string, ein_dict = "b t b_s d", {"b": b, "t": t, "b_s": b_s}
+        elif modality_tokens.ndim == 5:
+            b, h, w, b_s, _ = modality_tokens.shape
+            ein_string, ein_dict = "b h w b_s d", {"b": b, "h": h, "w": w, "b_s": b_s}
         elif modality_tokens.ndim == 6:
             b, h, w, t, b_s, _ = modality_tokens.shape
-        else:
-            print (f'weird shape: {modality_tokens.shape}')
-            
-        modality_embed = torch.zeros(modality_tokens.shape)
-        if modality_spec.is_channel_varying:
-            # Channel embeddings
-            channel_embed = self.per_modality_channel_embeddings[modality]
-            channel_embed = repeat(
-                channel_embed, "b_s d -> b h w t b_s d", b=b, h=h, w=w, t=t
+            ein_string, ein_dict = (
+                "b h w t b_s d",
+                {"b": b, "h": h, "w": w, "t": t, "b_s": b_s},
             )
-            modality_embed[..., :d] += channel_embed
+        else:
+            raise ValueError(f"Unsupported tokens shape: {modality_tokens.shape}")
+
+        modality_embed = torch.zeros(modality_tokens.shape)
+
+        # Channel embeddings
+        channel_embed = self.per_modality_channel_embeddings[modality]
+        channel_embed = repeat(channel_embed, f"b_s d -> {ein_string}", **ein_dict)
+        modality_embed[..., :d] += channel_embed
+
         if modality_spec.is_time_varying:
             # Time position encodings
-            time_embed = repeat(
-                self.pos_embed[:t], "t d -> b h w t b_s d", b=b, h=h, w=w, b_s=b_s
-            )
-            modality_embed[..., d:d*2] += time_embed
+            time_embed = repeat(self.pos_embed[:t], f"t d -> {ein_string}", **ein_dict)
+            modality_embed[..., d : d * 2] += time_embed
 
             # Month encodings
+            assert timestamps is not None
             months = timestamps[:, :, 1]
             month_embed = self.month_embed(months)
-            month_embed = repeat(
-                month_embed, "b t d -> b h w t b_s d", h=h, w=w, b_s=b_s
-            )
-            modality_embed[..., d*2:d*3] += month_embed
+            month_embed = repeat(month_embed, f"b t d -> {ein_string}", **ein_dict)
+            modality_embed[..., d * 2 : d * 3] += month_embed
         if modality_spec.is_space_varying:
             # Spatial encodings
+            assert input_res is not None
+            assert patch_size is not None
             gsd_ratio = self.calculate_gsd_ratio(input_res, patch_size)
             current_device = modality_tokens.device
             spatial_embed = get_2d_sincos_pos_encoding_with_resolution(
@@ -440,14 +445,9 @@ class FlexiHeliosCompositeEncodings(nn.Module):
             )
             spatial_embed = rearrange(spatial_embed, "b (h w) d -> b h w d", h=h, w=w)
             spatial_embed = repeat(
-                spatial_embed,
-                "b h w d -> b h w t b_s d",
-                b_s=b_s,
-                t=t,
-                h=h,
-                w=w,  # Adding to handle uneven dims
+                spatial_embed, f"b h w d -> {ein_string}", **ein_dict
             )
-            modality_embed[..., d*3:d*4] += spatial_embed
+            modality_embed[..., d * 3 : d * 4] += spatial_embed
 
         return modality_tokens + modality_embed
 
