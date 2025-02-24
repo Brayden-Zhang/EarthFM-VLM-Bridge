@@ -86,14 +86,15 @@ def build_train_module_config(
     common: CommonComponents,
 ) -> LatentMIMTrainModuleConfig:
     """Build the train module config for an experiment."""
-    LR = 0.0001
+    LR = 0.002
+    WD = 0.02
     RANK_BATCH_SIZE = (
         32  # TODO: maybe this should be computed dynamically and not specified here
     )
     ENCODE_RATIO = 0.1
     DECODE_RATIO = 0.5
 
-    optim_config = AdamWConfig(lr=LR)
+    optim_config = AdamWConfig(lr=LR, weight_decay=WD)
     masking_config = MaskingConfig(
         strategy_config={
             "type": "random",

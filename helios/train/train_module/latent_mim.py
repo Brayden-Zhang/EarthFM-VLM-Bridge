@@ -183,9 +183,14 @@ class LatentMIMTrainModule(HeliosTrainModule):
         )
         with torch.no_grad():
             logger.info(f"Using ema decay {cur_ema_value}")
-            for param, target_param in zip(
-                self.model.encoder.parameters(), self.model.target_encoder.parameters()
+            for (name, param), target_param in zip(
+                self.model.encoder.named_parameters(),
+                self.model.target_encoder.parameters(),
             ):
+                if torch.allclose(param, target_param):
+                    logger.warning(
+                        f"Encoder and target encoder parameters close for {name}"
+                    )
                 target_param.data = (
                     cur_ema_value * target_param.data + (1 - cur_ema_value) * param.data
                 )

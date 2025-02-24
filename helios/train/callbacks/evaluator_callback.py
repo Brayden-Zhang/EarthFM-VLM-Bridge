@@ -52,7 +52,7 @@ class DownstreamEvaluator:
         """Get the embeddings for the given data loader."""
         return get_embeddings(
             data_loader=data_loader,
-            model=self.trainer.train_module.model.target_encoder,
+            model=self.trainer.train_module.model.encoder,
             patch_size=self.trainer.train_module.model.encoder.max_patch_size,
         )
 
