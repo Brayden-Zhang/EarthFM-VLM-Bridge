@@ -10,10 +10,10 @@ import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
 from einops import rearrange
+from matplotlib.figure import Figure
+
 from helios.data.constants import Modality
 from helios.data.dataset import HeliosDataset
-from helios.dataset.sample import SampleInformation
-from matplotlib.figure import Figure
 
 logger = logging.getLogger(__name__)
 
@@ -21,12 +21,12 @@ logger = logging.getLogger(__name__)
 
 
 def visualize_sample(dataset: HeliosDataset, sample_index: int) -> Figure:
-    """
-    Visualize a sample from the Helios Dataset in a grid format:
-      - Each modality is placed on its own row.
-      - Each band of that modality is shown in columns of that row.
-      - If the modality is LATLON, plot the coordinate on a base map.
-      - If the modality is WORLDCOVER, use a discrete colormap and show a legend.
+    """Visualize a sample from the Helios Dataset in a grid format.
+
+    - Each modality is placed on its own row.
+    - Each band of that modality is shown in columns of that row.
+    - If the modality is LATLON, plot the coordinate on a base map.
+    - If the modality is WORLDCOVER, use a discrete colormap and show a legend.
     Saves the resulting figure to a .png file.
     """
     # -------------------------------
@@ -113,9 +113,6 @@ def visualize_sample(dataset: HeliosDataset, sample_index: int) -> Figure:
     for empty_col in range(max_bands - 1, 0, -1):
         axes[0, empty_col].axis("off")
 
-    # -------------------------------
-    # 4. Plot each modality
-    # -------------------------------
     for row_idx, (modality_spec, modality_tile) in enumerate(modalities, start=1):
         logger.info(f"Plotting modality: {modality_spec.name}")
 
@@ -140,7 +137,7 @@ def visualize_sample(dataset: HeliosDataset, sample_index: int) -> Figure:
 
             # 4B(i). If WorldCover, use discrete colormap & legend
             if modality_spec == Modality.WORLDCOVER:
-                im = ax.imshow(channel_data, cmap=wc_cmap, norm=wc_norm)
+                _ = ax.imshow(channel_data, cmap=wc_cmap, norm=wc_norm)
                 ax.set_title(f"{modality_spec.name.upper()} - {band_name}")
 
                 # Create legend patches
@@ -160,7 +157,7 @@ def visualize_sample(dataset: HeliosDataset, sample_index: int) -> Figure:
                 )
                 ax.axis("off")
 
-            # 4B(ii). For other modalities, do normal percentile-based scaling
+            #  For other modalities, do normal percentile-based scaling
             else:
                 valid_mask = ~np.isnan(channel_data)
                 if not np.any(valid_mask):
@@ -168,7 +165,7 @@ def visualize_sample(dataset: HeliosDataset, sample_index: int) -> Figure:
                 else:
                     vmin, vmax = np.nanpercentile(channel_data[valid_mask], [2, 98])
 
-                im = ax.imshow(channel_data, cmap="viridis", vmin=vmin, vmax=vmax)
+                _ = ax.imshow(channel_data, cmap="viridis", vmin=vmin, vmax=vmax)
                 ax.set_title(f"{modality_spec.name.upper()} — {band_name}")
                 ax.axis("off")
 
@@ -177,9 +174,6 @@ def visualize_sample(dataset: HeliosDataset, sample_index: int) -> Figure:
         for empty_col in range(used_cols, max_bands):
             axes[row_idx, empty_col].axis("off")
 
-    # -------------------------------
-    # 5. Final layout adjustments
-    # -------------------------------
     plt.tight_layout()
     fig.subplots_adjust(
         wspace=0.3, hspace=0.3, left=0.05, right=0.95, top=0.95, bottom=0.05

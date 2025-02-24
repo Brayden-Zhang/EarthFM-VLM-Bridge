@@ -4,29 +4,32 @@ import logging
 from os import environ
 
 import numpy as np
-from helios.data.constants import Modality
-from helios.data.dataloader import HeliosDataLoaderConfig
-from helios.data.dataset import HeliosDatasetConfig
-from helios.internal.experiment import (CommonComponents,
-                                        HeliosVisualizeConfig, main)
-from helios.nn.flexihelios import EncoderConfig, PredictorConfig
-from helios.nn.latent_mim import LatentMIMConfig
-from helios.train.callbacks import (DownstreamEvaluatorCallbackConfig,
-                                    HeliosSpeedMonitorCallback,
-                                    HeliosWandBCallback)
-from helios.train.loss import LossConfig
-from helios.train.masking import MaskingConfig
-from helios.train.train_module.latent_mim import LatentMIMTrainModuleConfig
-from olmo_core.distributed.parallel.data_parallel import (DataParallelConfig,
-                                                          DataParallelType)
+from olmo_core.distributed.parallel.data_parallel import (
+    DataParallelConfig,
+    DataParallelType,
+)
 from olmo_core.optim import AdamWConfig
 from olmo_core.optim.scheduler import CosWithWarmup
-from olmo_core.train.callbacks import (ConfigSaverCallback,
-                                       GPUMemoryMonitorCallback)
+from olmo_core.train.callbacks import ConfigSaverCallback, GPUMemoryMonitorCallback
 from olmo_core.train.checkpoint import CheckpointerConfig
 from olmo_core.train.common import Duration, LoadStrategy
 from olmo_core.train.config import TrainerConfig
 from upath import UPath
+
+from helios.data.constants import Modality
+from helios.data.dataloader import HeliosDataLoaderConfig
+from helios.data.dataset import HeliosDatasetConfig
+from helios.internal.experiment import CommonComponents, HeliosVisualizeConfig, main
+from helios.nn.flexihelios import EncoderConfig, PredictorConfig
+from helios.nn.latent_mim import LatentMIMConfig
+from helios.train.callbacks import (
+    DownstreamEvaluatorCallbackConfig,
+    HeliosSpeedMonitorCallback,
+    HeliosWandBCallback,
+)
+from helios.train.loss import LossConfig
+from helios.train.masking import MaskingConfig
+from helios.train.train_module.latent_mim import LatentMIMTrainModuleConfig
 
 logger = logging.getLogger(__name__)
 # TODO: Need to use the dynamic computation from trainer for this
@@ -219,7 +222,7 @@ def build_visualize_config(common: CommonComponents) -> HeliosVisualizeConfig:
     """Build the visualize config for an experiment."""
     return HeliosVisualizeConfig(
         num_samples=50,
-        output_dir=common.save_folder / "visualizations",
+        output_dir=str(UPath(common.save_folder) / "visualizations"),
     )
 
 

@@ -1,30 +1,27 @@
 """Code for configuring and running Helios experiments."""
 
 import logging
-import os
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
-from pathlib import Path
 from typing import cast
 
-import cartopy.crs as ccrs
-import cartopy.feature as cfeature
-import matplotlib.pyplot as plt
 import numpy as np
-import torch
+from olmo_core.config import Config, StrEnum
+from olmo_core.train import (
+    TrainerConfig,
+    prepare_training_environment,
+    teardown_training_environment,
+)
+from olmo_core.train.callbacks import ConfigSaverCallback, WandBCallback
+from olmo_core.utils import get_default_device, prepare_cli_environment, seed_all
+
 from helios.data.constants import ModalitySpec
 from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig, collate_helios
 from helios.data.visualize import visualize_sample
 from helios.nn.latent_mim import LatentMIMConfig
 from helios.train.train_module.latent_mim import LatentMIMTrainModuleConfig
-from olmo_core.config import Config, StrEnum
-from olmo_core.train import (TrainerConfig, prepare_training_environment,
-                             teardown_training_environment)
-from olmo_core.train.callbacks import ConfigSaverCallback, WandBCallback
-from olmo_core.utils import (get_default_device, prepare_cli_environment,
-                             seed_all)
 
 logger = logging.getLogger(__name__)
 
@@ -136,7 +133,7 @@ def train(config: HeliosExperimentConfig) -> None:
 
 
 def visualize(config: HeliosExperimentConfig) -> None:
-    """Visualize the dataset for an experiment"""
+    """Visualize the dataset for an experiment."""
     logger.info("Visualizing the dataset")
     if config.visualize_config is None:
         raise ValueError("visualize_config is not set")
