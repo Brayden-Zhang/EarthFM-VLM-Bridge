@@ -395,18 +395,39 @@ class FlexiHeliosCompositeEncodings(nn.Module):
         print ("***** HERE ******")
         print (modality_spec)
         logger.debug(f"Applying encodings to modality {modality}")
+        d = self.embedding_dim_per_embedding_type
         
         if modality_tokens.ndim == 3:
             # modality_tokens = [B, Band_Sets, D]; static in space, static in time
             b, b_s, _ = modality_tokens.shape
+            h = w = t = 1
         elif modality_tokens.ndim == 6:
             b, h, w, t, b_s, _ = modality_tokens.shape
+        else:
+            print (f'weird shape: {modality_tokens.shape}')
             
+        modality_embed = torch.zeros(modality_tokens.shape)
         if modality_spec.is_channel_varying:
-            modality_channel_embed = self.per_modality_channel_embeddings[modality]
-            modality_channel_embed = repeat(
-                modality_channel_embed, "b_s d -> b b_s d", b=b
+            # Channel embeddings
+            channel_embed = self.per_modality_channel_embeddings[modality]
+            channel_embed = repeat(
+                channel_embed, "b_s d -> b h w t b_s d", b=b, h=h, w=w, t=t
             )
+            modality_embed[..., :d] += channel_embed
+        if modality_spec.is_time_varying:
+            # Time position encodings
+            time_embed = repeat(
+                self.pos_embed[:t], "t d -> b h w t b_s d", b=b, h=h, w=w, b_s=b_s
+            )
+            modality_embed[..., d:d*2] += time_embed
+
+            # Month encodings
+            months = timestamps[:, :, 1]
+            month_embed = self.month_embed(months)
+            month_embed = repeat(
+                month_embed, "b t d -> b h w t b_s d", h=h, w=w, b_s=b_s
+            )
+            modality_embed[..., d*2:d*3] += month_embed
         if modality_spec.is_space_varying:
             # Spatial encodings
             gsd_ratio = self.calculate_gsd_ratio(input_res, patch_size)
@@ -419,44 +440,14 @@ class FlexiHeliosCompositeEncodings(nn.Module):
             )
             spatial_embed = rearrange(spatial_embed, "b (h w) d -> b h w d", h=h, w=w)
             spatial_embed = repeat(
-                spatial_embed, "b h w d -> b h w t b_s d", b_s=b_s, t=t
-            )
-            sp_zeros = torch.zeros(
-                b,
-                h,
-                w,
-                t,
-                b_s,
-                self.embedding_dim_per_embedding_type * 2,
-                device=current_device,
-            )
-        if modality_spec.is_time_varying:
-            # Time position encodings
-            modality_pos_embed = repeat(
-                self.pos_embed[:t], "t d -> b h w t b_s d", b=b, h=h, w=w, b_s=b_s
-            )
-            # Month encodings
-            months = timestamps[:, :, 1]
-            month_embed = self.month_embed(months)
-            modality_month_embed = repeat(
-                month_embed, "b t d -> b h w t b_s d", h=h, w=w, b_s=b_s
-            )
-
-        else:
-            raise ValueError(
-                f"Unsupported tokens shape {modality_tokens.shape} for {modality}"
-            )
-
-        # Combine all encodings
-        modality_embed = torch.cat(
-            [
-                modality_channel_embed,
-                modality_pos_embed,
-                modality_month_embed,
                 spatial_embed,
-            ],
-            dim=-1,
-        )
+                "b h w d -> b h w t b_s d",
+                b_s=b_s,
+                t=t,
+                h=h,
+                w=w,  # Adding to handle uneven dims
+            )
+            modality_embed[..., d*3:d*4] += spatial_embed
 
         return modality_tokens + modality_embed
 
