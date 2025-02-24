@@ -137,16 +137,12 @@ def visualize(config: HeliosExperimentConfig) -> None:
     logger.info("Visualizing the dataset")
     if config.visualize_config is None:
         raise ValueError("visualize_config is not set")
-    # Create a visualization of the dataset
-    # It could just be some files to click through
-    # It could be a bunch of tiles next to each other of these plots
-    # we also might want to save the entire geographic distribution as well
     dataset = config.dataset.build()
     sample_indices = np.random.randint(
         0, len(dataset), config.visualize_config.num_samples
     )
     for sample_index in sample_indices:
-        visualize_sample(dataset, sample_index)
+        visualize_sample(dataset, sample_index, config.visualize_config.output_dir)
     logger.info("Done visualizing the dataset")
 
 
@@ -238,7 +234,7 @@ def main(
     """Main entry point for Helios experiments.
 
     overrides:  A list of field attributes with dot notation, e.g. ``foo.bar=1``.
-    Current usage: torchrun script.py train
+    Current usage: torchrun script.py train, python script.py visualize
 
     """
     usage = f"""
@@ -252,9 +248,13 @@ def main(
 [b magenta]prep:[/]       Not Implemented. Prepare the dataset ahead of training to save GPU time.
 [b magenta]launch_prep:[/] Not Implemented. Launch the script on Beaker with the [b magenta]prep[/] subcommand.
 [b magenta]dry_run:[/]     Pretty print the config and exit.
+[b magenta]visualize:[/]   Visualize the dataset.
 
 [b]Examples[/]
-$ [i]python {sys.argv[0]} {SubCmd.launch} run01 ai2/pluto-cirrascale --launch.num_nodes=2[/]
+    # Train on 4 GPUs across 2 nodes
+    torchrun train.py train
+    # Visualize the dataset
+    python train.py visualize
     """.strip()
 
     if len(sys.argv) < 2 or sys.argv[1] not in set(SubCmd):
