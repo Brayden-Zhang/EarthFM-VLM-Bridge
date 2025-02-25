@@ -942,6 +942,8 @@ class Encoder(FlexiHeliosBase):
                 break
 
             if exit_ids_seq is not None:
+                # this should only ever be called by the target encoder,
+                # in a torch.no_grad context
                 assert exited_tokens is not None
                 # If a token should exit, then we update the exit token with the current token at the same position
                 exited_tokens = torch.where(
@@ -956,6 +958,8 @@ class Encoder(FlexiHeliosBase):
             tokens = blk(x=tokens, y=None, attn_mask=~new_mask.bool())
 
         if exit_ids_seq is not None:
+            # this should only ever be called by the target encoder,
+            # in a torch.no_grad context
             assert exited_tokens is not None
             # full depth
             # IMPORTANT: write this to x
