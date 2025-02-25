@@ -136,7 +136,6 @@ class ModalitySpec:
         """
         return sum(len(band_set.bands) for band_set in self.band_sets)
 
-
     @property
     def is_temporal(self) -> bool:
         """Does the modality vary in time."""
