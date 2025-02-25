@@ -103,7 +103,7 @@ def build_train_module_config(
     )
     loss_config = LossConfig(
         loss_config={
-            "type": "patch_discrimination",
+            "type": "l2",
         }
     )
 
@@ -206,7 +206,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
 
 def build_common_components() -> CommonComponents:
     """Build the common components for an experiment."""
-    run_name = "fix_gradient_accumulation_testing_w_wo"
+    run_name = "l2-with-batchwise-subsetting"
     # Variables to be changed per user
     workdir = UPath("./output")  # nosec
     # This allows pre-emptible jobs to save their workdir in the output folder

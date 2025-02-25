@@ -112,6 +112,54 @@ def test_l2_loss() -> None:
     # MSE should be 4 since preds are 2, targets are 0
     assert loss_value == 4
 
+def test_l2_loss_is_same_with_gradient_accumulation(set_random_seeds: None) -> None:
+    """Test that the loss is the same with gradient accumulation."""
+    b, t, t_h, t_w, d = 4, 2, 4, 4, 2
+
+    preds = TokensAndMasks(
+        sentinel2=2 * torch.ones((b, t, t_h, t_w, d)),
+        sentinel2_mask=torch.randint(0, 3, (b, t, t_h, t_w)),
+        latlon=2 * torch.ones((b, 1, d)),
+        latlon_mask=torch.ones((b, 1)) * 2,
+    )
+    targets = TokensAndMasks(
+        sentinel2=torch.zeros((b, t, t_h, t_w, d)),
+        sentinel2_mask=torch.randint(0, 3, (b, t, t_h, t_w)),
+        latlon=torch.zeros((b, 1, d)),
+        latlon_mask=torch.zeros((b, 1)),
+    )
+    loss = L2Loss()
+    loss_value = loss.compute(preds, targets)
+    # Now slice the batch into 2 smaller batches
+    preds_1 = TokensAndMasks(
+        sentinel2=preds.sentinel2[:2],
+        sentinel2_mask=preds.sentinel2_mask[:2],
+        latlon=preds.latlon[:2],
+        latlon_mask=preds.latlon_mask[:2],
+    )
+    targets_1 = TokensAndMasks(
+        sentinel2=targets.sentinel2[:2],
+        sentinel2_mask=targets.sentinel2_mask[:2],
+        latlon=targets.latlon[:2],
+        latlon_mask=targets.latlon_mask[:2],
+    )
+    preds_2 = TokensAndMasks(
+        sentinel2=preds.sentinel2[2:],
+        sentinel2_mask=preds.sentinel2_mask[2:],
+        latlon=preds.latlon[2:],
+        latlon_mask=preds.latlon_mask[2:],
+    )
+    targets_2 = TokensAndMasks(
+        sentinel2=targets.sentinel2[2:],
+        sentinel2_mask=targets.sentinel2_mask[2:],
+        latlon=targets.latlon[2:],
+        latlon_mask=targets.latlon_mask[2:],
+    )
+    loss_value_1 = loss.compute(preds_1, targets_1)
+    loss_value_2 = loss.compute(preds_2, targets_2)
+    loss_value = (loss_value_1 + loss_value_2) / 2
+    assert torch.isclose(loss_value, loss_value_1)
+
 
 def test_cross_entropy_loss() -> None:
     """Just test that it runs as expected."""

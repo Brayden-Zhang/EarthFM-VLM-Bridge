@@ -247,6 +247,7 @@ class HeliosSample(NamedTuple):
             sampled_hw_p, max_tokens_per_instance
         )
         sampled_hw = sampled_hw_p * patch_size
+        logger.info(f"sampled_hw: {sampled_hw_p}, max_t: {max_t}")
         start_h = np.random.choice(self.height - sampled_hw + 1)
         start_w = np.random.choice(self.width - sampled_hw + 1)
         start_t = np.random.choice(self.time - max_t + 1)
@@ -508,7 +509,7 @@ class HeliosDataset(Dataset):
         """
         latlons = []
         for sample in self.samples:
-            latlon = self._get_latlon(sample)
+            latlon = self.get_latlon(sample)
             latlons.append(latlon)
         latlons = np.vstack(latlons)
         return latlons

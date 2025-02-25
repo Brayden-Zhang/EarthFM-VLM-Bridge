@@ -154,9 +154,14 @@ class LatentMIMTrainModule(HeliosTrainModule):
         self.base_loss = loss_config.build()
         self.masking_strategy = masking_config.build()
 
-    def loss_fn(self, pred: Any, targets: Any) -> torch.Tensor:
+    def loss_fn(
+        self, pred: Any, targets: Any, total_tokens: int | None = None
+    ) -> torch.Tensor:
         """Compute the loss between the predicted and target tensors."""
-        return self.base_loss.compute(pred, targets)
+        kwargs = {}
+        if total_tokens is not None and self.base_loss.reduce_by_total_tokens:
+            kwargs["total_tokens"] = total_tokens
+        return self.base_loss.compute(pred, targets, **kwargs)
 
     def eval_loss_fn(self, logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
         """Compute the loss between the predicted and target tensors."""
@@ -186,8 +191,18 @@ class LatentMIMTrainModule(HeliosTrainModule):
         token_budget = self.model.token_budget
 
         total_batch_loss = torch.tensor(0.0, device=self.device)
-        # Split into micro-batches.
-        microbatches = split_batch(batch, self.rank_microbatch_size)
+        h_w_to_sample = list(
+            range(self.model.h_w_to_sample_min, self.model.h_w_to_sample_max)
+        )
+        patch_size = np.random.choice(
+            np.arange(1, self.model.encoder.max_patch_size)
+        )
+        microbatch = self.model.transform.apply(microbatch)
+        subsampled_batch = microbatch.subset(patch_size, token_budget, h_w_to_sample)
+        subsampled_batch = subsampled_batch.to_device(self.device)
+        # Split into micro-batches. If we subsample each microbatch seperately
+        # then we get inconsistent results when microbatching
+        microbatches = split_batch(subsampled_batch, self.rank_microbatch_size)
         num_microbatches = len(microbatches)
         for microbatch_idx, microbatch in enumerate(microbatches, start=1):
             with self._train_microbatch_context(microbatch_idx, num_microbatches):
@@ -195,17 +210,11 @@ class LatentMIMTrainModule(HeliosTrainModule):
                     f"Training microbatch {microbatch_idx} of {num_microbatches} with batch size {microbatch.batch_size}"
                 )
 
-                # Gallileo does this subsetting at the microbtch level so we will too for now
+                # Gallileo does this subsetting at the microbtch level but that gives
+                # inconsistent results when microbatching
                 # Smallest h /w must be bigger than the smallest patch size
-                h_w_to_sample = list(
-                    range(self.model.h_w_to_sample_min, self.model.h_w_to_sample_max)
-                )
-                patch_size = np.random.choice(
-                    np.arange(1, self.model.encoder.max_patch_size)
-                )
-                microbatch = self.model.transform.apply(microbatch)
-                subsampled_batch = microbatch.subset(patch_size, token_budget, h_w_to_sample)
-                subsampled_batch = subsampled_batch.to_device(self.device)
+                # Each microbatch should have about the same number of encoded tokens if
+                # we mask here
                 masked_batch = self.masking_strategy.apply_mask(subsampled_batch)
 
                 # Run Encoder and decoder on the augmented input
