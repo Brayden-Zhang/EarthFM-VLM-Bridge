@@ -189,30 +189,28 @@ class LatentMIMTrainModule(HeliosTrainModule):
         """Train a batch."""
         # Set the maximum number of tokens
         token_budget = self.model.token_budget
-
-        total_batch_loss = torch.tensor(0.0, device=self.device)
         h_w_to_sample = list(
-            range(self.model.h_w_to_sample_min, self.model.h_w_to_sample_max)
+                    range(self.model.h_w_to_sample_min, self.model.h_w_to_sample_max)
         )
-        patch_size = np.random.choice(
-            np.arange(1, self.model.encoder.max_patch_size)
-        )
-        microbatch = self.model.transform.apply(microbatch)
-        subsampled_batch = microbatch.subset(patch_size, token_budget, h_w_to_sample)
-        subsampled_batch = subsampled_batch.to_device(self.device)
-        # Split into micro-batches. If we subsample each microbatch seperately
-        # then we get inconsistent results when microbatching
-        microbatches = split_batch(subsampled_batch, self.rank_microbatch_size)
+        total_batch_loss = torch.tensor(0.0, device=self.device)
+        # Split into micro-batches.
+        microbatches = split_batch(batch, self.rank_microbatch_size)
         num_microbatches = len(microbatches)
         for microbatch_idx, microbatch in enumerate(microbatches, start=1):
             with self._train_microbatch_context(microbatch_idx, num_microbatches):
                 logger.info(
                     f"Training microbatch {microbatch_idx} of {num_microbatches} with batch size {microbatch.batch_size}"
                 )
-
-                # Gallileo does this subsetting at the microbtch level but that gives
+                # Gallileo does this subsetting at the microbatch level but that gives
                 # inconsistent results when microbatching
                 # Smallest h /w must be bigger than the smallest patch size
+
+                patch_size = np.random.choice(
+                    np.arange(1, self.model.encoder.max_patch_size)
+                )
+                microbatch = self.model.transform.apply(microbatch)
+                subsampled_batch = microbatch.subset(patch_size, token_budget, h_w_to_sample)
+                subsampled_batch = subsampled_batch.to_device(self.device)
                 # Each microbatch should have about the same number of encoded tokens if
                 # we mask here
                 masked_batch = self.masking_strategy.apply_mask(subsampled_batch)

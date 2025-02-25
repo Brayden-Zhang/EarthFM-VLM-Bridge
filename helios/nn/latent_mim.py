@@ -94,4 +94,7 @@ class LatentMIMConfig(Config):
             encoder=encoder,
             decoder=decoder,
             transform=transform,
+            token_budget=self.token_budget,
+            h_w_to_sample_min=self.h_w_to_sample_min,
+            h_w_to_sample_max=self.h_w_to_sample_max,
         )
