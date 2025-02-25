@@ -15,6 +15,7 @@ from upath import UPath
 from helios.evals.datasets import GeobenchDataset
 from helios.evals.embeddings import get_embeddings
 from helios.evals.knn import run_knn
+from helios.nn.flexihelios import PoolingType
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,10 @@ class DownstreamEvaluator:
         name: str,
         task: str,
         trainer: Trainer,
+        batch_size: int = 128,
+        num_workers: int = 8,
+        pooling_type: PoolingType = PoolingType.MAX,
+        norm_stats_from_pretrained: bool = True,
         device: torch.device | None = None,
     ) -> None:
         """Initialize the downstream evaluator."""
@@ -40,12 +45,24 @@ class DownstreamEvaluator:
         self.task = task
         self.trainer = trainer
         self.device = device
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+        self.pooling_type = pooling_type
+        self.norm_stats_from_pretrained = norm_stats_from_pretrained
 
     def _get_data_loader(self, split: str) -> DataLoader:
         """Get the data loader for the given split."""
         return DataLoader(
-            GeobenchDataset(GEOBENCH_DIR, self.task, split, "default"),
+            GeobenchDataset(
+                GEOBENCH_DIR,
+                self.task,
+                split,
+                "default",
+                norm_stats_from_pretrained=self.norm_stats_from_pretrained,
+            ),
             collate_fn=GeobenchDataset.collate_fn,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
         )
 
     def _get_embeddings(self, data_loader: DataLoader) -> tuple:
@@ -54,6 +71,7 @@ class DownstreamEvaluator:
             data_loader=data_loader,
             model=self.trainer.train_module.model.encoder,
             patch_size=self.trainer.train_module.model.encoder.max_patch_size,
+            pooling_type=self.pooling_type,
         )
 
     def val(self) -> float:
@@ -111,10 +129,21 @@ class DownstreamEvaluatorCallback(Callback):
 
 
 @dataclass
+class DownstreamTaskConfig:
+    """Config for a downstream task."""
+
+    name: str
+    batch_size: int = 128
+    num_workers: int = 8
+    pooling_type: PoolingType = PoolingType.MAX
+    norm_stats_from_pretrained: bool = True
+
+
+@dataclass
 class DownstreamEvaluatorCallbackConfig(CallbackConfig):
     """Config for the downstream evaluator callback."""
 
-    tasks: list[str]
+    tasks: list[DownstreamTaskConfig]
     eval_interval: int = 10
     eval_duration: Duration = field(default_factory=lambda: Duration.epochs(10))
     enabled: bool = True
@@ -126,9 +155,13 @@ class DownstreamEvaluatorCallbackConfig(CallbackConfig):
 
         evaluators: list[Evaluator] = [
             DownstreamEvaluator(
-                name=f"{NAME_PREFIX}-{task}",
-                task=task,
+                name=f"{NAME_PREFIX}-{task.name}",
+                task=task.name,
                 trainer=trainer,
+                batch_size=task.batch_size,
+                num_workers=task.num_workers,
+                pooling_type=task.pooling_type,
+                norm_stats_from_pretrained=task.norm_stats_from_pretrained,
                 device=trainer.device,
             )
             for task in self.tasks

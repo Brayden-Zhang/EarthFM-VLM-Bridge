@@ -9,6 +9,7 @@ from helios.nn.flexihelios import (
     Encoder,
     FlexiHeliosBase,
     FlexiHeliosCompositeEncodings,
+    PoolingType,
     Predictor,
     TokensAndMasks,
 )
@@ -418,18 +419,35 @@ class TestTokensAndMasks:
         assert (x[mask.bool()] == 0).all()
         assert (x[(1 - mask).bool()] == 1).all()
 
-    def test_average_unmasked_tokens(self) -> None:
-        """Test TokensAndMasks.average_unmasked_tokens."""
+    def test_pool_unmasked_tokens(self) -> None:
+        """Test TokensAndMasks.pool_unmasked_tokens."""
         b, h, w, t, d = 2, 4, 4, 3, 128
-        sentinel_2 = torch.ones((b, h, w, t, d))
-        sentinel_2[0, 0, 0, 0, :] = 0  # set one "token" to 0s
-        sentinel_2_mask = torch.zeros((b, h, w, t)).long()
-        sentinel_2_mask[0, 0, 0, 0] = 1  # set the same token's mask to 1
-        t_and_m = TokensAndMasks(sentinel2=sentinel_2, sentinel2_mask=sentinel_2_mask)
-        averaged = t_and_m.average_unmasked_tokens()
+        # Setup for mean pooling
+        sentinel_2_mean = torch.ones((b, h, w, t, d))
+        sentinel_2_mean[0, 0, 0, 0, :] = 0  # set one "token" to 0s
+        sentinel_2_mask_mean = torch.zeros((b, h, w, t)).long()
+        sentinel_2_mask_mean[0, 0, 0, 0] = 1  # set the same token's mask to 1
+        t_and_m_mean = TokensAndMasks(
+            sentinel2=sentinel_2_mean, sentinel2_mask=sentinel_2_mask_mean
+        )
+        # Setup for max pooling
+        sentinel_2_max = torch.ones((b, h, w, t, d)) * 2  # set all tokens to 2
+        sentinel_2_max[0, 0, 0, 0, :] = 3  # set one "token" to 3s for max pooling
+        sentinel_2_mask_max = torch.zeros((b, h, w, t)).long()
+        sentinel_2_mask_max[0, 0, 0, 0] = 1  # set the same token's mask to 1
+        t_and_m_max = TokensAndMasks(
+            sentinel2=sentinel_2_max, sentinel2_mask=sentinel_2_mask_max
+        )
 
-        assert averaged.shape == (b, d)
-        assert (averaged == 1).all()  # check the 0 tokens have been ignored
+        # Test max pooling
+        pooled_max = t_and_m_max.pool_unmasked_tokens(PoolingType.MAX)
+        assert pooled_max.shape == (b, d)
+        assert (pooled_max == 2).all()  # check the 3 tokens have been ignored
+
+        # Test mean pooling
+        pooled_mean = t_and_m_mean.pool_unmasked_tokens(PoolingType.MEAN)
+        assert pooled_mean.shape == (b, d)
+        assert (pooled_mean == 1).all()  # check the 0 tokens have been ignored
 
 
 # TODO: write a unit test for the FlexiPatchEmbeddings

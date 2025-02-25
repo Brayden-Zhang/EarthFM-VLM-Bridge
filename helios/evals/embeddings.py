@@ -5,14 +5,17 @@ import logging
 import torch
 from torch.utils.data import DataLoader
 
-from helios.nn.flexihelios import Encoder
+from helios.nn.flexihelios import Encoder, PoolingType
 from helios.train.masking import MaskedHeliosSample
 
 logger = logging.getLogger(__name__)
 
 
 def get_embeddings(
-    data_loader: DataLoader, model: Encoder, patch_size: int
+    data_loader: DataLoader,
+    model: Encoder,
+    patch_size: int,
+    pooling_type: PoolingType = PoolingType.MAX,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Get embeddings from model for the data in data_loader."""
     embeddings = []
@@ -39,7 +42,7 @@ def get_embeddings(
                 batch_embeddings = model(
                     masked_helios_sample, patch_size=patch_size
                 )  # (bsz, dim)
-            embeddings.append(batch_embeddings.average_unmasked_tokens().cpu())
+            embeddings.append(batch_embeddings.pool_unmasked_tokens(pooling_type).cpu())
             labels.append(label)
 
     embeddings = torch.cat(embeddings, dim=0)  # (N, dim)

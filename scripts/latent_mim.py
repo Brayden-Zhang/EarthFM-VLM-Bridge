@@ -19,14 +19,16 @@ from upath import UPath
 from helios.data.constants import Modality
 from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig
-from helios.internal.experiment import CommonComponents, main
-from helios.nn.flexihelios import EncoderConfig, PredictorConfig
+from helios.data.normalize import Strategy
+from helios.internal.experiment import CommonComponents, HeliosVisualizeConfig, main
+from helios.nn.flexihelios import EncoderConfig, PoolingType, PredictorConfig
 from helios.nn.latent_mim import LatentMIMConfig
 from helios.train.callbacks import (
     DownstreamEvaluatorCallbackConfig,
     HeliosSpeedMonitorCallback,
     HeliosWandBCallback,
 )
+from helios.train.callbacks.evaluator_callback import DownstreamTaskConfig
 from helios.train.loss import LossConfig
 from helios.train.masking import MaskingConfig
 from helios.train.train_module.latent_mim import LatentMIMTrainModuleConfig
@@ -92,7 +94,7 @@ def build_train_module_config(
         16  # TODO: maybe this should be computed dynamically and not specified here
     )
     ENCODE_RATIO = 0.1
-    DECODE_RATIO = 0.5
+    DECODE_RATIO = 0.75
 
     optim_config = AdamWConfig(lr=LR, weight_decay=WD)
     masking_config = MaskingConfig(
@@ -129,7 +131,7 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
     # things should be set during building
     # TODO: handle dp_process_group internally
     # TODO: Include collate function here
-    NUM_WORKERS = 0
+    NUM_WORKERS = 1
     NUM_THREADS = 0
     GLOBAL_BATCH_SIZE = 16
 
@@ -171,7 +173,15 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
         enabled=True,  # set to False to avoid wandb errors
     )
     EVAL_INTERVAL_EPOCHS = 1
-    EVAL_TASKS = ["m-eurosat"]
+    EVAL_TASKS = [
+        DownstreamTaskConfig(
+            name="m-eurosat",
+            batch_size=128,
+            num_workers=8,
+            pooling_type=PoolingType.MAX,
+            norm_stats_from_pretrained=True,
+        ),
+    ]
     # Let us not use garbage collector fallback
     trainer_config = (
         TrainerConfig(
@@ -202,7 +212,7 @@ def build_common_components() -> CommonComponents:
     """Build the common components for an experiment."""
     run_name = "test_run"
     # Variables to be changed per user
-    workdir = UPath("/temp/helios/workdir")  # nosec
+    workdir = UPath("./output")  # nosec
     # This allows pre-emptible jobs to save their workdir in the output folder
     SUPPORTED_MODALITIES = [
         Modality.SENTINEL2,
@@ -219,6 +229,16 @@ def build_common_components() -> CommonComponents:
     )
 
 
+def build_visualize_config(common: CommonComponents) -> HeliosVisualizeConfig:
+    """Build the visualize config for an experiment."""
+    return HeliosVisualizeConfig(
+        num_samples=50,
+        output_dir="./test_vis",  # str(UPath(common.save_folder) / "visualizations"),
+        normalize_strategy=Strategy.PREDEFINED,
+        std_multiplier=2.0,
+    )
+
+
 if __name__ == "__main__":
     main(
         common_components_builder=build_common_components,
@@ -227,4 +247,5 @@ if __name__ == "__main__":
         dataset_config_builder=build_dataset_config,
         dataloader_config_builder=build_dataloader_config,
         trainer_config_builder=build_trainer_config,
+        visualize_config_builder=build_visualize_config,
     )

@@ -3,6 +3,7 @@
 import logging
 import math
 from dataclasses import dataclass
+from enum import Enum
 from typing import Any, NamedTuple
 
 import torch
@@ -44,6 +45,13 @@ def return_modalities_from_dict(
 
 # Resolution of the input data in meters
 BASE_GSD = 10
+
+
+class PoolingType(str, Enum):
+    """Strategy for pooling the tokens."""
+
+    MAX = "max"
+    MEAN = "mean"
 
 
 class TokensAndMasks(NamedTuple):
@@ -135,16 +143,27 @@ class TokensAndMasks(NamedTuple):
         masks = torch.cat(flattened_masks, dim=1)[:, :, 0]
         return x, masks
 
-    def average_unmasked_tokens(self) -> Tensor:
-        """Returns an average of all unmasked tokens.
+    def pool_unmasked_tokens(
+        self, pooling_type: PoolingType = PoolingType.MAX
+    ) -> Tensor:
+        """Pool the unmasked tokens.
 
-        The return tensor will have shape [B, D].
+        Args:
+            pooling_type: Pooling type for the tokens
         """
         x, mask = self.flatten_tokens_and_masks()
         # 1s for online encoder, 0s elsewhere
         mask = (mask == MaskValue.ONLINE_ENCODER.value).long()
-        x_for_mean = x * mask.unsqueeze(-1)
-        return x_for_mean.sum(dim=1) / torch.sum(mask, -1, keepdim=True)
+        x_for_pooling = x * mask.unsqueeze(-1)
+        if pooling_type == PoolingType.MAX:
+            x_for_pooling = x_for_pooling.masked_fill(
+                ~mask.bool().unsqueeze(-1), -float("inf")
+            )
+            return x_for_pooling.max(dim=1).values
+        elif pooling_type == PoolingType.MEAN:
+            return x_for_pooling.sum(dim=1) / torch.sum(mask, -1, keepdim=True)
+        else:
+            raise ValueError(f"Invalid pooling type: {pooling_type}")
 
 
 class FlexiHeliosPatchEmbeddings(nn.Module):
@@ -421,7 +440,7 @@ class FlexiHeliosCompositeEncodings(nn.Module):
         channel_embed = repeat(channel_embed, f"b_s d -> {ein_string}", **ein_dict)
         modality_embed[..., :d] += channel_embed
 
-        if modality.is_time_varying:
+        if modality.is_temporal:
             # Time position encodings
             time_embed = repeat(self.pos_embed[:t], f"t d -> {ein_string}", **ein_dict)
             modality_embed[..., d : d * 2] += time_embed
@@ -432,7 +451,7 @@ class FlexiHeliosCompositeEncodings(nn.Module):
             month_embed = self.month_embed(months)
             month_embed = repeat(month_embed, f"b t d -> {ein_string}", **ein_dict)
             modality_embed[..., d * 2 : d * 3] += month_embed
-        if modality.is_space_varying:
+        if modality.is_spatial:
             # Spatial encodings
             assert input_res is not None
             assert patch_size is not None
