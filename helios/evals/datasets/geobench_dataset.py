@@ -278,7 +278,7 @@ class GeobenchDataset(Dataset):
         # Normalize using the pretrained dataset's normalization stats
         if self.norm_stats_from_pretrained:
             s2 = torch.tensor(
-                self.normalizer_computed.normalize(Modality.SENTINEL2, s2.numpy())
+                self.normalizer_computed.normalize(Modality.SENTINEL2, s2)
             )
 
         timestamp = repeat(torch.tensor(self.default_day_month_year), "d -> t d", t=1)
