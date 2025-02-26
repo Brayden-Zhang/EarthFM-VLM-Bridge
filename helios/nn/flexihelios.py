@@ -64,8 +64,8 @@ class TokensAndMasks(NamedTuple):
         latlon_mask: lat lon mask indicating which coordinates are masked/unmasked
     """
 
-    sentinel2: Tensor | None = None
-    sentinel2_mask: Tensor | None = None
+    sentinel2_l2a: Tensor | None = None
+    sentinel2_l2a_mask: Tensor | None = None
     sentinel1: Tensor | None = None
     sentinel1_mask: Tensor | None = None
     worldcover: Tensor | None = None
@@ -76,8 +76,8 @@ class TokensAndMasks(NamedTuple):
     @property
     def device(self) -> torch.device:
         """Get the device of the tokens and masks."""
-        if self.sentinel2 is not None:
-            return self.sentinel2.device
+        if self.sentinel2_l2a is not None:
+            return self.sentinel2_l2a.device
         else:
             # look for any other modality that is not None
             for modality in self._fields:
