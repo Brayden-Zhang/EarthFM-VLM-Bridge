@@ -96,12 +96,12 @@ class HeliosSpeedMonitorCallback(SpeedMonitorCallback):
         )
         self.trainer.record_metric("throughput/device/TPS Encoded", tps_encoded)
         self.trainer.record_metric(
-            "throughput/device/TPS Encoded (actual avg)", tps_encoded_avg
+            "throughput/device/TPS Encoded (estimated avg)", tps_encoded_avg
         )
         self.trainer.record_metric("throughput/device/TPS Decoded", tps_decoded)
         self.trainer.record_metric(
-            "throughput/device/TPS Decoded (actual avg)", tps_decoded_avg
+            "throughput/device/TPS Decoded (estimated avg)", tps_decoded_avg
         )
         self.trainer.record_metric("throughput/device/data loading (%)", data_pct)
         self.trainer.record_metric("throughput/device/BPS", bps)
-        self.trainer.record_metric("throughput/device/BPS (actual avg)", bps_avg)
+        self.trainer.record_metric("throughput/device/BPS (estimated avg)", bps_avg)

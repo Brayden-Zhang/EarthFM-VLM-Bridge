@@ -131,7 +131,7 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
     # things should be set during building
     # TODO: handle dp_process_group internally
     # TODO: Include collate function here
-    NUM_WORKERS = 1
+    NUM_WORKERS = 2
     NUM_THREADS = 0
     GLOBAL_BATCH_SIZE = 64
 
