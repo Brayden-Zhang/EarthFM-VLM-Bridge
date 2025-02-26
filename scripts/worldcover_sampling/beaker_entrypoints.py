@@ -1,18 +1,27 @@
-from beaker import Beaker, ExperimentSpec, TaskSpec, Constraints, TaskResources, Priority
+"""Beaker entrypoints for 20250122_worldcover_sampling."""
+
+from beaker import (
+    Beaker,
+    Constraints,
+    ExperimentSpec,
+    Priority,
+    TaskResources,
+    TaskSpec,
+)
 from beaker.services.experiment import ExperimentClient
-from typing import List
 
 
 def launch_worldcover_job(
     beaker_image: str,
     workspace: str = "ai2/gabi-workspace",
     budget: str = "ai2/d5",
-    clusters: List[str] = [
+    clusters: list[str] = [
         "ai2/jupiter-cirrascale-2",
         "ai2/saturn-cirrascale",
         "ai2/ceres-cirrascale",
     ],
-):
+) -> None:
+    """Launch worldcover job."""
     description = "worldcover_1km_sampling"
     beaker = Beaker.from_env(default_workspace=workspace)
 
