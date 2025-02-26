@@ -60,6 +60,6 @@ if __name__ == "__main__":
     output.to_csv(SUBSAMPLED_GRID_PATH)
     print(len(output))
 
-    output_global = _find_clusters(grid, "global", num_clusters_per_tile=100000)
+    output_global = _find_clusters(grid, "global", num_clusters_per_tile=150000)
     output_global.to_csv(SUBSAMPLED_GLOBAL_GRID_PATH)
     print(len(output_global))
