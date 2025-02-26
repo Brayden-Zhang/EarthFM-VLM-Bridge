@@ -1302,7 +1302,6 @@ class EncoderConfig(Config):
         return Encoder(supported_modalities=self.supported_modalities, **kwargs)
 
 
-
 @dataclass
 class PredictorConfig(Config):
     """Configuration for the Predictor."""
@@ -1339,7 +1338,6 @@ class PredictorConfig(Config):
         kwargs = self.as_dict(exclude_none=True, recurse=False)
         logger.info(f"kwargs: {kwargs}")
         return Predictor(supported_modalities=self.supported_modalities, **kwargs)
-
 
 
 # TODO: add multiple combo of variables for encoder and predictor, and being able to build them directly, no need to specify each parameter, e.g., encoder_tiny, encoder_small, encoder_base, encoder_large, etc.
