@@ -74,7 +74,7 @@ def build_launch_config(
             "conda install gh --channel conda-forge",
             # assumes that conda is installed, which is true for our beaker images.
             "gh auth status",
-            "gh repo clone allenai/helios .",
+            "gh repo clone $REPO_URL .",
             'git checkout "$GIT_REF"',
             "git submodule update --init --recursive",
             # Setup python environment.
