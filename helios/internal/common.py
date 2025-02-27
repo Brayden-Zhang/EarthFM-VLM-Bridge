@@ -65,9 +65,8 @@ def build_launch_config(
         # TODO: These EnvSecrets might be pretty annoying to make EVERYONE  to se tup but worht standardizing
         env_secrets=[
             BeakerEnvSecret(name="BEAKER_TOKEN", secret=f"{beaker_user}_BEAKER_TOKEN"),
-            BeakerEnvSecret(
-                name="WANDB_API_KEY", secret=f"{beaker_user}_WANDB_API_KEY"
-            ),
+            # TODO: Update to match the convention of name first
+            BeakerEnvSecret(name="WANDB_API_KEY", secret="WANDB_API_KEY"),
             # BeakerEnvSecret(name="R2_ENDPOINT_URL", secret="R2_ENDPOINT_URL"),
             # BeakerEnvSecret(name="WEKA_ENDPOINT_URL", secret="WEKA_ENDPOINT_URL"),
             # BeakerEnvSecret(name="SLACK_WEBHOOK_URL", secret="SLACK_WEBHOOK_URL"),
