@@ -3,8 +3,8 @@
 from olmo_core.internal.common import get_beaker_username
 from olmo_core.io import is_url
 from olmo_core.launch.beaker import (BeakerEnvSecret, BeakerEnvVar,
-                                     BeakerLaunchConfig, BeakerWekaBucket,
-                                     OLMoCoreBeakerImage)
+                                     BeakerLaunchConfig, BeakerPriority,
+                                     BeakerWekaBucket, OLMoCoreBeakerImage)
 from olmo_core.utils import generate_uuid
 
 BUDGET = "ai2/d5"
@@ -55,6 +55,7 @@ def build_launch_config(
         num_gpus=1,
         shared_filesystem=not is_url(root_dir),
         allow_dirty=False,
+        priority=BeakerPriority.high,
         env_vars=[
             BeakerEnvVar(name="NCCL_DEBUG", value="INFO" if nccl_debug else "WARN")
         ],
@@ -73,7 +74,7 @@ def build_launch_config(
             "conda install gh --channel conda-forge",
             # assumes that conda is installed, which is true for our beaker images.
             "gh auth status",
-            'gh repo clone allenai/helios .',
+            "gh repo clone allenai/helios .",
             'git checkout "$GIT_REF"',
             "git submodule update --init --recursive",
             # Setup python environment.
