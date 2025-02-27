@@ -1,15 +1,16 @@
 """Trying to prototype fitting everything into olmo core."""
 
 import logging
-from os import environ
 
 from olmo_core.config import DType
-from olmo_core.distributed.parallel.data_parallel import (DataParallelConfig,
-                                                          DataParallelType)
+from olmo_core.distributed.parallel.data_parallel import (
+    DataParallelConfig,
+    DataParallelType,
+)
+from olmo_core.internal.common import get_beaker_username
 from olmo_core.optim import AdamWConfig
 from olmo_core.optim.scheduler import CosWithWarmup
-from olmo_core.train.callbacks import (ConfigSaverCallback,
-                                       GPUMemoryMonitorCallback)
+from olmo_core.train.callbacks import ConfigSaverCallback, GPUMemoryMonitorCallback
 from olmo_core.train.checkpoint import CheckpointerConfig
 from olmo_core.train.common import Duration, LoadStrategy
 from olmo_core.train.config import TrainerConfig
@@ -20,13 +21,19 @@ from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig
 from helios.data.normalize import Strategy
 from helios.internal.common import build_launch_config, get_root_dir
-from helios.internal.experiment import (CommonComponents,
-                                        HeliosVisualizeConfig, SubCmd, main)
+from helios.internal.experiment import (
+    CommonComponents,
+    HeliosVisualizeConfig,
+    SubCmd,
+    main,
+)
 from helios.nn.flexihelios import EncoderConfig, PoolingType, PredictorConfig
 from helios.nn.latent_mim import LatentMIMConfig
-from helios.train.callbacks import (DownstreamEvaluatorCallbackConfig,
-                                    HeliosSpeedMonitorCallback,
-                                    HeliosWandBCallback)
+from helios.train.callbacks import (
+    DownstreamEvaluatorCallbackConfig,
+    HeliosSpeedMonitorCallback,
+    HeliosWandBCallback,
+)
 from helios.train.callbacks.evaluator_callback import DownstreamTaskConfig
 from helios.train.loss import LossConfig
 from helios.train.masking import MaskingConfig
@@ -218,18 +225,13 @@ def build_common_components(
     overrides: list[str],
 ) -> CommonComponents:
     """Build the common components for an experiment."""
-
     # Variables to be changed per user
-    workdir = UPath("./output")  # nosec
-    # This allows pre-emptible jobs to save their workdir in the output folder
     SUPPORTED_MODALITIES = [
         Modality.SENTINEL2_L2A.name,
         Modality.LATLON.name,
         Modality.SENTINEL1.name,
         Modality.WORLDCOVER.name,
     ]
-    if environ.get("USE_OUTPUT_FOLDER"):
-        workdir = UPath(environ["USE_OUTPUT_FOLDER"]) / "helios" / "workdir"
 
     cmd_to_launch = SubCmd.train
     if cmd == SubCmd.launch_prep:
@@ -241,9 +243,11 @@ def build_common_components(
         clusters=cluster,
         nccl_debug=False,
     )
+    root_dir = get_root_dir(cluster)
+    beaker_user = get_beaker_username()
     return CommonComponents(
         run_name=run_name,
-        save_folder=workdir,
+        save_folder=f"{root_dir}/checkpoints/{beaker_user.lower()}/{run_name}",
         supported_modality_names=SUPPORTED_MODALITIES,
         launch=launch_config,
     )

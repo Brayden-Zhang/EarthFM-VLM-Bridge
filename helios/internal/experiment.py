@@ -265,7 +265,7 @@ class SubCmd(StrEnum):
 
 def main(
     *,
-    common_components_builder: Callable[[], CommonComponents],
+    common_components_builder: Callable,
     model_config_builder: Callable[[CommonComponents], LatentMIMConfig],
     dataset_config_builder: Callable[[CommonComponents], HeliosDatasetConfig],
     dataloader_config_builder: Callable[[CommonComponents], HeliosDataLoaderConfig],
@@ -284,7 +284,7 @@ def main(
     """
     usage = f"""
 [yellow]Usage:[/] [i blue]python[/] [i cyan]{sys.argv[0]}[/] [i b magenta]{'|'.join(SubCmd)}[/] [i b]RUN_NAME CLUSTER[/] [i][OVERRIDES...][/]
-
+If running command on a local machine ie from a session, you can use the [b]local[/b] cluster name.
 [b]Subcommands[/]
 [b magenta]launch:[/]     Not Implemented. Launch the script on Beaker with the [b magenta]train[/] subcommand.
 [b magenta]train:[/]       Run the trainer. You usually shouldn't invoke the script with this subcommand directly.
@@ -302,7 +302,7 @@ def main(
     python train.py visualize
     """.strip()
 
-    if len(sys.argv) < 2 or sys.argv[1] not in set(SubCmd):
+    if len(sys.argv) < 4 or sys.argv[1] not in set(SubCmd):
         import rich
 
         rich.get_console().print(usage, highlight=False)

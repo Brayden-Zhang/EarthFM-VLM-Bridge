@@ -2,11 +2,14 @@
 
 import logging
 
-from olmo_core.internal.common import get_beaker_username
-from olmo_core.io import is_url
-from olmo_core.launch.beaker import (BeakerEnvSecret, BeakerEnvVar,
-                                     BeakerLaunchConfig, BeakerPriority,
-                                     BeakerWekaBucket, OLMoCoreBeakerImage)
+from olmo_core.launch.beaker import (
+    BeakerEnvSecret,
+    BeakerEnvVar,
+    BeakerLaunchConfig,
+    BeakerPriority,
+    BeakerWekaBucket,
+    OLMoCoreBeakerImage,
+)
 from olmo_core.utils import generate_uuid
 
 logger = logging.getLogger(__name__)
@@ -14,6 +17,22 @@ BUDGET = "ai2/d5"
 WORKSPACE = "ai2/earth-systems"
 
 DEFAULT_HELIOS_WEKA_BUCKET = BeakerWekaBucket("dfive-default", "/weka/dfive-default")
+PROJECT_NAME = "helios"
+
+
+def get_root_dir(cluster: str) -> str:
+    """Get the root directory for the experiment.
+
+    This is where the save_folder will be stored
+    """
+    root_dir: str = f"weka://{DEFAULT_HELIOS_WEKA_BUCKET.bucket}/{PROJECT_NAME}"
+    if "jupiter" in cluster:
+        root_dir = f"/weka/{DEFAULT_HELIOS_WEKA_BUCKET.bucket}/{PROJECT_NAME}"
+    elif "augusta" in cluster:
+        raise ValueError("Augusta is not supported yet")
+    elif "local" in cluster:
+        root_dir = "./local_output"
+    return root_dir
 
 
 def build_launch_config(
@@ -26,6 +45,11 @@ def build_launch_config(
     budget: str = BUDGET,
     nccl_debug: bool = False,
 ) -> BeakerLaunchConfig:
+    """Build a launch config for a helios experiment.
+
+    THis will be the default setup, any changes that are temporary should be overriden
+    on the commandline
+    """
     weka_buckets: list[BeakerWekaBucket] = [DEFAULT_HELIOS_WEKA_BUCKET]
 
     return BeakerLaunchConfig(
@@ -46,8 +70,8 @@ def build_launch_config(
             BeakerEnvVar(name="NCCL_DEBUG", value="INFO" if nccl_debug else "WARN")
         ],
         env_secrets=[
-            BeakerEnvSecret(name="WANDB_API_KEY", secret="WANDB_API_KEY"),
-            BeakerEnvSecret(name="GITHUB_TOKEN", secret="GITHUB_TOKEN"),
+            BeakerEnvSecret(name="WANDB_API_KEY", secret="WANDB_API_KEY"),  # nosec
+            BeakerEnvSecret(name="GITHUB_TOKEN", secret="GITHUB_TOKEN"),  # nosec
         ],
         setup_steps=[
             # Clone private repo.
