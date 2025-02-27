@@ -175,6 +175,8 @@ class MaskedHeliosSample(NamedTuple):
 class MaskingStrategy(ABC):
     """Abstract base class for masking strategies."""
 
+    generator: np.random.Generator
+
     @abstractmethod
     def apply_mask(self, batch: HeliosSample, **kwargs: Any) -> MaskedHeliosSample:
         """Apply masking to the input data.
@@ -188,152 +190,7 @@ class MaskingStrategy(ABC):
         """
         pass
 
-    @property
-    def encode_ratio(self) -> float:
-        """Get the encode ratio."""
-        if not hasattr(self, "_encode_ratio"):
-            raise AttributeError("Encode ratio not set")
-        return self._encode_ratio
-
-    @property
-    def decode_ratio(self) -> float:
-        """Get the decode ratio."""
-        if not hasattr(self, "_decode_ratio"):
-            raise AttributeError("Decode ratio not set")
-        return self._decode_ratio
-
-
-MASKING_STRATEGY_REGISTRY = ClassRegistry[MaskingStrategy]()
-
-
-# EXAMPLE
-@MASKING_STRATEGY_REGISTRY.register("space")
-class SpaceMaskingStrategy(MaskingStrategy):
-    """Spatially structured random masking of the input data."""
-
-    def __init__(
-        self,
-        encode_ratio: float = 0.5,
-        decode_ratio: float = 0.5,
-    ) -> None:
-        """Initialize the masking strategy."""
-        self._encode_ratio = encode_ratio
-        self._decode_ratio = decode_ratio
-        self.generator = np.random.default_rng(0)
-
-    def _create_mask_per_modality(
-        self,
-        modality: ModalitySpec,
-        shape: torch.Size,
-        patch_size: int,
-        device: torch.device | None = None,
-    ) -> ArrayTensor:
-        if not modality.is_spatial:
-            raise ValueError("Non-spatial modality {modality}")
-
-        b, h, w = shape[:3]
-        t = shape[3] if modality.is_multitemporal else 1
-        b_s = shape[-1]
-
-        assert (h % patch_size == 0) and (w % patch_size == 0)
-        h_p = h // patch_size
-        w_p = w // patch_size
-
-        patches = h_p * w_p
-        encode_patches = int(self.encode_ratio * patches)
-        decode_patches = int(self.decode_ratio * patches)
-        target_patches = patches - encode_patches - decode_patches
-
-        flat_mask = np.concatenate(
-            (
-                np.ones(target_patches, dtype=np.int_),
-                np.ones(decode_patches, dtype=np.int_) * 2,
-                np.zeros(encode_patches, dtype=np.int_),
-            )
-        )
-
-        # numpy to for permuted function
-        flat_mask = repeat(flat_mask, "x -> b x", b=b)
-        flat_mask = self.generator.permuted(flat_mask, axis=1)
-        patch_mask = rearrange(flat_mask, "b (h w) -> b h w", h=h_p, w=w_p)
-
-        mask = np.repeat(patch_mask, repeats=patch_size, axis=1)
-        mask = np.repeat(mask, repeats=patch_size, axis=2)
-        mask = repeat(mask, "... -> ... t b_s", t=t, b_s=b_s)
-        mask = torch.as_tensor(mask, device=device)
-        mask = mask.view(*shape)
-        return mask
-
-    def apply_mask(
-        self, batch: HeliosSample, patch_size: int = 1, **kwargs: Any
-    ) -> MaskedHeliosSample:
-        """Apply random masking to the input data.
-
-        All Masking happens in unpatchified form and not grouped across bandsets
-        as the modality data is unpatchified and not grouped across bandsets
-
-        The mask created for the space-time varying modality will be different than
-        for the static modality.
-
-        For space-time varying data, we will mask out the same ratio of values for
-        all the instances in the batch. However, since a static modality might have
-        very few tokens in a batch (e.g. 1 for latlons) instead we mask out a certain
-        ratios of values across the entire batch.
-
-        Args:
-            batch: Input data of type HeliosSample
-            patch_size: patch size applied to sample
-            **kwargs: Additional arguments for maskings
-
-        Returns:
-            MaskedHeliosSample containing the masked data and mask
-        """
-        output_dict: dict[str, ArrayTensor | None] = {}
-        for modality_name in batch._fields:
-            modality = getattr(batch, modality_name)
-            if modality is None:
-                # set modality and mask to None
-                output_dict[modality_name] = None
-                output_dict[
-                    MaskedHeliosSample.get_masked_modality_name(modality_name)
-                ] = None
-            else:
-                if modality_name == "timestamps":
-                    output_dict[modality_name] = modality
-                    continue
-
-                if isinstance(modality, torch.Tensor):
-                    device: torch.device | None = modality.device
-                else:
-                    device = None
-
-                mask = self._create_mask_per_modality(
-                    Modality.get(modality_name), modality.shape, patch_size, device
-                )
-
-                output_dict[modality_name] = modality
-                output_dict[
-                    MaskedHeliosSample.get_masked_modality_name(modality_name)
-                ] = mask
-        return MaskedHeliosSample(**output_dict)
-
-
-# EXAMPLE
-@MASKING_STRATEGY_REGISTRY.register("random")
-class RandomMaskingStrategy(MaskingStrategy):
-    """Randomly masks the input data."""
-
-    def __init__(
-        self,
-        encode_ratio: float = 0.5,
-        decode_ratio: float = 0.5,
-    ) -> None:
-        """Initialize the masking strategy."""
-        self._encode_ratio = encode_ratio
-        self._decode_ratio = decode_ratio
-        self.generator = np.random.default_rng(0)
-
-    def _create_mask_per_modality(
+    def _create_random_mask(
         self,
         modality: ModalitySpec,
         shape: torch.Size,
@@ -369,6 +226,248 @@ class RandomMaskingStrategy(MaskingStrategy):
         mask = mask.view(*shape)
         return mask
 
+    @property
+    def encode_ratio(self) -> float:
+        """Get the encode ratio."""
+        if not hasattr(self, "_encode_ratio"):
+            raise AttributeError("Encode ratio not set")
+        return self._encode_ratio
+
+    @property
+    def decode_ratio(self) -> float:
+        """Get the decode ratio."""
+        if not hasattr(self, "_decode_ratio"):
+            raise AttributeError("Decode ratio not set")
+        return self._decode_ratio
+
+
+MASKING_STRATEGY_REGISTRY = ClassRegistry[MaskingStrategy]()
+
+
+@MASKING_STRATEGY_REGISTRY.register("time")
+class TimeMaskingStrategy(MaskingStrategy):
+    """Time structured random masking of the input data."""
+
+    def __init__(
+        self,
+        encode_ratio: float = 0.5,
+        decode_ratio: float = 0.5,
+    ) -> None:
+        """Initialize the masking strategy."""
+        self._encode_ratio = encode_ratio
+        self._decode_ratio = decode_ratio
+        self.generator = np.random.default_rng(0)
+
+    def _create_temporal_mask(
+        self,
+        modality: ModalitySpec,
+        shape: torch.Size,
+        device: torch.device | None = None,
+    ) -> ArrayTensor:
+        if not modality.is_multitemporal:
+            raise ValueError("Non-temporal modality {modality}")
+
+        b = shape[0]
+        t = shape[-2]
+
+        encode_times = int(self.encode_ratio * t)
+        decode_times = int(self.decode_ratio * t)
+        target_times = t - encode_times - decode_times
+
+        flat_mask = np.concatenate(
+            (
+                np.ones(target_times, dtype=np.int_),
+                np.ones(decode_times, dtype=np.int_) * 2,
+                np.zeros(encode_times, dtype=np.int_),
+            )
+        )
+
+        # numpy to for permuted function
+        mask = repeat(flat_mask, "t -> b t", b=b)
+        mask = self.generator.permuted(mask, axis=1)
+        mask = torch.as_tensor(mask, device=device)
+        return mask
+
+    def apply_mask(
+        self, batch: HeliosSample, patch_size: int = 1, **kwargs: Any
+    ) -> MaskedHeliosSample:
+        """Apply random masking to the input data.
+
+        Masking happens in patchified form, with whole patches having the same mask. Masking currently doesn't work on non-spatial data.
+
+        Args:
+            batch: Input data of type HeliosSample
+            patch_size: patch size applied to sample
+            **kwargs: Additional arguments for maskings
+
+        Returns:
+            MaskedHeliosSample containing the masked data and mask
+        """
+        output_dict: dict[str, ArrayTensor | None] = {}
+        temporal_mask = None
+        for modality_name in batch._fields:
+            instance = getattr(batch, modality_name)
+            if instance is None:
+                # set instance and mask to None
+                output_dict[modality_name] = None
+                output_dict[
+                    MaskedHeliosSample.get_masked_modality_name(modality_name)
+                ] = None
+            else:
+                if modality_name == "timestamps":
+                    output_dict[modality_name] = instance
+                    continue
+
+                if isinstance(instance, torch.Tensor):
+                    device: torch.device | None = instance.device
+                else:
+                    device = None
+
+                modality = Modality.get(modality_name)
+                shape = instance.shape
+                if not modality.is_multitemporal:
+                    mask = self._create_random_mask(modality, shape, device)
+                else:
+                    if temporal_mask is None:
+                        temporal_mask = self._create_temporal_mask(
+                            Modality.get(modality_name), shape, device
+                        )
+                    t, b_s = shape[-2:]
+                    b, h, w = list(shape[:-2]) + [1] * (3 - len(shape[:-2]))
+                    mask = repeat(
+                        temporal_mask, "b t -> b h w t b_s", h=h, w=w, b_s=b_s
+                    )
+                    mask = mask.view(*shape)
+
+                output_dict[modality_name] = instance
+                output_dict[
+                    MaskedHeliosSample.get_masked_modality_name(modality_name)
+                ] = mask
+        return MaskedHeliosSample(**output_dict)
+
+
+@MASKING_STRATEGY_REGISTRY.register("space")
+class SpaceMaskingStrategy(MaskingStrategy):
+    """Spatially structured random masking of the input data."""
+
+    def __init__(
+        self,
+        encode_ratio: float = 0.5,
+        decode_ratio: float = 0.5,
+    ) -> None:
+        """Initialize the masking strategy."""
+        self._encode_ratio = encode_ratio
+        self._decode_ratio = decode_ratio
+        self.generator = np.random.default_rng(0)
+
+    def _create_spatial_mask(
+        self,
+        modality: ModalitySpec,
+        shape: torch.Size,
+        patch_size: int,
+        device: torch.device | None = None,
+    ) -> ArrayTensor:
+        if not modality.is_spatial:
+            raise ValueError("Non-spatial modality {modality}")
+
+        b, h, w = shape[:3]
+
+        assert (h % patch_size == 0) and (w % patch_size == 0)
+        h_p = h // patch_size
+        w_p = w // patch_size
+
+        patches = h_p * w_p
+        encode_patches = int(self.encode_ratio * patches)
+        decode_patches = int(self.decode_ratio * patches)
+        target_patches = patches - encode_patches - decode_patches
+
+        flat_mask = np.concatenate(
+            (
+                np.ones(target_patches, dtype=np.int_),
+                np.ones(decode_patches, dtype=np.int_) * 2,
+                np.zeros(encode_patches, dtype=np.int_),
+            )
+        )
+
+        # numpy to for permuted function
+        batch_mask = repeat(flat_mask, "x -> b x", b=b)
+        random_batch_mask = self.generator.permuted(batch_mask, axis=1)
+        patch_mask = rearrange(random_batch_mask, "b (h w) -> b h w", h=h_p, w=w_p)
+
+        mask = np.repeat(patch_mask, repeats=patch_size, axis=1)
+        mask = np.repeat(mask, repeats=patch_size, axis=2)
+        mask = torch.as_tensor(mask, device=device)
+        return mask
+
+    def apply_mask(
+        self, batch: HeliosSample, patch_size: int = 1, **kwargs: Any
+    ) -> MaskedHeliosSample:
+        """Apply random masking to the input data.
+
+        Masking happens in patchified form, with whole patches having the same mask. Non-spatial data is randomly masked.
+
+        Args:
+            batch: Input data of type HeliosSample
+            patch_size: patch size applied to sample
+            **kwargs: Additional arguments for maskings
+
+        Returns:
+            MaskedHeliosSample containing the masked data and mask
+        """
+        output_dict: dict[str, ArrayTensor | None] = {}
+        spatial_mask = None
+        for modality_name in batch._fields:
+            instance = getattr(batch, modality_name)
+            if instance is None:
+                # set instance and mask to None
+                output_dict[modality_name] = None
+                output_dict[
+                    MaskedHeliosSample.get_masked_modality_name(modality_name)
+                ] = None
+            else:
+                if modality_name == "timestamps":
+                    output_dict[modality_name] = instance
+                    continue
+
+                if isinstance(instance, torch.Tensor):
+                    device: torch.device | None = instance.device
+                else:
+                    device = None
+
+                modality = Modality.get(modality_name)
+                shape = instance.shape
+                if not modality.is_spatial:
+                    mask = self._create_random_mask(modality, shape, device)
+                else:
+                    if spatial_mask is None:
+                        spatial_mask = self._create_spatial_mask(
+                            Modality.get(modality_name), shape, patch_size, device
+                        )
+                    time_and_bandsets = np.prod(shape[3:])
+                    mask = repeat(spatial_mask, "... -> ... n", n=time_and_bandsets)
+                    mask = mask.view(*shape)
+
+                output_dict[modality_name] = instance
+                output_dict[
+                    MaskedHeliosSample.get_masked_modality_name(modality_name)
+                ] = mask
+        return MaskedHeliosSample(**output_dict)
+
+
+@MASKING_STRATEGY_REGISTRY.register("random")
+class RandomMaskingStrategy(MaskingStrategy):
+    """Randomly masks the input data."""
+
+    def __init__(
+        self,
+        encode_ratio: float = 0.5,
+        decode_ratio: float = 0.5,
+    ) -> None:
+        """Initialize the masking strategy."""
+        self._encode_ratio = encode_ratio
+        self._decode_ratio = decode_ratio
+        self.generator = np.random.default_rng(0)
+
     def apply_mask(self, batch: HeliosSample, **kwargs: Any) -> MaskedHeliosSample:
         """Apply random masking to the input data.
 
@@ -392,28 +491,28 @@ class RandomMaskingStrategy(MaskingStrategy):
         """
         output_dict: dict[str, ArrayTensor | None] = {}
         for modality_name in batch._fields:
-            modality = getattr(batch, modality_name)
-            if modality is None:
-                # set modality and mask to None
+            instance = getattr(batch, modality_name)
+            if instance is None:
+                # set instance and mask to None
                 output_dict[modality_name] = None
                 output_dict[
                     MaskedHeliosSample.get_masked_modality_name(modality_name)
                 ] = None
             else:
                 if modality_name == "timestamps":
-                    output_dict[modality_name] = modality
+                    output_dict[modality_name] = instance
                     continue
 
-                if isinstance(modality, torch.Tensor):
-                    device: torch.device | None = modality.device
+                if isinstance(instance, torch.Tensor):
+                    device: torch.device | None = instance.device
                 else:
                     device = None
 
-                mask = self._create_mask_per_modality(
-                    Modality.get(modality_name), modality.shape, device
+                mask = self._create_random_mask(
+                    Modality.get(modality_name), instance.shape, device
                 )
 
-                output_dict[modality_name] = modality
+                output_dict[modality_name] = instance
                 output_dict[
                     MaskedHeliosSample.get_masked_modality_name(modality_name)
                 ] = mask
