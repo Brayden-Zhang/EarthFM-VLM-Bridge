@@ -18,7 +18,7 @@ def geobench_dir() -> Path:
 
 def test_geobench_dataset(geobench_dir: Path) -> None:
     """Test forward pass from GeoBench data."""
-    supported_modalities = [Modality.SENTINEL2]
+    supported_modalities = [Modality.SENTINEL2_L2A]
     d = DataLoader(
         GeobenchDataset(
             dataset="m-eurosat",

@@ -29,7 +29,7 @@ def set_random_seeds() -> None:
 @pytest.fixture
 def supported_modalities() -> list[ModalitySpec]:
     """Create a list of supported modalities for testing."""
-    return [Modality.SENTINEL2, Modality.LATLON]
+    return [Modality.SENTINEL2_L2A, Modality.LATLON]
 
 
 # TODO: add some create mock data factory functions for all the contracts and different steps
@@ -72,14 +72,14 @@ def prepare_samples_and_supported_modalities() -> (
         """Prepare the dataset."""
         # Create three S2 tiles corresponding to its bandsets & resolutions
         crs = "EPSG:32610"
-        sentinel2_10m_path = data_path / "s2_10m.tif"
-        sentinel2_20m_path = data_path / "s2_20m.tif"
-        sentinel2_40m_path = data_path / "s2_40m.tif"
+        sentinel2_l2a_10m_path = data_path / "s2_l2a_10m.tif"
+        sentinel2_l2a_20m_path = data_path / "s2_l2a_20m.tif"
+        sentinel2_l2a_40m_path = data_path / "s2_l2a_40m.tif"
         sentinel1_10m_path = data_path / "s1_10m.tif"
         worldcover_path = data_path / "worldcover.tif"
-        create_geotiff(sentinel2_10m_path, 256, 256, 10, crs, 4 * 12)
-        create_geotiff(sentinel2_20m_path, 128, 128, 20, crs, 6 * 12)
-        create_geotiff(sentinel2_40m_path, 64, 64, 40, crs, 3 * 12)
+        create_geotiff(sentinel2_l2a_10m_path, 256, 256, 10, crs, 4 * 12)
+        create_geotiff(sentinel2_l2a_20m_path, 128, 128, 20, crs, 6 * 12)
+        create_geotiff(sentinel2_l2a_40m_path, 64, 64, 40, crs, 2 * 12)
         # Create one S1 tile
         create_geotiff(sentinel1_10m_path, 256, 256, 10, crs, 2 * 12)
         # Create one WorldCover tile
@@ -99,7 +99,7 @@ def prepare_samples_and_supported_modalities() -> (
                 grid_tile=GridTile(crs=crs, resolution_factor=16, col=165, row=-1968),
                 time_span=TimeSpan.YEAR,
                 modalities={
-                    Modality.SENTINEL2: ModalityTile(
+                    Modality.SENTINEL2_L2A: ModalityTile(
                         grid_tile=GridTile(
                             crs=crs, resolution_factor=16, col=165, row=-1968
                         ),
@@ -107,12 +107,11 @@ def prepare_samples_and_supported_modalities() -> (
                         center_time=datetime(2020, 6, 30),
                         band_sets={
                             BandSet(["B02", "B03", "B04", "B08"], 16): data_path
-                            / "s2_10m.tif",
+                            / "s2_l2a_10m.tif",
                             BandSet(
                                 ["B05", "B06", "B07", "B8A", "B11", "B12"], 32
-                            ): data_path / "s2_20m.tif",
-                            BandSet(["B01", "B09", "B10"], 64): data_path
-                            / "s2_40m.tif",
+                            ): data_path / "s2_l2a_20m.tif",
+                            BandSet(["B01", "B09"], 64): data_path / "s2_l2a_40m.tif",
                         },
                     ),
                     Modality.SENTINEL1: ModalityTile(
@@ -141,7 +140,7 @@ def prepare_samples_and_supported_modalities() -> (
     return (
         prepare_samples_func,
         [
-            Modality.SENTINEL2,
+            Modality.SENTINEL2_L2A,
             Modality.SENTINEL1,
             Modality.WORLDCOVER,
             Modality.LATLON,  # We want to include latlon even though it is not a read in modality

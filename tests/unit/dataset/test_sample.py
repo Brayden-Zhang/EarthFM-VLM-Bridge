@@ -142,7 +142,7 @@ def test_subsetting() -> None:
         t,
     ) = 1, 16, 16, 100
     sample = HeliosSample(
-        sentinel2=torch.ones((b, h, w, t, HeliosSample.num_bands("sentinel2"))),
+        sentinel2_l2a=torch.ones((b, h, w, t, HeliosSample.num_bands("sentinel2_l2a"))),
         timestamps=torch.ones((b, t, HeliosSample.num_bands("timestamps"))),
     )
     subsetted_sample = sample.subset(
@@ -164,7 +164,7 @@ def test_subsetting_worldcover_too() -> None:
         t,
     ) = 1, 16, 16, 100
     sample = HeliosSample(
-        sentinel2=torch.ones((b, h, w, t, HeliosSample.num_bands("sentinel2"))),
+        sentinel2_l2a=torch.ones((b, h, w, t, HeliosSample.num_bands("sentinel2_l2a"))),
         worldcover=torch.ones((b, h, w, HeliosSample.num_bands("worldcover"))),
         timestamps=torch.ones((b, t, HeliosSample.num_bands("timestamps"))),
     )

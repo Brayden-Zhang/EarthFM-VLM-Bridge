@@ -23,7 +23,7 @@ class Loss(ABC):
     name: str
 
     @abstractmethod
-    def compute(self, predictions: Any, targets: Any, **kwargs: Any) -> float:
+    def compute(self, predictions: Any, targets: Any, **kwargs: Any) -> Tensor:
         """Compute the loss between predictions and targets."""
         pass
 
@@ -68,7 +68,7 @@ class PatchDiscriminationLoss(Loss):
 
     def compute(
         self, predictions: TokensAndMasks, targets: TokensAndMasks, **kwargs: Any
-    ) -> float:
+    ) -> Tensor:
         """Compute patch discrimination loss between predictions and targets.
 
         Args:
@@ -130,7 +130,7 @@ class L1Loss(Loss):
 
     def compute(
         self, predictions: TokensAndMasks, targets: TokensAndMasks, **kwargs: Any
-    ) -> float:
+    ) -> Tensor:
         """Compute L1 loss between predictions and targets.
 
         Args:
@@ -183,7 +183,7 @@ class CrossEntropyLoss(Loss):
 
     def compute(
         self, predictions: TokensAndMasks, targets: TokensAndMasks, **kwargs: Any
-    ) -> float:
+    ) -> Tensor:
         """Compute cross entropy between predictions and targets.
 
         Args:

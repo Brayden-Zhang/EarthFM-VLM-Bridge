@@ -45,8 +45,9 @@ def _geobench_band_index_from_helios_name(helios_name: str) -> int:
     raise ValueError(f"Unmatched band name {helios_name}")
 
 
+# For now, with Sentinel2 L2A, we will drop the B10 band in GeoBench dataset
 GEOBENCH_TO_HELIOS_S2_BANDS = [
-    _geobench_band_index_from_helios_name(b) for b in Modality.SENTINEL2.band_order
+    _geobench_band_index_from_helios_name(b) for b in Modality.SENTINEL2_L2A.band_order
 ]
 
 
@@ -283,12 +284,12 @@ class GeobenchDataset(Dataset):
         # Normalize using the pretrained dataset's normalization stats
         if self.norm_stats_from_pretrained:
             s2 = torch.tensor(
-                self.normalizer_computed.normalize(Modality.SENTINEL2, s2)
+                self.normalizer_computed.normalize(Modality.SENTINEL2_L2A, s2)
             )
 
         timestamp = repeat(torch.tensor(self.default_day_month_year), "d -> t d", t=1)
         masked_sample = MaskedHeliosSample.from_heliossample(
-            HeliosSample(sentinel2=s2.float(), timestamps=timestamp.long())
+            HeliosSample(sentinel2_l2a=s2.float(), timestamps=timestamp.long())
         )
         return masked_sample, target
 

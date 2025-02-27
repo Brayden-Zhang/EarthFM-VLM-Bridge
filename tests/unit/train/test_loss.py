@@ -11,14 +11,14 @@ def test_patch_disc_loss() -> None:
     b, t_h, t_w, t, d = 3, 4, 4, 2, 2
 
     preds = TokensAndMasks(
-        sentinel2=torch.ones((b, t_h, t_w, t, d)),
-        sentinel2_mask=torch.ones((b, t_h, t_w, t)) * 2,
+        sentinel2_l2a=torch.ones((b, t_h, t_w, t, d)),
+        sentinel2_l2a_mask=torch.ones((b, t_h, t_w, t)) * 2,
         latlon=torch.ones((b, 1, d)),
         latlon_mask=torch.ones((b, 1)) * 2,
     )
     targets = TokensAndMasks(
-        sentinel2=torch.ones((b, t_h, t_w, t, d)),
-        sentinel2_mask=torch.zeros((b, t_h, t_w, t)),
+        sentinel2_l2a=torch.ones((b, t_h, t_w, t, d)),
+        sentinel2_l2a_mask=torch.zeros((b, t_h, t_w, t)),
         latlon=torch.ones((b, 1, d)),
         latlon_mask=torch.zeros((b, 1)),
     )
@@ -34,14 +34,14 @@ def test_patch_disc_loss_averaged_over_batch_size() -> None:
     b, t_h, t_w, t, d = 3, 4, 4, 2, 2
 
     preds = TokensAndMasks(
-        sentinel2=torch.ones((b, t_h, t_w, t, d)),
-        sentinel2_mask=torch.ones((b, t_h, t_w, t)) * 2,
+        sentinel2_l2a=torch.ones((b, t_h, t_w, t, d)),
+        sentinel2_l2a_mask=torch.ones((b, t_h, t_w, t)) * 2,
         latlon=torch.ones((b, 1, d)),
         latlon_mask=torch.ones((b, 1)) * 2,
     )
     targets = TokensAndMasks(
-        sentinel2=torch.ones((b, t_h, t_w, t, d)),
-        sentinel2_mask=torch.zeros((b, t_h, t_w, t)),
+        sentinel2_l2a=torch.ones((b, t_h, t_w, t, d)),
+        sentinel2_l2a_mask=torch.zeros((b, t_h, t_w, t)),
         latlon=torch.ones((b, 1, d)),
         latlon_mask=torch.zeros((b, 1)),
     )
@@ -52,14 +52,14 @@ def test_patch_disc_loss_averaged_over_batch_size() -> None:
     b, t_h, t_w, t, d = 8, 4, 4, 2, 2
 
     preds = TokensAndMasks(
-        sentinel2=torch.ones((b, t_h, t_w, t, d)),
-        sentinel2_mask=torch.ones((b, t_h, t_w, t)) * 2,
+        sentinel2_l2a=torch.ones((b, t_h, t_w, t, d)),
+        sentinel2_l2a_mask=torch.ones((b, t_h, t_w, t)) * 2,
         latlon=torch.ones((b, 1, d)),
         latlon_mask=torch.ones((b, 1)) * 2,
     )
     targets = TokensAndMasks(
-        sentinel2=torch.ones((b, t_h, t_w, t, d)),
-        sentinel2_mask=torch.zeros((b, t_h, t_w, t)),
+        sentinel2_l2a=torch.ones((b, t_h, t_w, t, d)),
+        sentinel2_l2a_mask=torch.zeros((b, t_h, t_w, t)),
         latlon=torch.ones((b, 1, d)),
         latlon_mask=torch.zeros((b, 1)),
     )
@@ -74,14 +74,14 @@ def test_l1_loss() -> None:
     b, t, t_h, t_w, d = 3, 2, 4, 4, 2
 
     preds = TokensAndMasks(
-        sentinel2=torch.ones((b, t, t_h, t_w, d)),
-        sentinel2_mask=torch.ones((b, t, t_h, t_w)) * 2,
+        sentinel2_l2a=torch.ones((b, t, t_h, t_w, d)),
+        sentinel2_l2a_mask=torch.ones((b, t, t_h, t_w)) * 2,
         latlon=torch.ones((b, 1, d)),
         latlon_mask=torch.ones((b, 1)) * 2,
     )
     targets = TokensAndMasks(
-        sentinel2=torch.zeros((b, t, t_h, t_w, d)),
-        sentinel2_mask=torch.zeros((b, t, t_h, t_w)),
+        sentinel2_l2a=torch.zeros((b, t, t_h, t_w, d)),
+        sentinel2_l2a_mask=torch.zeros((b, t, t_h, t_w)),
         latlon=torch.zeros((b, 1, d)),
         latlon_mask=torch.zeros((b, 1)),
     )
@@ -96,14 +96,14 @@ def test_l2_loss() -> None:
     b, t, t_h, t_w, d = 3, 2, 4, 4, 2
 
     preds = TokensAndMasks(
-        sentinel2=2 * torch.ones((b, t, t_h, t_w, d)),
-        sentinel2_mask=torch.ones((b, t, t_h, t_w)) * 2,
+        sentinel2_l2a=2 * torch.ones((b, t, t_h, t_w, d)),
+        sentinel2_l2a_mask=torch.ones((b, t, t_h, t_w)) * 2,
         latlon=2 * torch.ones((b, 1, d)),
         latlon_mask=torch.ones((b, 1)) * 2,
     )
     targets = TokensAndMasks(
-        sentinel2=torch.zeros((b, t, t_h, t_w, d)),
-        sentinel2_mask=torch.zeros((b, t, t_h, t_w)),
+        sentinel2_l2a=torch.zeros((b, t, t_h, t_w, d)),
+        sentinel2_l2a_mask=torch.zeros((b, t, t_h, t_w)),
         latlon=torch.zeros((b, 1, d)),
         latlon_mask=torch.zeros((b, 1)),
     )
@@ -118,14 +118,14 @@ def test_cross_entropy_loss() -> None:
     b, t, t_h, t_w, d = 3, 2, 4, 4, 2
 
     preds = TokensAndMasks(
-        sentinel2=2 * torch.ones((b, t, t_h, t_w, d)),
-        sentinel2_mask=torch.ones((b, t, t_h, t_w)) * 2,
+        sentinel2_l2a=2 * torch.ones((b, t, t_h, t_w, d)),
+        sentinel2_l2a_mask=torch.ones((b, t, t_h, t_w)) * 2,
         latlon=2 * torch.ones((b, 1, d)),
         latlon_mask=torch.ones((b, 1)) * 2,
     )
     targets = TokensAndMasks(
-        sentinel2=torch.zeros((b, t, t_h, t_w, 1), dtype=torch.long),
-        sentinel2_mask=torch.zeros((b, t, t_h, t_w)),
+        sentinel2_l2a=torch.zeros((b, t, t_h, t_w, 1), dtype=torch.long),
+        sentinel2_l2a_mask=torch.zeros((b, t, t_h, t_w)),
         latlon=torch.zeros((b, 1, 1), dtype=torch.long),
         latlon_mask=torch.zeros((b, 1)),
     )

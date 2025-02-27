@@ -257,9 +257,9 @@ class HeliosDataLoader(DataLoaderBase):
         logger.info("Getting mock batch NOT FROM DATASET")
         # TODO: This should be a feature of the modality spec
         output_dict = {}
-        if Modality.SENTINEL2 in self.dataset.supported_modalities:
-            mock_sentinel2 = torch.rand(1, 256, 256, 12, 13)
-            output_dict["sentinel2"] = mock_sentinel2
+        if Modality.SENTINEL2_L2A in self.dataset.supported_modalities:
+            mock_sentinel2_l2a = torch.rand(1, 256, 256, 12, 12)
+            output_dict["sentinel2_l2a"] = mock_sentinel2_l2a
         if Modality.SENTINEL1 in self.dataset.supported_modalities:
             mock_sentinel1 = torch.rand(1, 256, 256, 12, 2)
             output_dict["sentinel1"] = mock_sentinel1

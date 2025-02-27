@@ -57,7 +57,7 @@ class TestFlexiHeliosPatchEmbeddings:
         Returns:
             FlexiHeliosPatchEmbeddings: Test patch embeddings instance with small test config
         """
-        supported_modality_names = ["sentinel2", "latlon"]
+        supported_modality_names = ["sentinel2_l2a", "latlon"]
         return FlexiHeliosPatchEmbeddings(
             supported_modality_names=supported_modality_names,
             embedding_size=16,
@@ -71,14 +71,14 @@ class TestFlexiHeliosPatchEmbeddings:
     ) -> None:
         """Test the forward pass of the patch embeddings."""
         sentinel_2_num_band_sets, sentinel_2_num_bands = (
-            modality_band_set_len_and_total_bands["sentinel2"]
+            modality_band_set_len_and_total_bands["sentinel2_l2a"]
         )
         latlon_num_band_sets, latlon_num_bands = modality_band_set_len_and_total_bands[
             "latlon"
         ]
         B, H, W, T, num_bands = 1, 16, 16, 3, sentinel_2_num_bands
-        sentinel2 = torch.randn((B, H, W, T, num_bands))
-        sentinel2_mask = torch.zeros((B, H, W, T, num_bands), dtype=torch.long)
+        sentinel2_l2a = torch.randn((B, H, W, T, num_bands))
+        sentinel2_l2a_mask = torch.zeros((B, H, W, T, num_bands), dtype=torch.long)
         patch_size = 4
 
         latlon = torch.randn(B, latlon_num_bands)
@@ -89,8 +89,8 @@ class TestFlexiHeliosPatchEmbeddings:
         timestamps = torch.cat([days, months, years], dim=-1)  # Shape: (B, T, 3)
 
         masked_sample_dict = {
-            "sentinel2": sentinel2,
-            "sentinel2_mask": sentinel2_mask,
+            "sentinel2_l2a": sentinel2_l2a,
+            "sentinel2_l2a_mask": sentinel2_l2a_mask,
             "latlon": latlon,
             "latlon_mask": latlon_mask,
             "timestamps": timestamps,
@@ -98,7 +98,7 @@ class TestFlexiHeliosPatchEmbeddings:
         sample = MaskedHeliosSample(**masked_sample_dict)
         output = patch_embeddings.forward(sample, patch_size)
         embedding_size = patch_embeddings.embedding_size
-        assert output["sentinel2"].shape == (
+        assert output["sentinel2_l2a"].shape == (
             B,
             H // patch_size,
             W // patch_size,
@@ -106,7 +106,7 @@ class TestFlexiHeliosPatchEmbeddings:
             sentinel_2_num_band_sets,  # of band sets
             embedding_size,
         )
-        assert output["sentinel2_mask"].shape == (
+        assert output["sentinel2_l2a_mask"].shape == (
             B,
             H // patch_size,
             W // patch_size,
@@ -149,15 +149,17 @@ class TestEncoder:
         modality_band_set_len_and_total_bands: dict[str, tuple[int, int]],
     ) -> None:
         """Test applying attention layers with masking via the apply_attn method."""
-        sentinel2_num_band_sets, _ = modality_band_set_len_and_total_bands["sentinel2"]
+        sentinel2_l2a_num_band_sets, _ = modality_band_set_len_and_total_bands[
+            "sentinel2_l2a"
+        ]
         latlon_num_band_sets, _ = modality_band_set_len_and_total_bands["latlon"]
-        B, H, W, T, C, D = 1, 2, 2, 3, sentinel2_num_band_sets, 16
-        sentinel2_tokens = torch.randn(B, H, W, T, C, D)
-        sentinel2_mask = torch.zeros(B, H, W, T, C, dtype=torch.long)
+        B, H, W, T, C, D = 1, 2, 2, 3, sentinel2_l2a_num_band_sets, 16
+        sentinel2_l2a_tokens = torch.randn(B, H, W, T, C, D)
+        sentinel2_l2a_mask = torch.zeros(B, H, W, T, C, dtype=torch.long)
 
         # Mask the first and second "positions" in this 2x2 grid.
-        sentinel2_mask[0, 0, 0, 0] = 1  # mask first token
-        sentinel2_mask[0, 0, 1, 0] = 1  # mask second token
+        sentinel2_l2a_mask[0, 0, 0, 0] = 1  # mask first token
+        sentinel2_l2a_mask[0, 0, 1, 0] = 1  # mask second token
         latlon = torch.randn(B, latlon_num_band_sets, D)
         latlon_mask = torch.randint(
             0, 2, (B, latlon_num_band_sets), dtype=torch.float32
@@ -165,8 +167,8 @@ class TestEncoder:
 
         # Construct the TokensAndMasks namedtuple with mock modality data + mask.
         x = {
-            "sentinel2": sentinel2_tokens,
-            "sentinel2_mask": sentinel2_mask,
+            "sentinel2_l2a": sentinel2_l2a_tokens,
+            "sentinel2_l2a_mask": sentinel2_l2a_mask,
             "latlon": latlon,
             "latlon_mask": latlon_mask,
         }
@@ -183,15 +185,17 @@ class TestEncoder:
 
         # Ensure shape is preserved in the output tokens.
         assert (
-            output["sentinel2"].shape == sentinel2_tokens.shape
-        ), f"Expected output 'sentinel2' shape {sentinel2_tokens.shape}, got {output['sentinel2'].shape}."
+            output["sentinel2_l2a"].shape == sentinel2_l2a_tokens.shape
+        ), f"Expected output 'sentinel2_l2a' shape {sentinel2_l2a_tokens.shape}, got {output['sentinel2_l2a'].shape}."
 
         # Confirm the mask was preserved and that masked tokens are zeroed out in the output.
         assert (
-            output["sentinel2_mask"] == sentinel2_mask
+            output["sentinel2_l2a_mask"] == sentinel2_l2a_mask
         ).all(), "Mask should be preserved in output"
         assert (
-            output["sentinel2"][sentinel2_mask >= MaskValue.TARGET_ENCODER_ONLY.value]
+            output["sentinel2_l2a"][
+                sentinel2_l2a_mask >= MaskValue.TARGET_ENCODER_ONLY.value
+            ]
             == 0
         ).all(), "Masked tokens should be 0 in output"
 
@@ -205,25 +209,25 @@ class TestEncoder:
         In this scenario we do not provide a token exit configuration so that all transformer
         layers are executed normally.
         """
-        sentinel2_num_band_sets, sentinel2_num_bands = (
-            modality_band_set_len_and_total_bands["sentinel2"]
+        sentinel2_l2a_num_band_sets, sentinel2_l2a_num_bands = (
+            modality_band_set_len_and_total_bands["sentinel2_l2a"]
         )
         latlon_num_band_sets, latlon_num_bands = modality_band_set_len_and_total_bands[
             "latlon"
         ]
-        B, H, W, T, C = 1, 8, 8, 4, sentinel2_num_bands
-        sentinel2 = torch.randn(B, H, W, T, C)
-        sentinel2_mask = torch.zeros(B, H, W, T, C, dtype=torch.long)
+        B, H, W, T, C = 1, 8, 8, 4, sentinel2_l2a_num_bands
+        sentinel2_l2a = torch.randn(B, H, W, T, C)
+        sentinel2_l2a_mask = torch.zeros(B, H, W, T, C, dtype=torch.long)
         latlon = torch.randn(B, latlon_num_bands)
-        latlon_mask = torch.randint(0, 2, (B, latlon_num_bands), dtype=torch.float32)
+        latlon_mask = torch.zeros(B, latlon_num_bands, dtype=torch.float32)
         days = torch.randint(0, 25, (B, T, 1), dtype=torch.long)
         months = torch.randint(0, 12, (B, T, 1), dtype=torch.long)
         years = torch.randint(2018, 2020, (B, T, 1), dtype=torch.long)
         timestamps = torch.cat([days, months, years], dim=-1)  # Shape: (B, T, 3)
 
         masked_sample_dict = {
-            "sentinel2": sentinel2,
-            "sentinel2_mask": sentinel2_mask,
+            "sentinel2_l2a": sentinel2_l2a,
+            "sentinel2_l2a_mask": sentinel2_l2a_mask,
             "latlon": latlon,
             "latlon_mask": latlon_mask,
             "timestamps": timestamps,
@@ -248,21 +252,27 @@ class TestEncoder:
             expected_H,
             expected_W,
             T,
-            sentinel2_num_band_sets,
+            sentinel2_l2a_num_band_sets,
             expected_embedding_size,
         )
-        assert output.sentinel2 is not None
-        assert output.sentinel2_mask is not None
+        assert output.sentinel2_l2a is not None
+        assert output.sentinel2_l2a_mask is not None
         assert output.latlon is not None
         assert output.latlon_mask is not None
         assert (
-            output.sentinel2.shape == expected_shape
-        ), f"Expected output sentinel2 shape {expected_shape}, got {output.sentinel2.shape}"
+            output.sentinel2_l2a.shape == expected_shape
+        ), f"Expected output sentinel2_l2a shape {expected_shape}, got {output.sentinel2_l2a.shape}"
 
-        expected_mask_shape = (B, expected_H, expected_W, T, sentinel2_num_band_sets)
+        expected_mask_shape = (
+            B,
+            expected_H,
+            expected_W,
+            T,
+            sentinel2_l2a_num_band_sets,
+        )
         assert (
-            output.sentinel2_mask.shape == expected_mask_shape
-        ), f"Expected output sentinel2_mask shape {expected_mask_shape}, got {output.sentinel2_mask.shape}"
+            output.sentinel2_l2a_mask.shape == expected_mask_shape
+        ), f"Expected output sentinel2_l2a_mask shape {expected_mask_shape}, got {output.sentinel2_l2a_mask.shape}"
         assert output.latlon.shape == (
             B,
             latlon_num_band_sets,
@@ -276,6 +286,21 @@ class TestEncoder:
             )
         ), f"Expected output latlon_mask shape {latlon_mask.shape}, got {output.latlon_mask.shape}"
 
+        # test the gradients are correct too
+        output.sentinel2_l2a.sum().backward()
+
+        for name, param in encoder.named_parameters():
+            # the composite_encodings is a bug which will be fixed now
+            if not any(
+                ignore_param in name
+                for ignore_param in [
+                    "pos_embed",
+                    "month_embed",
+                    "composite_encodings.per_modality_channel_embeddings.latlon",
+                ]
+            ):
+                assert param.grad is not None, name
+
     def test_forward_exit_config_exists(
         self,
         encoder: Encoder,
@@ -285,15 +310,15 @@ class TestEncoder:
 
         In this scenario (with an exit configuration) we set tokens in each modality for early exit.
         """
-        sentinel2_num_band_sets, sentinel2_num_bands = (
-            modality_band_set_len_and_total_bands["sentinel2"]
+        sentinel2_l2a_num_band_sets, sentinel2_l2a_num_bands = (
+            modality_band_set_len_and_total_bands["sentinel2_l2a"]
         )
         latlon_num_band_sets, latlon_num_bands = modality_band_set_len_and_total_bands[
             "latlon"
         ]
-        B, H, W, T, C = 1, 8, 8, 4, sentinel2_num_bands
-        sentinel2 = torch.randn(B, H, W, T, C)
-        sentinel2_mask = torch.zeros(B, H, W, T, C, dtype=torch.long)
+        B, H, W, T, C = 1, 2, 2, 1, sentinel2_l2a_num_bands
+        sentinel2_l2a = torch.randn(B, H, W, T, C)
+        sentinel2_l2a_mask = torch.zeros(B, H, W, T, C, dtype=torch.long)
         latlon = torch.randn(B, latlon_num_bands)
         latlon_mask = torch.zeros((B, latlon_num_bands), dtype=torch.float32)
         # Generate valid timestamps with month in [1, 12]
@@ -303,18 +328,18 @@ class TestEncoder:
         timestamps = torch.cat([days, months, years], dim=-1)
 
         masked_sample_dict = {
-            "sentinel2": sentinel2,
-            "sentinel2_mask": sentinel2_mask,
+            "sentinel2_l2a": sentinel2_l2a,
+            "sentinel2_l2a_mask": sentinel2_l2a_mask,
             "latlon": latlon,
             "latlon_mask": latlon_mask,
             "timestamps": timestamps,
         }
         x = MaskedHeliosSample(**masked_sample_dict)
 
-        patch_size = 4
+        patch_size = 2
         input_res = 1
 
-        token_exit_cfg = {"sentinel2": 1, "latlon": 0}
+        token_exit_cfg = {"sentinel2_l2a": 0, "latlon": 0}
         exit_after_n_layers = 1
 
         output = encoder.forward(
@@ -328,26 +353,32 @@ class TestEncoder:
         expected_H = H // patch_size
         expected_W = W // patch_size
         expected_embedding_size = encoder.embedding_size
-        expected_shape_sentinel2 = (
+        expected_shape_sentinel2_l2a = (
             B,
             expected_H,
             expected_W,
             T,
-            sentinel2_num_band_sets,
+            sentinel2_l2a_num_band_sets,
             expected_embedding_size,
         )
-        assert output.sentinel2 is not None
-        assert output.sentinel2_mask is not None
+        assert output.sentinel2_l2a is not None
+        assert output.sentinel2_l2a_mask is not None
         assert output.latlon is not None
         assert output.latlon_mask is not None
         assert (
-            output.sentinel2.shape == expected_shape_sentinel2
-        ), f"Expected output sentinel2 shape {expected_shape_sentinel2}, got {output.sentinel2.shape}"
+            output.sentinel2_l2a.shape == expected_shape_sentinel2_l2a
+        ), f"Expected output sentinel2_l2a shape {expected_shape_sentinel2_l2a}, got {output.sentinel2_l2a.shape}"
 
-        expected_mask_shape = (B, expected_H, expected_W, T, sentinel2_num_band_sets)
+        expected_mask_shape = (
+            B,
+            expected_H,
+            expected_W,
+            T,
+            sentinel2_l2a_num_band_sets,
+        )
         assert (
-            output.sentinel2_mask.shape == expected_mask_shape
-        ), f"Expected output sentinel2_mask shape {expected_mask_shape}, got {output.sentinel2_mask.shape}"
+            output.sentinel2_l2a_mask.shape == expected_mask_shape
+        ), f"Expected output sentinel2_l2a_mask shape {expected_mask_shape}, got {output.sentinel2_l2a_mask.shape}"
         expected_shape_latlon = (
             B,
             latlon_num_band_sets,
@@ -357,25 +388,41 @@ class TestEncoder:
             output.latlon.shape == expected_shape_latlon
         ), f"Expected output latlon shape {expected_shape_latlon}, got {output.latlon.shape}"
 
+        output.sentinel2_l2a.sum().backward()
+        for name, param in encoder.named_parameters():
+            # the composite_encodings is a bug which will be fixed now
+            if not (
+                any(
+                    ignore_param in name
+                    for ignore_param in [
+                        "pos_embed",
+                        "month_embed",
+                        "composite_encodings.per_modality_channel_embeddings.latlon",
+                    ]
+                )
+                or ("block" in name)
+            ):
+                assert param.grad is not None, name
+
     def test_entire_modality_masked(
         self,
         encoder: Encoder,
         modality_band_set_len_and_total_bands: dict[str, tuple[int, int]],
     ) -> None:
         """Test that when an entire modality is masked."""
-        sentinel2_num_band_sets, sentinel2_num_bands = (
-            modality_band_set_len_and_total_bands["sentinel2"]
+        sentinel2_l2a_num_band_sets, sentinel2_l2a_num_bands = (
+            modality_band_set_len_and_total_bands["sentinel2_l2a"]
         )
         latlon_num_band_sets, latlon_num_bands = modality_band_set_len_and_total_bands[
             "latlon"
         ]
-        B, H, W, T, C = 1, 8, 8, 4, sentinel2_num_bands
-        sentinel2 = torch.randn(B, H, W, T, C)
+        B, H, W, T, C = 1, 8, 8, 4, sentinel2_l2a_num_bands
+        sentinel2_l2a = torch.randn(B, H, W, T, C)
         latlon = torch.randn(B, latlon_num_bands)
         # Mask the entirety of each modality
-        sentinel2_mask = torch.ones(B, H, W, T, C, dtype=torch.long)
-        # Make 1 token in 1 channel group in S2 visible
-        sentinel2_mask[0, 0, 0, 0, 0] = 0
+        sentinel2_l2a_mask = torch.ones(B, H, W, T, C, dtype=torch.long)
+        # Make 1 token in all S2 channel groups
+        sentinel2_l2a_mask[0, 0, 0, 0, :] = 0
         latlon_mask = torch.ones(B, 2, dtype=torch.float32)
         days = torch.randint(0, 25, (B, T, 1), dtype=torch.long)
         months = torch.randint(0, 12, (B, T, 1), dtype=torch.long)
@@ -383,8 +430,8 @@ class TestEncoder:
         timestamps = torch.cat([days, months, years], dim=-1)  # Shape: (B, T, 3)
 
         masked_sample_dict = {
-            "sentinel2": sentinel2,
-            "sentinel2_mask": sentinel2_mask,
+            "sentinel2_l2a": sentinel2_l2a,
+            "sentinel2_l2a_mask": sentinel2_l2a_mask,
             "latlon": latlon,
             "latlon_mask": latlon_mask,
             "timestamps": timestamps,
@@ -408,21 +455,27 @@ class TestEncoder:
             expected_H,
             expected_W,
             T,
-            sentinel2_num_band_sets,
+            sentinel2_l2a_num_band_sets,
             expected_embedding_size,
         )
-        assert output.sentinel2 is not None
-        assert output.sentinel2_mask is not None
+        assert output.sentinel2_l2a is not None
+        assert output.sentinel2_l2a_mask is not None
         assert output.latlon is not None
         assert output.latlon_mask is not None
         assert (
-            output.sentinel2.shape == expected_shape
-        ), f"Expected output sentinel2 shape {expected_shape}, got {output.sentinel2.shape}"
+            output.sentinel2_l2a.shape == expected_shape
+        ), f"Expected output sentinel2_l2a shape {expected_shape}, got {output.sentinel2_l2a.shape}"
 
-        expected_mask_shape = (B, expected_H, expected_W, T, sentinel2_num_band_sets)
+        expected_mask_shape = (
+            B,
+            expected_H,
+            expected_W,
+            T,
+            sentinel2_l2a_num_band_sets,
+        )
         assert (
-            output.sentinel2_mask.shape == expected_mask_shape
-        ), f"Expected output sentinel2_mask shape {expected_mask_shape}, got {output.sentinel2_mask.shape}"
+            output.sentinel2_l2a_mask.shape == expected_mask_shape
+        ), f"Expected output sentinel2_l2a_mask shape {expected_mask_shape}, got {output.sentinel2_l2a_mask.shape}"
         assert output.latlon.shape == (
             B,
             1,
@@ -435,6 +488,23 @@ class TestEncoder:
                 1,
             )
         ), f"Expected output latlon_mask shape {latlon_mask.shape}, got {output.latlon_mask.shape}"
+
+        output.sentinel2_l2a.sum().backward()
+        for name, param in encoder.named_parameters():
+            # the composite_encodings is a bug which will be fixed now
+            if not (
+                any(
+                    ignore_param in name
+                    for ignore_param in [
+                        "pos_embed",
+                        "month_embed",
+                        "composite_encodings.per_modality_channel_embeddings.latlon",
+                        "patch_embeddings.per_modality_embeddings.latlon",
+                    ]
+                )
+                or ("block" in name)
+            ):
+                assert param.grad is not None, name
 
 
 class TestPredictor:
@@ -470,27 +540,29 @@ class TestPredictor:
         H = 2  # Spatial height
         W = 2  # Spatial width
         T = 3  # Number of timesteps
-        sentinel2_num_band_sets, _ = modality_band_set_len_and_total_bands["sentinel2"]
+        sentinel2_l2a_num_band_sets, _ = modality_band_set_len_and_total_bands[
+            "sentinel2_l2a"
+        ]
         latlon_num_band_sets, _ = modality_band_set_len_and_total_bands["latlon"]
         embedding_dim = predictor.encoder_to_decoder_embed.in_features
 
-        sentinel2_tokens = torch.randn(
-            B, H, W, T, sentinel2_num_band_sets, embedding_dim
+        sentinel2_l2a_tokens = torch.randn(
+            B, H, W, T, sentinel2_l2a_num_band_sets, embedding_dim
         )
 
-        sentinel2_mask = torch.full(
-            (B, H, W, T, sentinel2_num_band_sets),
+        sentinel2_l2a_mask = torch.full(
+            (B, H, W, T, sentinel2_l2a_num_band_sets),
             fill_value=MaskValue.DECODER.value,
             dtype=torch.float32,
         )
-        sentinel2_mask[:, :, :, :, 0] = MaskValue.ONLINE_ENCODER.value
+        sentinel2_l2a_mask[:, :, :, :, 0] = MaskValue.ONLINE_ENCODER.value
         # Create dummy latitude and longitude data (and its mask)
         latlon = torch.randn(B, latlon_num_band_sets, embedding_dim)
         latlon_mask = torch.zeros(B, latlon_num_band_sets, dtype=torch.float32)
 
         encoded_tokens = TokensAndMasks(
-            sentinel2=sentinel2_tokens,
-            sentinel2_mask=sentinel2_mask,
+            sentinel2_l2a=sentinel2_l2a_tokens,
+            sentinel2_l2a_mask=sentinel2_l2a_mask,
             latlon=latlon,
             latlon_mask=latlon_mask,
         )
@@ -512,27 +584,38 @@ class TestPredictor:
             H,
             W,
             T,
-            sentinel2_num_band_sets,
+            sentinel2_l2a_num_band_sets,
             predictor.output_embedding_size,
         )
-        assert output.sentinel2 is not None
-        assert output.sentinel2_mask is not None
+        assert output.sentinel2_l2a is not None
+        assert output.sentinel2_l2a_mask is not None
         assert output.latlon is not None
         assert output.latlon_mask is not None
         assert (
-            output.sentinel2.shape == expected_token_shape
-        ), f"Expected tokens shape {expected_token_shape}, got {output.sentinel2.shape}"
+            output.sentinel2_l2a.shape == expected_token_shape
+        ), f"Expected tokens shape {expected_token_shape}, got {output.sentinel2_l2a.shape}"
 
-        expected_mask_shape = (B, H, W, T, sentinel2_num_band_sets)
+        expected_mask_shape = (B, H, W, T, sentinel2_l2a_num_band_sets)
         assert (
-            output.sentinel2_mask.shape == expected_mask_shape
-        ), f"Expected mask shape {expected_mask_shape}, got {output.sentinel2_mask.shape}"
+            output.sentinel2_l2a_mask.shape == expected_mask_shape
+        ), f"Expected mask shape {expected_mask_shape}, got {output.sentinel2_l2a_mask.shape}"
         assert output.latlon.shape == (
             B,
             latlon_num_band_sets,
             predictor.output_embedding_size,
         )
         assert output.latlon_mask.shape == (B, latlon_num_band_sets)
+        output.sentinel2_l2a.sum().backward()
+        for name, param in predictor.named_parameters():
+            if not any(
+                ignore_param in name
+                for ignore_param in [
+                    "pos_embed",
+                    "month_embed",
+                    "composite_encodings.per_modality_channel_embeddings.latlon",
+                ]
+            ):
+                assert param.grad is not None, name
 
     def test_predictor_forward(
         self,
@@ -544,16 +627,18 @@ class TestPredictor:
         H = 2  # Spatial height
         W = 2  # Spatial width
         T = 3  # Number of timesteps
-        sentinel2_num_band_sets, _ = modality_band_set_len_and_total_bands["sentinel2"]
+        sentinel2_l2a_num_band_sets, _ = modality_band_set_len_and_total_bands[
+            "sentinel2_l2a"
+        ]
         latlon_num_band_sets, _ = modality_band_set_len_and_total_bands["latlon"]
         embedding_dim = predictor.encoder_to_decoder_embed.in_features
 
-        sentinel2_tokens = torch.randn(
-            B, H, W, T, sentinel2_num_band_sets, embedding_dim
+        sentinel2_l2a_tokens = torch.randn(
+            B, H, W, T, sentinel2_l2a_num_band_sets, embedding_dim
         )
 
-        sentinel2_mask = torch.full(
-            (B, H, W, T, sentinel2_num_band_sets),
+        sentinel2_l2a_mask = torch.full(
+            (B, H, W, T, sentinel2_l2a_num_band_sets),
             fill_value=MaskValue.DECODER.value,
             dtype=torch.float32,
         )
@@ -566,8 +651,8 @@ class TestPredictor:
         )
 
         encoded_tokens = TokensAndMasks(
-            sentinel2=sentinel2_tokens,
-            sentinel2_mask=sentinel2_mask,
+            sentinel2_l2a=sentinel2_l2a_tokens,
+            sentinel2_l2a_mask=sentinel2_l2a_mask,
             latlon=latlon,
             latlon_mask=latlon_mask,
         )
@@ -589,57 +674,168 @@ class TestPredictor:
             H,
             W,
             T,
-            sentinel2_num_band_sets,
+            sentinel2_l2a_num_band_sets,
             predictor.output_embedding_size,
         )
-        assert output.sentinel2 is not None
-        assert output.sentinel2_mask is not None
+        assert output.sentinel2_l2a is not None
+        assert output.sentinel2_l2a_mask is not None
         assert output.latlon is not None
         assert output.latlon_mask is not None
         assert (
-            output.sentinel2.shape == expected_token_shape
-        ), f"Expected tokens shape {expected_token_shape}, got {output.sentinel2.shape}"
+            output.sentinel2_l2a.shape == expected_token_shape
+        ), f"Expected tokens shape {expected_token_shape}, got {output.sentinel2_l2a.shape}"
 
-        expected_mask_shape = (B, H, W, T, sentinel2_num_band_sets)
+        expected_mask_shape = (B, H, W, T, sentinel2_l2a_num_band_sets)
         assert (
-            output.sentinel2_mask.shape == expected_mask_shape
-        ), f"Expected mask shape {expected_mask_shape}, got {output.sentinel2_mask.shape}"
+            output.sentinel2_l2a_mask.shape == expected_mask_shape
+        ), f"Expected mask shape {expected_mask_shape}, got {output.sentinel2_l2a_mask.shape}"
         assert output.latlon.shape == (
             B,
             latlon_num_band_sets,
             predictor.output_embedding_size,
         )
         assert output.latlon_mask.shape == (B, latlon_num_band_sets)
+        output.sentinel2_l2a.sum().backward()
+        for name, param in predictor.named_parameters():
+            if not any(
+                ignore_param in name
+                for ignore_param in [
+                    "pos_embed",
+                    "month_embed",
+                    "composite_encodings.per_modality_channel_embeddings.latlon",
+                ]
+            ):
+                assert param.grad is not None, name
+
+    @torch.no_grad()
+    def test_token_exit_cfgs_single_exit_equivalency(
+        self,
+        modality_band_set_len_and_total_bands: dict[str, tuple[int, int]],
+    ) -> None:
+        """Test the full end to end forward pass of the model with an exit configuration."""
+        supported_modalities = [
+            Modality.SENTINEL2_L2A,
+            Modality.LATLON,
+            Modality.WORLDCOVER,
+        ]
+        token_exit_cfg = {"sentinel2_l2a": 1, "latlon": 1, "worldcover": 1}
+        sentinel2_l2a_num_band_sets, sentinel2_l2a_num_bands = (
+            modality_band_set_len_and_total_bands["sentinel2_l2a"]
+        )
+        latlon_num_band_sets, latlon_num_bands = modality_band_set_len_and_total_bands[
+            "latlon"
+        ]
+        B, H, W, T, C = (
+            1,
+            4,
+            4,
+            2,
+            sentinel2_l2a_num_bands,
+        )
+        # Create dummy sentinel2_l2a data: shape (B, H, W, T, C)
+        sentinel2_l2a = torch.randn(B, H, W, T, C)
+        # Here we assume 0 (ONLINE_ENCODER) means the token is visible.
+        sentinel2_l2a_mask = torch.zeros(B, H, W, T, C, dtype=torch.long)
+        # Dummy latitude-longitude data.
+        latlon = torch.randn(B, latlon_num_bands)
+        latlon_mask = (
+            torch.ones(B, latlon_num_bands, dtype=torch.float32)
+            * MaskValue.DECODER.value
+        )
+        worldcover = torch.randn(B, H, W, 1, 1)
+        worldcover_mask = (
+            torch.ones(B, H, W, 1, 1, dtype=torch.float32) * MaskValue.DECODER.value
+        )
+        # Generate valid timestamps:
+        # - days: range 1..31,
+        # - months: range 1..13,
+        # - years: e.g. 2018-2019.
+        days = torch.randint(0, 25, (B, T, 1), dtype=torch.long)
+        months = torch.randint(0, 12, (B, T, 1), dtype=torch.long)
+        years = torch.randint(2018, 2020, (B, T, 1), dtype=torch.long)
+        timestamps = torch.cat([days, months, years], dim=-1)  # Shape: (B, T, 3)
+
+        masked_sample_dict = {
+            "sentinel2_l2a": sentinel2_l2a,
+            "sentinel2_l2a_mask": sentinel2_l2a_mask,
+            "latlon": latlon,
+            "latlon_mask": latlon_mask,
+            "worldcover": worldcover,
+            "worldcover_mask": worldcover_mask,
+            "timestamps": timestamps,
+        }
+        x = MaskedHeliosSample(**masked_sample_dict)
+
+        patch_size = 4
+        input_res = 1
+        # Shared constants for encoder and predictor
+        MAX_PATCH_SIZE = 8
+        NUM_HEADS = 2
+        MLP_RATIO = 4.0
+        MAX_SEQ_LENGTH = 12
+        DEPTH = 2
+        DROP_PATH = 0.1
+        ENCODER_EMBEDDING_SIZE = 16
+        encoder = Encoder(
+            supported_modalities=supported_modalities,
+            embedding_size=ENCODER_EMBEDDING_SIZE,
+            max_patch_size=MAX_PATCH_SIZE,
+            num_heads=NUM_HEADS,
+            mlp_ratio=MLP_RATIO,
+            max_sequence_length=MAX_SEQ_LENGTH,
+            use_channel_embs=True,
+            depth=DEPTH,
+            drop_path=DROP_PATH,
+        )
+        output_exit_after = encoder.forward(
+            x, patch_size, input_res, exit_after_n_layers=1
+        )
+        output_exit_depth = encoder.forward(
+            x, patch_size, input_res, token_exit_cfg=token_exit_cfg
+        )
+        for key, val in output_exit_after.as_dict().items():
+            if val is None:
+                print(f"{key} is None")
+            else:
+                assert torch.equal(val, output_exit_depth.as_dict()[key]), val
 
 
 def test_end_to_end_with_exit_config(
     modality_band_set_len_and_total_bands: dict[str, tuple[int, int]],
 ) -> None:
     """Test the full end to end forward pass of the model with an exit configuration."""
-    supported_modalities = [Modality.SENTINEL2, Modality.LATLON, Modality.WORLDCOVER]
-    token_exit_cfg = {"sentinel2": 3, "latlon": 0, "worldcover": 0}
-    sentinel2_num_band_sets, sentinel2_num_bands = (
-        modality_band_set_len_and_total_bands["sentinel2"]
+    supported_modalities = [
+        Modality.SENTINEL2_L2A,
+        Modality.LATLON,
+        Modality.WORLDCOVER,
+    ]
+    token_exit_cfg = {"sentinel2_l2a": 3, "latlon": 0, "worldcover": 0}
+    sentinel2_l2a_num_band_sets, sentinel2_l2a_num_bands = (
+        modality_band_set_len_and_total_bands["sentinel2_l2a"]
     )
     latlon_num_band_sets, latlon_num_bands = modality_band_set_len_and_total_bands[
         "latlon"
     ]
     B, H, W, T, C = (
         1,
-        8,
-        8,
         4,
-        sentinel2_num_bands,
+        4,
+        2,
+        sentinel2_l2a_num_bands,
     )
-    # Create dummy sentinel2 data: shape (B, H, W, T, C)
-    sentinel2 = torch.randn(B, H, W, T, C)
+    # Create dummy sentinel2_l2a data: shape (B, H, W, T, C)
+    sentinel2_l2a = torch.randn(B, H, W, T, C)
     # Here we assume 0 (ONLINE_ENCODER) means the token is visible.
-    sentinel2_mask = torch.zeros(B, H, W, T, C, dtype=torch.long)
+    sentinel2_l2a_mask = torch.zeros(B, H, W, T, C, dtype=torch.long)
     # Dummy latitude-longitude data.
     latlon = torch.randn(B, latlon_num_bands)
-    latlon_mask = torch.ones(B, latlon_num_bands, dtype=torch.float32)
+    latlon_mask = (
+        torch.ones(B, latlon_num_bands, dtype=torch.float32) * MaskValue.DECODER.value
+    )
     worldcover = torch.randn(B, H, W, 1, 1)
-    worldcover_mask = torch.zeros(B, H, W, 1, 1, dtype=torch.float32)
+    worldcover_mask = (
+        torch.ones(B, H, W, 1, 1, dtype=torch.float32) * MaskValue.DECODER.value
+    )
     # Generate valid timestamps:
     # - days: range 1..31,
     # - months: range 1..13,
@@ -650,8 +846,8 @@ def test_end_to_end_with_exit_config(
     timestamps = torch.cat([days, months, years], dim=-1)  # Shape: (B, T, 3)
 
     masked_sample_dict = {
-        "sentinel2": sentinel2,
-        "sentinel2_mask": sentinel2_mask,
+        "sentinel2_l2a": sentinel2_l2a,
+        "sentinel2_l2a_mask": sentinel2_l2a_mask,
         "latlon": latlon,
         "latlon_mask": latlon_mask,
         "worldcover": worldcover,
@@ -691,35 +887,36 @@ def test_end_to_end_with_exit_config(
         num_heads=NUM_HEADS,
         max_sequence_length=MAX_SEQ_LENGTH,
         drop_path=DROP_PATH,
+        learnable_channel_embeddings=True,
     )
     output = encoder.forward(
         x,
         patch_size,
         input_res,
-        exit_after_n_layers=1,
+        exit_after_n_layers=3,
         token_exit_cfg=token_exit_cfg,
     )
     output = predictor.forward(output, timestamps, patch_size, input_res)
     patched_H = H // patch_size
     patched_W = W // patch_size
-    assert output.sentinel2 is not None
-    assert output.sentinel2_mask is not None
+    assert output.sentinel2_l2a is not None
+    assert output.sentinel2_l2a_mask is not None
     assert output.latlon is not None
     assert output.latlon_mask is not None
-    assert output.sentinel2.shape == (
+    assert output.sentinel2_l2a.shape == (
         B,
         patched_H,
         patched_W,
         T,
-        sentinel2_num_band_sets,
+        sentinel2_l2a_num_band_sets,
         predictor.output_embedding_size,
     )
-    assert output.sentinel2_mask.shape == (
+    assert output.sentinel2_l2a_mask.shape == (
         B,
         patched_H,
         patched_W,
         T,
-        sentinel2_num_band_sets,
+        sentinel2_l2a_num_band_sets,
     )
     assert output.latlon.shape == (
         B,
@@ -747,3 +944,29 @@ def test_end_to_end_with_exit_config(
         1,
         1,
     )
+    output.worldcover.sum().backward()
+    for name, param in encoder.named_parameters():
+        # worldcover and latlons are masked from the encoder
+        if not any(
+            ignore_param in name
+            for ignore_param in [
+                "pos_embed",
+                "month_embed",
+                "composite_encodings.per_modality_channel_embeddings.latlon",
+                "composite_encodings.per_modality_channel_embeddings.worldcover",
+                "patch_embeddings.per_modality_embeddings.latlon",
+                "patch_embeddings.per_modality_embeddings.worldcover",
+            ]
+        ):
+            assert param.grad is not None, name
+    for name, param in predictor.named_parameters():
+        # sentinel2_l2a is "masked" from the decoder
+        if not any(
+            ignore_param in name
+            for ignore_param in [
+                "pos_embed",
+                "month_embed",
+                "composite_encodings.per_modality_channel_embeddings.latlon",
+            ]
+        ):
+            assert param.grad is not None, name

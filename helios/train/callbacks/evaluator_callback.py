@@ -36,7 +36,7 @@ class DownstreamEvaluator:
         trainer: Trainer,
         batch_size: int = 128,
         num_workers: int = 8,
-        pooling_type: PoolingType = PoolingType.MAX,
+        pooling_type: PoolingType = PoolingType.MEAN,
         norm_stats_from_pretrained: bool = True,
         device: torch.device | None = None,
     ) -> None:

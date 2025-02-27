@@ -17,6 +17,7 @@ from olmo_core.train.train_module.transformer import (
     TransformerActivationCheckpointingConfig,
 )
 
+from helios.data.constants import Modality
 from helios.data.dataset import HeliosSample
 from helios.train.loss import LossConfig
 from helios.train.masking import MaskedHeliosSample, MaskingConfig
@@ -44,6 +45,9 @@ class LatentMIMTrainModuleConfig(HeliosTrainModuleConfig):
     )
     masking_config: MaskingConfig = field(
         default_factory=lambda: MaskingConfig(strategy_config={"type": "random"})
+    )
+    token_exit_cfg: dict[str, int] = field(
+        default_factory=lambda: {modality: 0 for modality in Modality.names()}
     )
     ema_decay: tuple[float, float] = (0.996, 1.0)
     max_grad_norm: float = 1.0
@@ -90,6 +94,7 @@ class LatentMIMTrainModule(HeliosTrainModule):
         device: The device to train on.
         state_dict_save_opts: Override state dict options for saving.
         state_dict_load_opts: Override state dict options for loading.
+        token_exit_cfg: The token exit configuration for the model.
     """
 
     def __init__(
@@ -99,6 +104,7 @@ class LatentMIMTrainModule(HeliosTrainModule):
         masking_config: MaskingConfig,
         loss_config: LossConfig,
         rank_microbatch_size: int,
+        token_exit_cfg: dict[str, int],
         compile_model: bool = False,
         float8_config: Float8Config | None = None,
         dp_config: DataParallelConfig | None = None,
@@ -133,6 +139,7 @@ class LatentMIMTrainModule(HeliosTrainModule):
             state_dict_save_opts: Override state dict options for saving.
             state_dict_load_opts: Override state dict options for loading.
             ema_decay: EMA decay rate for target encoder, as a tuple of (start_ema_decay, end_ema_decay)
+            token_exit_cfg: The token exit configuration for the model.
         """
         super().__init__(
             model=model,
@@ -151,6 +158,7 @@ class LatentMIMTrainModule(HeliosTrainModule):
             state_dict_load_opts=state_dict_load_opts,
         )
         self.start_ema, self.end_ema = ema_decay
+        self.token_exit_cfg = token_exit_cfg
         self.base_loss = loss_config.build()
         self.masking_strategy = masking_config.build()
 
@@ -223,7 +231,7 @@ class LatentMIMTrainModule(HeliosTrainModule):
                 masked_batch = self.masking_strategy.apply_mask(subsampled_batch)
 
                 # Run Encoder and decoder on the augmented input
-                decoded, target_output = self.model_forward(masked_batch, patch_size)
+                decoded, target_output = self.model_forward(masked_batch, patch_size, self.token_exit_cfg)
                 loss = self.loss_fn(decoded, target_output)
                 # Scale loss by number of microbatches
                 loss = loss / num_microbatches
@@ -231,6 +239,7 @@ class LatentMIMTrainModule(HeliosTrainModule):
                 total_batch_loss += loss_val
                 del decoded, target_output
                 loss.backward()
+
 
         self.trainer.record_metric(
             f"train/{self.base_loss.name}",
@@ -253,7 +262,7 @@ class LatentMIMTrainModule(HeliosTrainModule):
         raise NotImplementedError("eval batch not implemented")
 
     def model_forward(
-        self, batch: MaskedHeliosSample, patch_size: int
+        self, batch: MaskedHeliosSample, patch_size: int, token_exit_cfg: dict[str, int]
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Run a forward pass."""
         with self._model_forward_context():
@@ -263,9 +272,6 @@ class LatentMIMTrainModule(HeliosTrainModule):
                 target_output = self.model.target_encoder.forward(
                     batch.unmask(),
                     patch_size=patch_size,
-                    # token_exit_cfg={
-                    #     modality: 0
-                    #     for modality in self.model.encoder.supported_modality_names
-                    # },
+                    token_exit_cfg=token_exit_cfg,
                 )
             return decoded, target_output

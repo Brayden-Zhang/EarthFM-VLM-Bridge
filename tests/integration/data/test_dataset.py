@@ -26,7 +26,7 @@ def test_helios_dataset(
 
     assert len(dataset) == 1
     assert isinstance(dataset[0], HeliosSample)
-    assert dataset[0].sentinel2.shape == (256, 256, 12, 13)  # type: ignore
+    assert dataset[0].sentinel2_l2a.shape == (256, 256, 12, 12)  # type: ignore
     assert dataset[0].sentinel1.shape == (256, 256, 12, 2)  # type: ignore
     assert dataset[0].worldcover.shape == (256, 256, 1, 1)  # type: ignore
     assert dataset[0].latlon.shape == (2,)  # type: ignore
@@ -47,15 +47,15 @@ class TestHeliosDataset:
         samples = prepare_samples(tmp_path)
         logger.info(f"samples: {len(samples)}")
         sample: SampleInformation = samples[0]
-        sample_modality: ModalityTile = sample.modalities[Modality.SENTINEL2]
+        sample_modality: ModalityTile = sample.modalities[Modality.SENTINEL2_L2A]
         image = HeliosDataset.load_sample(sample_modality, sample)
-        sentinel2_bandset_indices = Modality.SENTINEL2.bandsets_as_indices()
+        sentinel2_bandset_indices = Modality.SENTINEL2_L2A.bandsets_as_indices()
         # checking that sample data is loaded in the order corresponding to the bandset indices
         # These are manually extracted values from each band and dependent on the seed (call with conftest.py)
         expected_values = [
-            [61, 161, 95, 142],
-            [176, 214, 252, 194, 68, 88],
-            [183, 94, 223],
+            [119, 247, 58, 216],
+            [41, 103, 96, 128, 120, 162],
+            [169, 19],
         ]
         data_matches_expected = []
         for bandset_index, expected_value_lst in zip(
@@ -70,7 +70,7 @@ class TestHeliosDataset:
         assert all(data_matches_expected)
 
         # Now check that different bandset indices change the values
-        fake_bandset_indices = [[1, 2, 3, 9], [4, 5, 6, 8, 11, 12], [0, 9, 10]]
+        fake_bandset_indices = [[1, 2, 3, 9], [4, 5, 6, 8, 10, 11], [0, 9]]
         data_matches = []
         for fake_bandset_index, expected_value_lst in zip(
             fake_bandset_indices, expected_values

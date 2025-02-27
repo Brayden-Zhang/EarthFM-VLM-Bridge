@@ -108,6 +108,7 @@ def build_train_module_config(
             "type": "l2",
         }
     )
+    token_exit_cfg = {modality.name: 0 for modality in common.supported_modalities}
 
     WARMUP_EPOCHS = 2
     dp_config = DataParallelConfig(name=DataParallelType.ddp)
@@ -117,7 +118,10 @@ def build_train_module_config(
         optim=optim_config,
         masking_config=masking_config,
         loss_config=loss_config,
+
         rank_microbatch_size=RANK_MICROBATCH_SIZE,
+
+        token_exit_cfg=token_exit_cfg,
         max_grad_norm=1.0,
         dp_config=dp_config,
         scheduler=scheduler,
@@ -146,7 +150,7 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
 
 def build_dataset_config(common: CommonComponents) -> HeliosDatasetConfig:
     """Build the dataset config for an experiment."""
-    TILE_PATH = UPath("/weka/dfive-default/helios/dataset/20250212/")
+    TILE_PATH = UPath("/weka/dfive-default/helios/dataset/20250223/")
     DTYPE = np.dtype("float32")
     return HeliosDatasetConfig(
         tile_path=TILE_PATH,
@@ -176,7 +180,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             name="m-eurosat",
             batch_size=128,
             num_workers=8,
-            pooling_type=PoolingType.MAX,
+            pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
         ),
     ]
@@ -208,12 +212,12 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
 
 def build_common_components() -> CommonComponents:
     """Build the common components for an experiment."""
-    run_name = "test_run"
+    run_name = "restarted_run_oh_yeah"
     # Variables to be changed per user
     workdir = UPath("./output")  # nosec
     # This allows pre-emptible jobs to save their workdir in the output folder
     SUPPORTED_MODALITIES = [
-        Modality.SENTINEL2,
+        Modality.SENTINEL2_L2A,
         Modality.LATLON,
         Modality.SENTINEL1,
         Modality.WORLDCOVER,

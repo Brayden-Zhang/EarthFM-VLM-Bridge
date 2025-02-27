@@ -19,10 +19,10 @@ def test_random_masking_and_unmask() -> None:
     months = torch.randint(1, 13, (b, 1, t), dtype=torch.long)
     years = torch.randint(2018, 2020, (b, 1, t), dtype=torch.long)
     timestamps = torch.cat([days, months, years], dim=1)  # Shape: (B, 3, T)
-    sentinel2_num_bands = Modality.SENTINEL2.num_bands
+    sentinel2_l2a_num_bands = Modality.SENTINEL2_L2A.num_bands
     latlon_num_bands = Modality.LATLON.num_bands
     batch = HeliosSample(
-        sentinel2=torch.ones((b, h, w, t, sentinel2_num_bands)),
+        sentinel2_l2a=torch.ones((b, h, w, t, sentinel2_l2a_num_bands)),
         latlon=torch.ones((b, latlon_num_bands)),
         timestamps=timestamps,
     )

@@ -51,7 +51,7 @@ class HeliosSample(NamedTuple):
     For each modality, we have an ArrayTensor named by the modality, along with the latlon and timestamps.
     """
 
-    sentinel2: ArrayTensor  # [B, H, W, T, len(S2_bands)]
+    sentinel2_l2a: ArrayTensor  # [B, H, W, T, len(S2_bands)]
     latlon: ArrayTensor | None = None  # [B, 2]
     timestamps: ArrayTensor | None = None  # [B, T, D=3], where D=[day, month, year]
     sentinel1: ArrayTensor | None = None  # [B, H, W, T, len(S1_bands)]
@@ -83,15 +83,15 @@ class HeliosSample(NamedTuple):
                 # timestamps is a special case which is not in Modality
                 raise ValueError("Timestamps are not maskable")
         else:
-            if self.sentinel2 is None:
-                raise ValueError("Sentinel2 is not present in the sample")
+            if self.sentinel2_l2a is None:
+                raise ValueError("Sentinel2 L2A is not present in the sample")
             attribute_shape = []
             if Modality.get(attribute).get_tile_resolution() > 0:
                 # Add batch size (if has), height, width
-                attribute_shape += self.sentinel2.shape[:-2]
+                attribute_shape += self.sentinel2_l2a.shape[:-2]
             if Modality.get(attribute).is_multitemporal:
                 # Add number of timesteps
-                attribute_shape += [self.sentinel2.shape[-2]]
+                attribute_shape += [self.sentinel2_l2a.shape[-2]]
             if not mask:
                 # Add number of bands
                 attribute_shape += [Modality.get(attribute).num_bands]
@@ -162,12 +162,12 @@ class HeliosSample(NamedTuple):
     @property
     def height(self) -> int:
         """Get the height of the data."""
-        return self.sentinel2.shape[1]
+        return self.sentinel2_l2a.shape[1]
 
     @property
     def width(self) -> int:
         """Get the width of the data."""
-        return self.sentinel2.shape[2]
+        return self.sentinel2_l2a.shape[2]
 
     @property
     def time(self) -> int:
@@ -440,7 +440,7 @@ class HeliosDataset(Dataset):
         filtered_samples = []
         # For now, we use sentinel2 as the base grid with resolution factor 16
         # Avoid samples with NAIP which has a resolution factor of 1
-        resolution_factor = Modality.SENTINEL2.tile_resolution_factor
+        resolution_factor = Modality.SENTINEL2_L2A.tile_resolution_factor
         for sample in samples:
             if sample.grid_tile.resolution_factor != resolution_factor:
                 continue
@@ -459,7 +459,7 @@ class HeliosDataset(Dataset):
                 continue
             # check if sample modalities have s1 and s2
             has_s1 = Modality.SENTINEL1 in sample.modalities
-            has_s2 = Modality.SENTINEL2 in sample.modalities
+            has_s2 = Modality.SENTINEL2_L2A in sample.modalities
             if has_s1:
                 sentinel1_months = len(
                     set(sample.modalities[Modality.SENTINEL1].images)
@@ -468,7 +468,7 @@ class HeliosDataset(Dataset):
                     continue
             if has_s2:
                 sentinel2_months = len(
-                    set(sample.modalities[Modality.SENTINEL2].images)
+                    set(sample.modalities[Modality.SENTINEL2_L2A].images)
                 )
                 if sentinel2_months != 12:
                     continue
@@ -514,8 +514,8 @@ class HeliosDataset(Dataset):
 
     def _get_timestamps(self, sample: SampleInformation) -> np.ndarray:
         """Get the timestamps of the sample."""
-        sample_sentinel2 = sample.modalities[Modality.SENTINEL2]
-        timestamps = [i.start_time for i in sample_sentinel2.images]
+        sample_sentinel2_l2a = sample.modalities[Modality.SENTINEL2_L2A]
+        timestamps = [i.start_time for i in sample_sentinel2_l2a.images]
         dt = pd.to_datetime(timestamps)
         # Note that month should be 0-indexed
         return np.array([dt.day, dt.month - 1, dt.year]).T
@@ -561,7 +561,7 @@ class HeliosDataset(Dataset):
             image = self.normalize_image(modality, image)
             sample_dict[modality.name] = image.astype(self.dtype)
             # Get latlon and timestamps from Sentinel2 data
-            if modality == Modality.SENTINEL2:
+            if modality == Modality.SENTINEL2_L2A:
                 sample_dict["latlon"] = self.get_latlon(sample).astype(self.dtype)
                 sample_dict["timestamps"] = self._get_timestamps(sample)
         return HeliosSample(**sample_dict)
