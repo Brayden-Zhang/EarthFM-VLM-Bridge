@@ -100,14 +100,6 @@ class HeliosSample(NamedTuple):
                 attribute_shape += [Modality.get(attribute).num_band_sets]
             return attribute_shape
 
-    @property
-    def batch_size(self) -> int:
-        """Get the batch size of the data."""
-        if len(self.sentinel2.shape) == 5:
-            return self.sentinel2.shape[0]
-        else:
-            return 1
-
     @staticmethod
     def num_bands(attribute: str) -> int:
         """Get the number of channels for a given attribute."""
