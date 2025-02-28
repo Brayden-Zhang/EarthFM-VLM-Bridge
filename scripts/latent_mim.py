@@ -1,13 +1,13 @@
 """Trying to prototype fitting everything into olmo core."""
 
 import logging
-from os import environ
 
 from olmo_core.config import DType
 from olmo_core.distributed.parallel.data_parallel import (
     DataParallelConfig,
     DataParallelType,
 )
+from olmo_core.internal.common import get_beaker_username
 from olmo_core.optim import AdamWConfig
 from olmo_core.optim.scheduler import CosWithWarmup
 from olmo_core.train.callbacks import ConfigSaverCallback, GPUMemoryMonitorCallback
@@ -20,7 +20,13 @@ from helios.data.constants import Modality
 from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig
 from helios.data.normalize import Strategy
-from helios.internal.experiment import CommonComponents, HeliosVisualizeConfig, main
+from helios.internal.common import build_launch_config, get_root_dir
+from helios.internal.experiment import (
+    CommonComponents,
+    HeliosVisualizeConfig,
+    SubCmd,
+    main,
+)
 from helios.nn.flexihelios import EncoderConfig, PoolingType, PredictorConfig
 from helios.nn.latent_mim import LatentMIMConfig
 from helios.train.callbacks import (
@@ -90,7 +96,7 @@ def build_train_module_config(
     common: CommonComponents,
 ) -> LatentMIMTrainModuleConfig:
     """Build the train module config for an experiment."""
-    LR = 0.0001
+    LR = 0.002
     RANK_MICROBATCH_SIZE = 8
     ENCODE_RATIO = 0.1
     DECODE_RATIO = 0.75
@@ -105,7 +111,7 @@ def build_train_module_config(
     )
     loss_config = LossConfig(
         loss_config={
-            "type": "l2",
+            "type": "patch_discrimination",  # TODO: Should be registered via enum names
         }
     )
     token_exit_cfg = {modality: 0 for modality in common.supported_modality_names}
@@ -210,24 +216,40 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
     return trainer_config
 
 
-def build_common_components() -> CommonComponents:
+# TODO: Allow submission of multiple clusters
+def build_common_components(
+    script: str,
+    cmd: SubCmd,
+    run_name: str,
+    cluster: str,
+    overrides: list[str],
+) -> CommonComponents:
     """Build the common components for an experiment."""
-    run_name = "test_run"
     # Variables to be changed per user
-    workdir = UPath("./output")  # nosec
-    # This allows pre-emptible jobs to save their workdir in the output folder
     SUPPORTED_MODALITIES = [
         Modality.SENTINEL2_L2A.name,
         Modality.LATLON.name,
         Modality.SENTINEL1.name,
         Modality.WORLDCOVER.name,
     ]
-    if environ.get("USE_OUTPUT_FOLDER"):
-        workdir = UPath(environ["USE_OUTPUT_FOLDER"]) / "helios" / "workdir"
+
+    cmd_to_launch = SubCmd.train
+    if cmd == SubCmd.launch_prep:
+        cmd_to_launch = SubCmd.prep
+
+    launch_config = build_launch_config(
+        name=f"{run_name}-{cmd_to_launch}",
+        cmd=[script, cmd_to_launch, run_name, cluster, *overrides],
+        clusters=cluster,
+        nccl_debug=False,
+    )
+    root_dir = get_root_dir(cluster)
+    beaker_user = get_beaker_username()
     return CommonComponents(
         run_name=run_name,
-        save_folder=workdir,
+        save_folder=f"{root_dir}/checkpoints/{beaker_user.lower()}/{run_name}",
         supported_modality_names=SUPPORTED_MODALITIES,
+        launch=launch_config,
     )
 
 

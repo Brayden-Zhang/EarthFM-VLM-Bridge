@@ -1,14 +1,17 @@
 ai2-olmo-core @ git+https://github.com/allenai/olmo-core.git@v2
+beaker-py>=1.32.0
 cartopy
 class-registry
 einops==0.7.0
 gcsfs
 geobench
+GitPython>=3.0,<4.0
 interrogate
 matplotlib
 numpy
 pandas
 pandera
+pre-commit
 pytest
 rasterio
 rioxarray
