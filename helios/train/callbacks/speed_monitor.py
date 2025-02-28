@@ -7,6 +7,7 @@ from typing import Any
 from olmo_core.train.callbacks.speed_monitor import SpeedMonitorCallback
 
 from helios.data.dataset import HeliosSample
+from helios.train.train_module.galileo import GalileoTrainModule
 from helios.train.train_module.latent_mim import LatentMIMTrainModule
 
 logger = logging.getLogger(__name__)
@@ -34,9 +35,30 @@ class HeliosSpeedMonitorCallback(SpeedMonitorCallback):
                 "Speed monitor callback bases token input based on token budget, "
                 "encoder ratio, and decoder ratio"
             )
+        elif isinstance(train_module, GalileoTrainModule):
+            # Unwrap if the model is in DDP
+            model = train_module.model
+            self._token_budget = model.token_budget
+            self._encoder_ratio = train_module.masking_strategy_a.encode_ratio
+            self._decoder_ratio = train_module.masking_strategy_a.decode_ratio
+            if train_module.masking_strategy_b.encode_ratio != self._encoder_ratio:
+                logger.warning(
+                    "Speed monitor callback bases token input based on encoder ratio "
+                    "from masking_strategy_a"
+                )
+            if train_module.masking_strategy_b.decode_ratio != self._decoder_ratio:
+                logger.warning(
+                    "Speed monitor callback bases token input based on decoder ratio "
+                    "from masking_strategy_a"
+                )
+            logger.warning(
+                "Speed monitor callback bases token input based on token budget, "
+                "encoder ratio, and decoder ratio"
+            )
         else:
             logger.warning(
-                "Speed monitor callback only calculates token throughput with LatentMIMTrainModule"
+                "Speed monitor callback only calculates token throughput with "
+                "LatentMIMTrainModule or GalileoTrainModule"
             )
 
     def pre_step(self, batch: Any) -> None:
