@@ -2,6 +2,7 @@
 
 import pytest
 from olmo_core.config import DType
+from olmo_core.launch.beaker import BeakerLaunchConfig
 from olmo_core.optim.adamw import AdamWConfig
 from olmo_core.train import TrainerConfig
 
@@ -26,6 +27,12 @@ def minimal_common_components() -> CommonComponents:
         run_name="test_run",
         save_folder="test_save_folder",
         supported_modality_names=["sentinel2", "sentinel1", "worldcover", "naip"],
+        launch=BeakerLaunchConfig(
+            name="test_run",
+            cmd=["dummy_cmd"],
+            clusters=["dummy_cluster"],
+            budget="dummy_budget",
+        ),
     )
 
 
