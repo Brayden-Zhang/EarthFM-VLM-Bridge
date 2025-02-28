@@ -25,9 +25,9 @@ launching training runs on beaker
 2. Set your default Beaker workspace
     `beaker config set default_workspace ai2/earth-systems`
 3. Set the following Beaker Secrets:
-    - `beaker secret write WANDB_API_KEY <your_key>`
+    - `beaker secret write <your_beaker_username>_WANDB_API_KEY <your_key>`
     - `beaker secret write <your_beaker_username>_BEAKER_TOKEN <your_token>`
-    - `beaker secret write GITHUB_TOKEN <your_key>`
+    - `beaker secret write <your_beaker_username>_GITHUB_TOKEN <your_key>`
 
 4. Create a script based on scripts/latent_mim.py and configure your experiment (you can override specific changes)
 
@@ -49,8 +49,8 @@ Add additional overides as needed.
 ### Sessions
 
 Be sure your session creation has included the following args
- - `  --secret-env WANDB_API_KEY=WANDB_API_KEY
-    --secret-env BEAKER_TOKEN=henryh_BEAKER_TOKEN `
+ - `  --secret-env WANDB_API_KEY=<your_beaker_username>_WANDB_API_KEY
+    --secret-env BEAKER_TOKEN=<your_beaker_username>__BEAKER_TOKEN `
 
 When launching runs in Sessions for debugging, use the following command,
 

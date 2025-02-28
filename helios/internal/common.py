@@ -76,8 +76,10 @@ def build_launch_config(
         ],
         env_secrets=[
             BeakerEnvSecret(name="BEAKER_TOKEN", secret=f"{beaker_user}_BEAKER_TOKEN"),
-            BeakerEnvSecret(name="WANDB_API_KEY", secret="WANDB_API_KEY"),  # nosec
-            BeakerEnvSecret(name="GITHUB_TOKEN", secret="GITHUB_TOKEN"),  # nosec
+            BeakerEnvSecret(
+                name="WANDB_API_KEY", secret=f"{beaker_user}_WANDB_API_KEY"
+            ),  # nosec
+            BeakerEnvSecret(name="GITHUB_TOKEN", secret=f"{beaker_user}_GITHUB_TOKEN"),  # nosec
         ],
         setup_steps=[
             # Clone private repo.
