@@ -9,6 +9,7 @@ from typing import cast
 import numpy as np
 from olmo_core.config import Config, StrEnum
 from olmo_core.distributed.utils import get_local_rank
+from olmo_core.launch.beaker import BeakerLaunchConfig
 from olmo_core.train import (
     TrainerConfig,
     prepare_training_environment,
@@ -30,9 +31,9 @@ logger = logging.getLogger(__name__)
 # TODO: Make this more agnostic to the training setup
 # TODO: Add support for different model configs
 # TODO: Add support for different train module configs
-# TODO: Add support for overrides
 
 
+# maybe this build common components can be the same function for every experiment
 @dataclass
 class CommonComponents(Config):
     """Any configurable items that are common to all experiments."""
@@ -40,6 +41,7 @@ class CommonComponents(Config):
     run_name: str
     save_folder: str
     supported_modality_names: list[str]
+    launch: BeakerLaunchConfig
     # callbacks: dict[str, Callback]
 
     def validate(self) -> None:
@@ -69,7 +71,7 @@ class HeliosExperimentConfig(Config):
     """Configuration for a Helios experiment."""
 
     run_name: str
-    # launch: BeakerLaunchConfig # we should use this as well
+    launch: BeakerLaunchConfig
     model: LatentMIMConfig  # TODO: make this agnostic to training setup
     dataset: HeliosDatasetConfig  # will likely be fixed for us
     data_loader: HeliosDataLoaderConfig  # will likely be fixed for us
@@ -129,12 +131,10 @@ def build_config(
         train_module=train_module_config,
         trainer=trainer_config,
         visualize_config=visualize_config,
+        launch=common.launch,
     )
     logger.info("Overrides: %s", overrides)
-    if len(overrides) > 0:
-        # also there are some unerlying dataclasses we don't want to be able to overide and are not actually part of config
-        # OmegaConf merge does not support all types we use so we would have to do some mods to make this work https://omegaconf.readthedocs.io/en/2.2_branch/structured_config.html
-        config = config.merge(overrides)
+    config = config.merge(overrides)
     return config
 
 
@@ -184,6 +184,13 @@ def visualize(config: HeliosExperimentConfig) -> None:
     logger.info("Done visualizing the dataset")
 
 
+def launch(config: HeliosExperimentConfig) -> None:
+    """Launch an experiment."""
+    logger.info("Launching the experiment")
+    logger.info(config)
+    config.launch.launch(follow=True)
+
+
 class SubCmd(StrEnum):
     """Subcommands for Helios experiments.
 
@@ -227,7 +234,7 @@ class SubCmd(StrEnum):
             # )
 
         if self == SubCmd.launch:
-            raise NotImplementedError
+            launch(config)
         elif self == SubCmd.dry_run:
             pass
         elif self == SubCmd.visualize:
@@ -258,7 +265,7 @@ class SubCmd(StrEnum):
 
 def main(
     *,
-    common_components_builder: Callable[[], CommonComponents],
+    common_components_builder: Callable,
     model_config_builder: Callable[[CommonComponents], LatentMIMConfig],
     dataset_config_builder: Callable[[CommonComponents], HeliosDatasetConfig],
     dataloader_config_builder: Callable[[CommonComponents], HeliosDataLoaderConfig],
@@ -277,7 +284,7 @@ def main(
     """
     usage = f"""
 [yellow]Usage:[/] [i blue]python[/] [i cyan]{sys.argv[0]}[/] [i b magenta]{'|'.join(SubCmd)}[/] [i b]RUN_NAME CLUSTER[/] [i][OVERRIDES...][/]
-
+If running command on a local machine ie from a session, you can use the [b]local[/b] cluster name.
 [b]Subcommands[/]
 [b magenta]launch:[/]     Not Implemented. Launch the script on Beaker with the [b magenta]train[/] subcommand.
 [b magenta]train:[/]       Run the trainer. You usually shouldn't invoke the script with this subcommand directly.
@@ -295,14 +302,15 @@ def main(
     python train.py visualize
     """.strip()
 
-    if len(sys.argv) < 2 or sys.argv[1] not in set(SubCmd):
+    if len(sys.argv) < 4 or sys.argv[1] not in set(SubCmd):
         import rich
 
         rich.get_console().print(usage, highlight=False)
         sys.exit(1)
 
-    script_name, cmd, *overrides = sys.argv
-    common = common_components_builder()
+    script, cmd, run_name, cluster, *overrides = sys.argv
+    # TODO: we should probably have a single common components builder that can be used for all experiments
+    common = common_components_builder(script, cmd, run_name, cluster, overrides)
 
     cmd = SubCmd(cmd)
     cmd.prepare_environment()
