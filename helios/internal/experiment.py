@@ -25,6 +25,7 @@ from helios.data.normalize import Normalizer, Strategy
 from helios.data.visualize import visualize_sample
 from helios.nn.latent_mim import LatentMIMConfig
 from helios.train.train_module.latent_mim import LatentMIMTrainModuleConfig
+from helios.train.train_module.train_module import HeliosTrainModuleConfig
 
 logger = logging.getLogger(__name__)
 
@@ -72,10 +73,10 @@ class HeliosExperimentConfig(Config):
 
     run_name: str
     launch: BeakerLaunchConfig
-    model: LatentMIMConfig  # TODO: make this agnostic to training setup
+    model: Config
     dataset: HeliosDatasetConfig  # will likely be fixed for us
     data_loader: HeliosDataLoaderConfig  # will likely be fixed for us
-    train_module: LatentMIMTrainModuleConfig  # we will want to support different train module model combinations
+    train_module: HeliosTrainModuleConfig
     trainer: TrainerConfig
     visualize_config: HeliosVisualizeConfig | None = None
     init_seed: int = 12536
@@ -96,13 +97,13 @@ def split_common_overrides(overrides: list[str]) -> tuple[list[str], list[str]]:
 
 def build_config(
     common: CommonComponents,
-    model_config_builder: Callable[[CommonComponents], LatentMIMConfig],
+    model_config_builder: Callable[[CommonComponents], Config],
     dataset_config_builder: Callable[[CommonComponents], HeliosDatasetConfig],
     dataloader_config_builder: Callable[[CommonComponents], HeliosDataLoaderConfig],
     trainer_config_builder: Callable[[CommonComponents], TrainerConfig],
     train_module_config_builder: Callable[
         [CommonComponents],
-        LatentMIMTrainModuleConfig,
+        HeliosTrainModuleConfig,
     ],
     overrides: list[str],
     visualize_config_builder: (
