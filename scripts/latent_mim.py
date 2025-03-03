@@ -135,7 +135,7 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
 
     NUM_WORKERS = 0
     NUM_THREADS = 0
-    GLOBAL_BATCH_SIZE = 32
+    GLOBAL_BATCH_SIZE = 128
 
     dataloader_config = HeliosDataLoaderConfig(
         global_batch_size=GLOBAL_BATCH_SIZE,
@@ -250,7 +250,7 @@ def build_visualize_config(common: CommonComponents) -> HeliosVisualizeConfig:
     """Build the visualize config for an experiment."""
     return HeliosVisualizeConfig(
         num_samples=None,
-        output_dir="./test_vis",  # str(UPath(common.save_folder) / "visualizations"),
+        output_dir="./test_vis2",  # str(UPath(common.save_folder) / "visualizations"),
         normalize_strategy=Strategy.PREDEFINED,
         std_multiplier=2.0,
     )

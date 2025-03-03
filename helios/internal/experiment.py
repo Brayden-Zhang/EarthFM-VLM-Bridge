@@ -5,6 +5,7 @@ import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import cast
+import math
 
 import numpy as np
 from olmo_core.config import Config, StrEnum
@@ -60,7 +61,7 @@ class HeliosVisualizeConfig(Config):
 
     output_dir: str
     num_samples: int | None = None
-    sample_indices: list[int] | None = None
+    global_step: int | None = None
     normalize_strategy: Strategy = Strategy.PREDEFINED
     std_multiplier: float = 2.0
 
@@ -168,14 +169,22 @@ def visualize(config: HeliosExperimentConfig) -> None:
     logger.info("Visualizing the dataset")
     if config.visualize_config is None:
         raise ValueError("visualize_config is not set")
-    global_step = 3686
+    global_step = config.visualize_config.global_step
     dataset = config.dataset.build()
-    data_loader = config.data_loader.build(
-        dataset, collator=collate_helios, dp_process_group=None
-    )
-    logger.info(f"number of steps per epoch: {data_loader.total_size}")
-    if config.visualize_config.sample_indices is not None:
-        sample_indices = config.visualize_config.sample_indices
+    if global_step is not None:
+        data_loader = config.data_loader.build(
+            dataset, collator=collate_helios, dp_process_group=None
+        )
+        logger.info(f"number of steps per epoch: {data_loader.total_batches}")
+        epoch = math.ceil(global_step / data_loader.total_batches)
+        step_in_epoch = global_step % data_loader.total_batches
+        logger.info(f"epoch: {epoch}, step in epoch: {step_in_epoch}")
+        # How many times has the data been reshuffled at epoch 4 I think it is 5 times
+        for i in range(1, epoch + 1):
+            data_loader.reshuffle(epoch=i)
+        batch_start = int(data_loader.get_global_indices()[step_in_epoch])
+        batch_end = batch_start + data_loader.global_batch_size
+        sample_indices = np.arange(batch_start, batch_end)
     else:
         sample_indices = np.random.randint(
             0, len(dataset), config.visualize_config.num_samples
@@ -184,6 +193,7 @@ def visualize(config: HeliosExperimentConfig) -> None:
         strategy=config.visualize_config.normalize_strategy,
         std_multiplier=config.visualize_config.std_multiplier,
     )
+    logger.info(f"sample indices: {sample_indices}")
     for sample_index in sample_indices:
         visualize_sample(
             dataset, sample_index, normalizer, config.visualize_config.output_dir
