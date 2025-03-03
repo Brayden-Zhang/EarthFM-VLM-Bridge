@@ -1,3 +1,5 @@
+"""Entrypoint for Sentinel-2 L1C jobs."""
+
 import argparse
 import multiprocessing
 
