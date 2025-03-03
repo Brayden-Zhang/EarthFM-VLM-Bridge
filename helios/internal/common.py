@@ -3,15 +3,13 @@
 import logging
 
 from olmo_core.internal.common import get_beaker_username
-from olmo_core.launch.beaker import (
-    BeakerEnvSecret,
-    BeakerEnvVar,
-    BeakerLaunchConfig,
-    BeakerPriority,
-    BeakerWekaBucket,
-    OLMoCoreBeakerImage,
-)
+from olmo_core.launch.beaker import (BeakerEnvSecret, BeakerEnvVar,
+                                     BeakerLaunchConfig, BeakerPriority,
+                                     BeakerWekaBucket, OLMoCoreBeakerImage)
 from olmo_core.utils import generate_uuid
+
+from helios.data.constants import Modality
+from helios.internal.experiment import CommonComponents, SubCmd
 
 logger = logging.getLogger(__name__)
 BUDGET = "ai2/d5"
@@ -79,7 +77,9 @@ def build_launch_config(
             BeakerEnvSecret(
                 name="WANDB_API_KEY", secret=f"{beaker_user}_WANDB_API_KEY"
             ),  # nosec
-            BeakerEnvSecret(name="GITHUB_TOKEN", secret=f"{beaker_user}_GITHUB_TOKEN"),  # nosec
+            BeakerEnvSecret(
+                name="GITHUB_TOKEN", secret=f"{beaker_user}_GITHUB_TOKEN"
+            ),  # nosec
         ],
         setup_steps=[
             # Clone private repo.
@@ -97,4 +97,40 @@ def build_launch_config(
             #  "pip install --upgrade --pre torch==2.6.0.dev20241112+cu121 --index-url https://download.pytorch.org/whl/nightly/cu121",
             "pip freeze",
         ],
+    )
+
+
+def build_common_components(
+    script: str,
+    cmd: SubCmd,
+    run_name: str,
+    cluster: str,
+    overrides: list[str],
+) -> CommonComponents:
+    """Build the common components for an experiment."""
+    # Variables to be changed per user
+    SUPPORTED_MODALITIES = [
+        Modality.SENTINEL2_L2A.name,
+        Modality.LATLON.name,
+        Modality.SENTINEL1.name,
+        Modality.WORLDCOVER.name,
+    ]
+
+    cmd_to_launch = SubCmd.train
+    if cmd == SubCmd.launch_prep:
+        cmd_to_launch = SubCmd.prep
+
+    launch_config = build_launch_config(
+        name=f"{run_name}-{cmd_to_launch}",
+        cmd=[script, cmd_to_launch, run_name, cluster, *overrides],
+        clusters=cluster,
+        nccl_debug=False,
+    )
+    root_dir = get_root_dir(cluster)
+    beaker_user = get_beaker_username()
+    return CommonComponents(
+        run_name=run_name,
+        save_folder=f"{root_dir}/checkpoints/{beaker_user.lower()}/{run_name}",
+        supported_modality_names=SUPPORTED_MODALITIES,
+        launch=launch_config,
     )
