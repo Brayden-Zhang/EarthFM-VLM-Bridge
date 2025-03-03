@@ -3,9 +3,14 @@
 import logging
 
 from olmo_core.internal.common import get_beaker_username
-from olmo_core.launch.beaker import (BeakerEnvSecret, BeakerEnvVar,
-                                     BeakerLaunchConfig, BeakerPriority,
-                                     BeakerWekaBucket, OLMoCoreBeakerImage)
+from olmo_core.launch.beaker import (
+    BeakerEnvSecret,
+    BeakerEnvVar,
+    BeakerLaunchConfig,
+    BeakerPriority,
+    BeakerWekaBucket,
+    OLMoCoreBeakerImage,
+)
 from olmo_core.utils import generate_uuid
 
 from helios.data.constants import Modality
@@ -77,9 +82,7 @@ def build_launch_config(
             BeakerEnvSecret(
                 name="WANDB_API_KEY", secret=f"{beaker_user}_WANDB_API_KEY"
             ),  # nosec
-            BeakerEnvSecret(
-                name="GITHUB_TOKEN", secret=f"{beaker_user}_GITHUB_TOKEN"
-            ),  # nosec
+            BeakerEnvSecret(name="GITHUB_TOKEN", secret=f"{beaker_user}_GITHUB_TOKEN"),  # nosec
         ],
         setup_steps=[
             # Clone private repo.
