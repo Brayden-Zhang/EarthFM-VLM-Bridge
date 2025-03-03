@@ -72,7 +72,7 @@ class HeliosExperimentConfig(Config):
 
     run_name: str
     launch: BeakerLaunchConfig
-    model: Any  # TODO: make this agnostic to training setup
+    model: Any  # TODO: make this agnostic to training setup this might be bad
     dataset: HeliosDatasetConfig  # will likely be fixed for us
     data_loader: HeliosDataLoaderConfig  # will likely be fixed for us
     train_module: (
