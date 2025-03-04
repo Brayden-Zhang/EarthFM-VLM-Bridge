@@ -13,7 +13,7 @@ from olmo_core.config import Config, DType
 from olmo_core.distributed.parallel import (
     DataParallelConfig,
     DataParallelType,
-    build_device_mesh,
+    build_world_mesh,
     get_dp_mesh,
     get_dp_process_group,
 )
@@ -175,7 +175,7 @@ class HeliosTrainModule(TrainModule):
         num_params = sum(p.numel() for p in self.model.parameters())
         logger.info(f"number of parameters: {num_params:,d}")
         self.device = device or get_default_device()
-        self.world_mesh = build_device_mesh(dp=dp_config, device_type=self.device.type)
+        self.world_mesh = build_world_mesh(dp=dp_config, device_type=self.device.type)
         logger.info(
             f"Data parallel world size = {get_world_size(self.dp_process_group):,d}"
         )

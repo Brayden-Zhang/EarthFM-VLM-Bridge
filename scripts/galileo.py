@@ -15,13 +15,14 @@ from olmo_core.train.common import Duration, LoadStrategy
 from olmo_core.train.config import TrainerConfig
 from upath import UPath
 
+from helios.data.constants import Modality
 from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig
 from helios.data.normalize import Strategy
 from helios.internal.common import build_common_components
 from helios.internal.experiment import CommonComponents, HeliosVisualizeConfig, main
 from helios.nn.flexihelios import EncoderConfig, PoolingType, PredictorConfig
-from helios.nn.latent_mim import LatentMIMConfig
+from helios.nn.galileo import GalileoConfig
 from helios.train.callbacks import (
     DownstreamEvaluatorCallbackConfig,
     HeliosSpeedMonitorCallback,
@@ -30,14 +31,14 @@ from helios.train.callbacks import (
 from helios.train.callbacks.evaluator_callback import DownstreamTaskConfig
 from helios.train.loss import LossConfig
 from helios.train.masking import MaskingConfig
-from helios.train.train_module.latent_mim import LatentMIMTrainModuleConfig
+from helios.train.train_module.galileo import GalileoTrainModuleConfig
 
 logger = logging.getLogger(__name__)
 # TODO: Need to use the dynamic computation from trainer for this
-STEPS_PER_EPOCH = 100
+STEPS_PER_EPOCH = 25
 
 
-def build_model_config(common: CommonComponents) -> LatentMIMConfig:
+def build_model_config(common: CommonComponents) -> GalileoConfig:
     """Build the model config for an experiment."""
     MAX_PATCH_SIZE = 8  # NOTE: actual patch_size <= max_patch_size
     TOKEN_BUDGET = 1500
@@ -45,8 +46,8 @@ def build_model_config(common: CommonComponents) -> LatentMIMConfig:
     # which may cause issues
     H_W_TO_SAMPLE_MIN = 5
     H_W_TO_SAMPLE_MAX = 13
-    ENCODER_EMBEDDING_SIZE = 256
-    DECODER_EMBEDDING_SIZE = 256
+    ENCODER_EMBEDDING_SIZE = 128
+    DECODER_EMBEDDING_SIZE = 128
     ENCODER_DEPTH = 4
     DECODER_DEPTH = 4
     ENCODER_NUM_HEADS = 8
@@ -74,7 +75,7 @@ def build_model_config(common: CommonComponents) -> LatentMIMConfig:
         supported_modality_names=common.supported_modality_names,
         learnable_channel_embeddings=True,
     )
-    model_config = LatentMIMConfig(
+    model_config = GalileoConfig(
         encoder_config=encoder_config,
         decoder_config=decoder_config,
         transform_type=TRANSFORM_TYPE,
@@ -87,7 +88,7 @@ def build_model_config(common: CommonComponents) -> LatentMIMConfig:
 
 def build_train_module_config(
     common: CommonComponents,
-) -> LatentMIMTrainModuleConfig:
+) -> GalileoTrainModuleConfig:
     """Build the train module config for an experiment."""
     LR = 0.002
     RANK_MICROBATCH_SIZE = 32
@@ -95,32 +96,53 @@ def build_train_module_config(
     DECODE_RATIO = 0.75
     WD = 0.02
     optim_config = AdamWConfig(lr=LR, weight_decay=WD)
-    masking_config = MaskingConfig(
+    masking_config_a = MaskingConfig(
+        strategy_config={
+            "type": "space_time",
+            "encode_ratio": ENCODE_RATIO,
+            "decode_ratio": DECODE_RATIO,
+        }
+    )
+    masking_config_b = MaskingConfig(
         strategy_config={
             "type": "random",
             "encode_ratio": ENCODE_RATIO,
             "decode_ratio": DECODE_RATIO,
         }
     )
-    loss_config = LossConfig(
+    loss_config_a = LossConfig(
         loss_config={
-            "type": "patch_discrimination",  # TODO: Should be registered via enum names
+            "type": "patch_discrimination",
         }
     )
-    token_exit_cfg = {modality: 0 for modality in common.supported_modality_names}
+    loss_config_b = LossConfig(
+        loss_config={
+            "type": "patch_discrimination",
+        }
+    )
+    token_exit_cfg_a = {
+        Modality.SENTINEL2_L2A.name: 4,
+        Modality.LATLON.name: 4,
+        Modality.SENTINEL1.name: 4,
+        Modality.WORLDCOVER.name: 0,
+    }
+    token_exit_cfg_b = {modality: 0 for modality in common.supported_modality_names}
 
     WARMUP_EPOCHS = 2
     dp_config = DataParallelConfig(name=DataParallelType.ddp)
 
     # TODO: would need a scheduler config and registry to be able to change this with overrides
     scheduler = CosWithWarmup(warmup_steps=WARMUP_EPOCHS * STEPS_PER_EPOCH)
-    train_module_config = LatentMIMTrainModuleConfig(
+    train_module_config = GalileoTrainModuleConfig(
         # TODO: change name to optim config
         optim_config=optim_config,
-        masking_config=masking_config,
-        loss_config=loss_config,
+        masking_config_a=masking_config_a,
+        masking_config_b=masking_config_b,
+        loss_config_a=loss_config_a,
+        loss_config_b=loss_config_b,
         rank_microbatch_size=RANK_MICROBATCH_SIZE,
-        token_exit_cfg=token_exit_cfg,
+        token_exit_cfg_a=token_exit_cfg_a,
+        token_exit_cfg_b=token_exit_cfg_b,
         max_grad_norm=1.0,
         dp_config=dp_config,
         scheduler=scheduler,
@@ -212,8 +234,8 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
 def build_visualize_config(common: CommonComponents) -> HeliosVisualizeConfig:
     """Build the visualize config for an experiment."""
     return HeliosVisualizeConfig(
-        num_samples=None,
-        output_dir=str(UPath(common.save_folder) / "visualizations"),
+        num_samples=50,
+        output_dir="./test_vis",  # str(UPath(common.save_folder) / "visualizations"),
         normalize_strategy=Strategy.PREDEFINED,
         std_multiplier=2.0,
     )
