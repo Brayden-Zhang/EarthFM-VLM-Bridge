@@ -62,7 +62,8 @@ class HeliosVisualizeConfig(Config):
     """Configuration for visualizing the dataset."""
 
     output_dir: str
-    num_samples: int = 10
+    num_samples: int | None = None
+    global_step: int | None = None
     normalize_strategy: Strategy = Strategy.PREDEFINED
     std_multiplier: float = 2.0
 
@@ -170,14 +171,22 @@ def visualize(config: HeliosExperimentConfig) -> None:
     logger.info("Visualizing the dataset")
     if config.visualize_config is None:
         raise ValueError("visualize_config is not set")
+    global_step = config.visualize_config.global_step
     dataset = config.dataset.build()
-    sample_indices = np.random.randint(
-        0, len(dataset), config.visualize_config.num_samples
-    )
+    if global_step is not None:
+        data_loader = config.data_loader.build(
+            dataset, collator=collate_helios, dp_process_group=None
+        )
+        sample_indices = data_loader.fast_forward(global_step)
+    else:
+        sample_indices = np.random.randint(
+            0, len(dataset), config.visualize_config.num_samples
+        )
     normalizer = Normalizer(
         strategy=config.visualize_config.normalize_strategy,
         std_multiplier=config.visualize_config.std_multiplier,
     )
+    logger.info(f"sample indices: {sample_indices}")
     for sample_index in sample_indices:
         visualize_sample(
             dataset, sample_index, normalizer, config.visualize_config.output_dir
@@ -239,6 +248,7 @@ class SubCmd(StrEnum):
         elif self == SubCmd.dry_run:
             pass
         elif self == SubCmd.visualize:
+            seed_all(config.init_seed)
             visualize(config)
         elif self == SubCmd.train:
             try:
