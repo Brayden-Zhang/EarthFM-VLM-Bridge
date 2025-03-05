@@ -520,14 +520,17 @@ class HeliosDataset(Dataset):
         latlons = np.vstack(latlons)
         return latlons
 
-    def get_data_distribution(self, num_samples: int = 100) -> dict[str, Any]:
-        """Get the data distribution per modality.
+    def get_sample_data_for_histogram(
+        self, num_samples: int = 100, num_values: int = 100
+    ) -> dict[str, Any]:
+        """Get the sample data per modality per band for showing the histogram.
 
         Args:
             num_samples: The number of samples to sample from the dataset.
+            num_values: The number of values to sample from each modality per band.
 
         Returns:
-            dict: A dictionary containing the data distribution per modality.
+            dict: A dictionary containing the sample data per modality per band.
         """
         if num_samples > len(self):
             raise ValueError(
@@ -543,6 +546,8 @@ class HeliosDataset(Dataset):
                 if modality == "timestamps" or modality == "latlon":
                     continue
                 modality_data = sample.as_dict(ignore_nones=True)[modality]
+                if modality_data is None:
+                    continue
                 modality_spec = Modality.get(modality)
                 modality_bands = modality_spec.band_order
                 if modality not in data_distribution:
@@ -550,7 +555,9 @@ class HeliosDataset(Dataset):
                 # for each band, flatten the data and extend the list
                 for idx, band in enumerate(modality_bands):
                     data_distribution[modality][band].extend(
-                        modality_data[:, :, :, idx].flatten().tolist()  # type: ignore
+                        random.sample(
+                            modality_data[:, :, :, idx].flatten().tolist(), num_values
+                        )
                     )
 
         return data_distribution

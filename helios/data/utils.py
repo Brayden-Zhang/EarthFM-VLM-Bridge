@@ -1,7 +1,6 @@
 """Utils for the data module."""
 
 import math
-import random
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
@@ -157,8 +156,6 @@ def plot_modality_data_distribution(modality: str, modality_data: dict) -> plt.F
     if len(modality_data) == 1:
         axes = [axes]
     for ax, (band, values) in zip(axes, modality_data.items()):
-        # Sample 1000 values to speed up plotting
-        values = random.sample(values, 1000)
         ax.hist(values, bins=50, alpha=0.75)
         ax.set_title(f"{modality} - {band}")
         ax.set_xlabel("Value")
