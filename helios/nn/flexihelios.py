@@ -684,6 +684,7 @@ class Encoder(FlexiHeliosBase):
         self,
         embedding_size: int,
         max_patch_size: int,
+        min_patch_size: int,
         num_heads: int,
         mlp_ratio: float,
         depth: int,
@@ -698,6 +699,7 @@ class Encoder(FlexiHeliosBase):
         Args:
             embedding_size: Size of token embeddings
             max_patch_size: Maximum patch size for patchification
+            min_patch_size: Minimum patch size for patchification
             num_heads: Number of attention heads
             mlp_ratio: Ratio for MLP hidden dimension
             depth: Number of transformer layers
@@ -718,6 +720,7 @@ class Encoder(FlexiHeliosBase):
             supported_modalities=supported_modalities,
             random_channel_embs=random_channel_embs,
         )
+        self.min_patch_size = min_patch_size
         self.max_patch_size = max_patch_size
         self.embedding_size = embedding_size
         self.patch_embeddings = FlexiHeliosPatchEmbeddings(
@@ -1272,6 +1275,7 @@ class EncoderConfig(Config):
     embedding_size: int = 16
     # This is the base patch size for the patch embedder
     max_patch_size: int = 8
+    min_patch_size: int = 1
     num_heads: int = 2
     mlp_ratio: float = 1.0
     depth: int = 2
