@@ -107,7 +107,7 @@ class DownstreamEvaluatorCallback(Callback):
     """Runs in-loop evaluations periodically during training."""
 
     evaluators: list[DownstreamEvaluator] = field(default_factory=list)
-    eval_interval: int = 10
+    eval_interval: Duration = field(default_factory=lambda: Duration.epochs(1))
     eval_duration: Duration = field(default_factory=lambda: Duration.epochs(10))
 
     def post_step(self) -> None:
@@ -144,7 +144,7 @@ class DownstreamEvaluatorCallbackConfig(CallbackConfig):
     """Config for the downstream evaluator callback."""
 
     tasks: list[DownstreamTaskConfig]
-    eval_interval: int = 10
+    eval_interval: Duration = field(default_factory=lambda: Duration.epochs(1))
     eval_duration: Duration = field(default_factory=lambda: Duration.epochs(10))
     enabled: bool = True
 

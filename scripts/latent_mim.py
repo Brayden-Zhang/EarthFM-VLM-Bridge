@@ -113,11 +113,12 @@ def build_train_module_config(
     dp_config = DataParallelConfig(name=DataParallelType.ddp)
 
     # TODO: would need a scheduler config and registry to be able to change this with overrides
-    scheduler = CosWithWarmup(warmup_steps=WARMUP_EPOCHS * STEPS_PER_EPOCH)
+    scheduler = CosWithWarmup()
     train_module_config = LatentMIMTrainModuleConfig(
         # TODO: change name to optim config
         optim_config=optim_config,
         masking_config=masking_config,
+        warmup_duration=Duration.epochs(WARMUP_EPOCHS),
         loss_config=loss_config,
         rank_microbatch_size=RANK_MICROBATCH_SIZE,
         token_exit_cfg=token_exit_cfg,

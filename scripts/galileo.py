@@ -157,6 +157,7 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
 
     NUM_WORKERS = 0
     NUM_THREADS = 0
+    # Global batch size should be in the common components
     GLOBAL_BATCH_SIZE = 128
 
     dataloader_config = HeliosDataLoaderConfig(
