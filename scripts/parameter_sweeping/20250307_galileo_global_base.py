@@ -17,9 +17,9 @@ MLP_RATIO = 4
 
 # Fixed token exit
 TOKEN_EXIT_CFG = {
-    "sentinel2_l2a": 0,
-    "sentinel1": 0,
-    "latlon": 0,
+    "sentinel2_l2a": 12,
+    "sentinel1": 12,
+    "latlon": 12,
     "worldcover": 0,
 }
 token_exit_args = " ".join(
@@ -30,7 +30,7 @@ token_exit_args = " ".join(
 # Sweep parameters
 LEARNING_RATES = [1e-4, 3e-4, 1e-3, 2e-3, 3e-3]
 WEIGHT_DECAYS = [1e-2, 2e-2, 3e-2]
-WARMUP_EPOCHS = [2, 10, 20, 30]
+WARMUP_EPOCHS = [2, 10, 30]
 
 # Base command template
 BASE_COMMAND = (
@@ -54,7 +54,7 @@ BASE_COMMAND = (
 # Iterate over all combinations of hyperparameters
 for lr, wd, warmup in itertools.product(LEARNING_RATES, WEIGHT_DECAYS, WARMUP_EPOCHS):
     # Construct run name indicating hyperparameters
-    run_name = f"galileo_local_base_lr_{lr}_wd_{wd}_warmup_{warmup}"
+    run_name = f"galileo_global_base_lr_{lr}_wd_{wd}_warmup_{warmup}"
 
     # Construct full command
     command = BASE_COMMAND.format(

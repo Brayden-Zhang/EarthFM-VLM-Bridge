@@ -4,7 +4,7 @@ import itertools
 import subprocess  # nosec
 
 # Fixed training parameters
-NUM_WORKERS = 16
+NUM_WORKERS = 8
 
 # Fixed model parameters
 ENCODER_EMBEDDING_SIZE = 256
