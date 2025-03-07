@@ -30,7 +30,7 @@ token_exit_args = " ".join(
 # Sweep parameters
 LEARNING_RATES = [1e-3, 2e-3, 3e-3]
 WEIGHT_DECAYS = [1e-2, 2e-2, 3e-2]
-WARMUP_EPOCHS = [2, 10, 20, 30]
+WARMUP_EPOCHS = [2, 10, 30]
 
 # Base command template
 BASE_COMMAND = (
