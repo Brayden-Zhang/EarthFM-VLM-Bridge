@@ -29,6 +29,9 @@ token_exit_args = " ".join(
     for key, value in TOKEN_EXIT_CFG.items()
 )
 
+# Evaluator tasks
+EVALUATOR_TASKS = '--trainer.callbacks.downstream_evaluator.tasks="[{name: m-eurosat, pooling_type: PoolingType.MAX}]"'
+
 # Sweep parameters
 LEARNING_RATES = [3e-4, 1e-3, 3e-3]
 WEIGHT_DECAYS = [1e-2, 3e-2]
@@ -51,7 +54,7 @@ BASE_COMMAND = (
     "--train_module.optim_config.weight_decay={wd} "
     "--train_module.warmup_duration.value={warmup} "
     "--train_module.warmup_duration.unit=epochs "
-    "--trainer.callbacks.downstream_evaluator.tasks=" + token_exit_args
+    f"{EVALUATOR_TASKS} " + token_exit_args  # Add evaluator tasks here
 )
 
 # Iterate over all combinations of hyperparameters
@@ -60,22 +63,19 @@ for lr, wd, warmup in itertools.product(LEARNING_RATES, WEIGHT_DECAYS, WARMUP_EP
     run_name = f"galileo_global_base_test_1_lr_{lr}_wd_{wd}_warmup_{warmup}"
 
     # Construct full command
-    command = (
-        BASE_COMMAND.format(
-            run_name=run_name,
-            encoder_embedding_size=ENCODER_EMBEDDING_SIZE,
-            decoder_embedding_size=DECODER_EMBEDDING_SIZE,
-            encoder_depth=ENCODER_DEPTH,
-            decoder_depth=DECODER_DEPTH,
-            encoder_num_heads=ENCODER_NUM_HEADS,
-            decoder_num_heads=DECODER_NUM_HEADS,
-            mlp_ratio=MLP_RATIO,
-            num_workers=NUM_WORKERS,
-            lr=lr,
-            wd=wd,
-            warmup=warmup,
-        )
-        + " --trainer.callbacks.downstream_evaluator.tasks=[{name: m-eurosat, pooling_type: PoolingType.MAX}, {name: m-brick-kiln, pooling_type: PoolingType.MAX}]"
+    command = BASE_COMMAND.format(
+        run_name=run_name,
+        encoder_embedding_size=ENCODER_EMBEDDING_SIZE,
+        decoder_embedding_size=DECODER_EMBEDDING_SIZE,
+        encoder_depth=ENCODER_DEPTH,
+        decoder_depth=DECODER_DEPTH,
+        encoder_num_heads=ENCODER_NUM_HEADS,
+        decoder_num_heads=DECODER_NUM_HEADS,
+        mlp_ratio=MLP_RATIO,
+        num_workers=NUM_WORKERS,
+        lr=lr,
+        wd=wd,
+        warmup=warmup,
     )
 
     print(f"Launching: {command}")
