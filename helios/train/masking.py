@@ -447,6 +447,75 @@ class SpaceMaskingStrategy(MaskingStrategy):
         return MaskedHeliosSample(**output_dict)
 
 
+@MASKING_STRATEGY_REGISTRY.register("modality")
+class ModalityMaskingStrategy(MaskingStrategy):
+    """Modality structured random masking of the input data."""
+
+    def __init__(
+        self,
+        encode_ratio: float = 0.5,
+        decode_ratio: float = 0.5,
+    ) -> None:
+        """Initialize the masking strategy."""
+        self._encode_ratio = encode_ratio
+        self._decode_ratio = decode_ratio
+        self.generator = np.random.default_rng(0)
+
+    def apply_mask(self, batch: HeliosSample, **kwargs: Any) -> MaskedHeliosSample:
+        """Randomly mask out modalities in the input data.
+
+        Entire modalities (per instance) are assigned the same mask.
+
+        Args:
+            batch: Input data of type HeliosSample
+            **kwargs: Additional arguments for maskings
+
+        Returns:
+            MaskedHeliosSample containing the masked data and mask
+        """
+        output_dict: dict[str, ArrayTensor | None] = {"timestamps": batch.timestamps}
+
+        present_modalities = list(batch.as_dict(ignore_nones=True).keys())
+        present_modalities = [b for b in present_modalities if b != "timestamps"]
+
+        num_present_modalities = len(present_modalities)
+        encode_modalities = max(1, int(self.encode_ratio * num_present_modalities))
+        decode_modalities = max(1, int(self.decode_ratio * num_present_modalities))
+        target_modalities = (
+            num_present_modalities - encode_modalities - decode_modalities
+        )
+
+        band_mask_per_instance = np.concatenate(
+            (
+                np.ones(target_modalities, dtype=np.int_)
+                * MaskValue.TARGET_ENCODER_ONLY.value,
+                np.ones(decode_modalities, dtype=np.int_) * MaskValue.DECODER.value,
+                np.ones(encode_modalities, dtype=np.int_)
+                * MaskValue.ONLINE_ENCODER.value,
+            )
+        )
+        batch_mask = repeat(band_mask_per_instance, "x -> b x", b=batch.batch_size)
+        random_batch_mask = self.generator.permuted(batch_mask, axis=1)
+        for idx, modality in enumerate(present_modalities):
+            instance = getattr(batch, modality)
+            output_dict[modality] = instance
+
+            if isinstance(instance, torch.Tensor):
+                device: torch.device | None = instance.device
+            else:
+                device = None
+
+            modality_mask = torch.tensor(random_batch_mask[:, idx], device=device)
+            shape = instance.shape
+            b_s = shape[-1]
+            b, h, w, t = list(shape[:-1]) + [1] * (4 - len(shape[:-1]))
+            mask = repeat(modality_mask, "b -> b h w t b_s", h=h, w=w, b_s=b_s, t=t)
+            mask = mask.view(*shape)
+            output_dict[MaskedHeliosSample.get_masked_modality_name(modality)] = mask
+
+        return MaskedHeliosSample(**output_dict)
+
+
 @MASKING_STRATEGY_REGISTRY.register("space_time")
 class SpaceTimeMaskingStrategy(MaskingStrategy):
     """Randomly select space or time masking and apply it to the input data."""
@@ -473,6 +542,44 @@ class SpaceTimeMaskingStrategy(MaskingStrategy):
             return self.space_strategy.apply_mask(batch, patch_size, **kwargs)
         else:
             return self.time_strategy.apply_mask(batch, **kwargs)
+
+
+@MASKING_STRATEGY_REGISTRY.register("modality_space_time")
+class ModalitySpaceTimeMaskingStrategy(MaskingStrategy):
+    """Randomly select modality, space or time masking and apply it to the input data."""
+
+    def __init__(
+        self,
+        encode_ratio: float = 0.5,
+        decode_ratio: float = 0.5,
+    ) -> None:
+        """Initialize the masking strategy."""
+        self._encode_ratio = encode_ratio
+        self._decode_ratio = decode_ratio
+        self.generator = np.random.default_rng(0)
+
+        self.space_strategy = SpaceMaskingStrategy(encode_ratio, decode_ratio)
+        self.time_strategy = TimeMaskingStrategy(encode_ratio, decode_ratio)
+        self.modality_strategy = ModalityMaskingStrategy(encode_ratio, decode_ratio)
+
+    def apply_mask(
+        self, batch: HeliosSample, patch_size: int = 1, **kwargs: Any
+    ) -> MaskedHeliosSample:
+        """Apply band or space or time masking to the input data."""
+        has_enough_timesteps = batch.time >= 3
+        has_enough_modalities = (len(batch.as_dict()) - 1) >= 2
+
+        possible_strategies: list[MaskingStrategy] = [self.space_strategy]
+        if has_enough_timesteps:
+            possible_strategies.append(self.time_strategy)
+        if has_enough_modalities:
+            possible_strategies.append(self.modality_strategy)
+
+        selected_strategy: MaskingStrategy = self.generator.choice(possible_strategies)
+        if isinstance(selected_strategy, SpaceMaskingStrategy):
+            return selected_strategy.apply_mask(batch, patch_size, **kwargs)
+        else:
+            return selected_strategy.apply_mask(batch, **kwargs)
 
 
 @MASKING_STRATEGY_REGISTRY.register("random")
