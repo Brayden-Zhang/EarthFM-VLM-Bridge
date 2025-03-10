@@ -107,13 +107,13 @@ class DownstreamEvaluatorCallback(Callback):
     """Runs in-loop evaluations periodically during training."""
 
     evaluators: list[DownstreamEvaluator] = field(default_factory=list)
-    eval_interval: int = 1000
-    # TODO: fix that eval_duration is not used
-    eval_duration: Duration = field(default_factory=lambda: Duration.epochs(10))
+    eval_duration: Duration = field(default_factory=lambda: Duration.epochs(1))
 
     def post_step(self) -> None:
         """Run the evaluators."""
-        if self.step <= 1 or self.step % self.eval_interval != 0:
+        # Compute the evaluation interval in steps.
+        eval_interval_steps = self.trainer.convert_duration_to_steps(self.eval_duration)
+        if self.step <= 1 or self.step % eval_interval_steps != 0:
             return
 
         for evaluator in self.evaluators:
@@ -128,6 +128,9 @@ class DownstreamEvaluatorCallback(Callback):
             )
             logger.info(f"Metric {METRIC_NAME}: {val_result}")
 
+        # Restore model to train mode.
+        self.trainer.model.train()
+
 
 @dataclass
 class DownstreamTaskConfig:
@@ -136,7 +139,7 @@ class DownstreamTaskConfig:
     name: str
     batch_size: int = 128
     num_workers: int = 8
-    pooling_type: PoolingType = PoolingType.MAX
+    pooling_type: PoolingType = PoolingType.MEAN
     norm_stats_from_pretrained: bool = True
 
 

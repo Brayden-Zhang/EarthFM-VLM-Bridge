@@ -33,8 +33,8 @@ from helios.train.masking import MaskingConfig
 from helios.train.train_module.latent_mim import LatentMIMTrainModuleConfig
 
 logger = logging.getLogger(__name__)
-# TODO: Need to use the dynamic computation from trainer for this
-STEPS_PER_EPOCH = 100
+# # TODO: Need to use the dynamic computation from trainer for this
+# STEPS_PER_EPOCH = 100
 
 
 def build_model_config(common: CommonComponents) -> LatentMIMConfig:
@@ -166,7 +166,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
     CANCEL_CHECK_INTERVAL = 1
     LOAD_STRATEGY = LoadStrategy.if_available
     WANDB_USERNAME = "eai-ai2"  # nosec
-    WANDB_PROJECT = "helios-20250307-sweep"
+    WANDB_PROJECT = "helios-train"
     checkpointer_config = CheckpointerConfig(work_dir=common.save_folder)
     wandb_callback = HeliosWandBCallback(
         name=common.run_name,
@@ -174,7 +174,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
         entity=WANDB_USERNAME,
         enabled=True,  # set to False to avoid wandb errors
     )
-    EVAL_INTERVAL_EPOCHS = 5
+    EVAL_INTERVAL_EPOCHS = 1
     EVAL_TASKS = [
         DownstreamTaskConfig(
             name="m-eurosat",
@@ -210,7 +210,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             "downstream_evaluator",
             DownstreamEvaluatorCallbackConfig(
                 tasks=EVAL_TASKS,
-                eval_interval=EVAL_INTERVAL_EPOCHS * STEPS_PER_EPOCH,
+                eval_duration=Duration.epochs(EVAL_INTERVAL_EPOCHS),
             ),
         )
     )
