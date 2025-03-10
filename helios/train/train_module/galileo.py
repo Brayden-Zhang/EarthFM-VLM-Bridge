@@ -251,7 +251,8 @@ class GalileoTrainModule(HeliosTrainModule):
 
                 patch_size = np.random.choice(
                     np.arange(
-                        self.model.min_patch_size, self.model.encoder.max_patch_size
+                        self.model.encoder.min_patch_size,
+                        self.model.encoder.max_patch_size,
                     )
                 )
                 microbatch = self.model.transform.apply(microbatch)

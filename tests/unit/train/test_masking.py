@@ -7,8 +7,8 @@ import torch
 from helios.data.constants import Modality
 from helios.data.dataset import HeliosSample
 from helios.train.masking import (
-    BandMaskingStrategy,
     MaskValue,
+    ModalityMaskingStrategy,
     RandomMaskingStrategy,
     SpaceMaskingStrategy,
     TimeMaskingStrategy,
@@ -186,8 +186,8 @@ def test_time_structure_masking_and_unmask() -> None:
                 assert (mask == 0).all()
 
 
-def test_band_mask_and_unmask() -> None:
-    """Test band structure masking ratios."""
+def test_modality_mask_and_unmask() -> None:
+    """Test modality structure masking ratios."""
     b, h, w, t = 100, 16, 16, 8
 
     days = torch.randint(1, 31, (b, 1, t), dtype=torch.long)
@@ -205,7 +205,7 @@ def test_band_mask_and_unmask() -> None:
     )
     total_modalities = len(batch.as_dict()) - 1
     encode_ratio, decode_ratio = 0.25, 0.5
-    masked_sample = BandMaskingStrategy(
+    masked_sample = ModalityMaskingStrategy(
         encode_ratio=encode_ratio,
         decode_ratio=decode_ratio,
     ).apply_mask(
