@@ -148,8 +148,8 @@ class DownstreamEvaluatorCallbackConfig(CallbackConfig):
     """Config for the downstream evaluator callback."""
 
     tasks: list[DownstreamTaskConfig]
-    eval_interval: int = 1000
-    eval_duration: Duration = field(default_factory=lambda: Duration.epochs(10))
+    # eval_interval: int = 1000
+    eval_duration: Duration = field(default_factory=lambda: Duration.epochs(1))
     enabled: bool = True
 
     def build(self, trainer: Trainer) -> Callback | None:
@@ -173,6 +173,6 @@ class DownstreamEvaluatorCallbackConfig(CallbackConfig):
 
         return DownstreamEvaluatorCallback(
             evaluators=evaluators,
-            eval_interval=self.eval_interval,
+            # eval_interval=self.eval_interval,
             eval_duration=self.eval_duration,
         )
