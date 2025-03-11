@@ -54,6 +54,7 @@ class HeliosDataLoader(DataLoaderBase):
         collator: Callable = default_collate,
         target_device_type: str = "cpu",
         drop_last: bool = True,
+        persistent_workers: bool = True,
     ):
         """Initialize the HeliosDataLoader."""
         super().__init__(
@@ -74,6 +75,7 @@ class HeliosDataLoader(DataLoaderBase):
         self.target_device_type = target_device_type
         self.drop_last = drop_last
         self._global_indices: np.ndarray | None = None
+        self.persistent_workers = persistent_workers
 
     @property
     def total_batches(self) -> int:
@@ -177,7 +179,9 @@ class HeliosDataLoader(DataLoaderBase):
             num_workers=self.num_workers,
             pin_memory=self.target_device_type == "cuda" and self.num_workers > 0,
             prefetch_factor=self.prefetch_factor,
-            persistent_workers=False,
+            persistent_workers=self.persistent_workers
+            if self.num_workers > 0
+            else False,
             timeout=0,
         )
 
@@ -276,6 +280,25 @@ class HeliosDataLoader(DataLoaderBase):
         timestamps = rearrange(timestamps, "b t c -> b c t")
         output_dict["timestamps"] = timestamps
         return HeliosSample(**output_dict)
+
+    def fast_forward(self, global_step: int) -> np.ndarray:
+        """Fast forward the data loader to a specific global step and return the batch_indices."""
+        logger.warning(
+            "Fast forward does not yet support returning to indices for multiple GPUs"
+        )
+        if get_world_size() > 1:
+            raise NotImplementedError("Fast forward is not supported in DDP")
+        # If the model was trained with multiple GPUS, this logic must be updated so that we grab from where all the ranks started
+        self.batches_processed = global_step
+        epoch = math.ceil(global_step / self.total_batches)
+        step_in_epoch = global_step % self.total_batches
+        logger.info(f"epoch: {epoch}, step in epoch: {step_in_epoch}")
+        for i in range(1, epoch + 1):
+            self.reshuffle(epoch=i)
+        batch_start = int(self.get_global_indices()[step_in_epoch])
+        batch_end = batch_start + self.global_batch_size
+        sample_indices = np.arange(batch_start, batch_end)
+        return sample_indices
 
 
 def iter_batched(

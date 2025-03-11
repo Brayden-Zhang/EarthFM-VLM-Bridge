@@ -27,7 +27,7 @@ jobs:
         pip install .
         git clone https://github.com/allenai/OLMo-core.git
         cd OLMo-core
-        git checkout v2 && pip install .
+        git checkout main && pip install .
 
 
     - name: Run tests

@@ -13,7 +13,7 @@ from olmo_core.config import Config, DType
 from olmo_core.distributed.parallel import (
     DataParallelConfig,
     DataParallelType,
-    build_device_mesh,
+    build_world_mesh,
     get_dp_mesh,
     get_dp_process_group,
 )
@@ -22,6 +22,7 @@ from olmo_core.exceptions import OLMoConfigurationError
 from olmo_core.float8 import Float8Config, Float8Handler
 from olmo_core.optim import OptimConfig, SkipStepOptimizer
 from olmo_core.optim.scheduler import Scheduler
+from olmo_core.train.common import Duration
 from olmo_core.train.train_module import EvalBatchSizeUnit, EvalBatchSpec, TrainModule
 from olmo_core.train.train_module.transformer import (
     TransformerActivationCheckpointingConfig,
@@ -139,6 +140,7 @@ class HeliosTrainModule(TrainModule):
         model: Any,
         optim_config: OptimConfig,
         rank_microbatch_size: int,
+        warmup_duration: Duration | None = None,
         compile_model: bool = False,
         float8_config: Float8Config | None = None,
         dp_config: DataParallelConfig | None = None,
@@ -157,6 +159,7 @@ class HeliosTrainModule(TrainModule):
             model: The transformer model to train.
             optim_config: The corresponding optimizer config.
             rank_microbatch_size: The rank batch size in instances.
+            warmup_duration: The warmup duration.
             compile_model: Whether to compile to the model.
             float8_config: Float8 configuration for the model.
             dp_config: Data parallel configuration for the model.
@@ -175,11 +178,11 @@ class HeliosTrainModule(TrainModule):
         num_params = sum(p.numel() for p in self.model.parameters())
         logger.info(f"number of parameters: {num_params:,d}")
         self.device = device or get_default_device()
-        self.world_mesh = build_device_mesh(dp=dp_config, device_type=self.device.type)
+        self.world_mesh = build_world_mesh(dp=dp_config, device_type=self.device.type)
         logger.info(
             f"Data parallel world size = {get_world_size(self.dp_process_group):,d}"
         )
-
+        self.warmup_duration = warmup_duration
         self.float8_handler: Float8Handler | None = None
         # float8_enabled = False
         if float8_config is not None:
@@ -299,6 +302,16 @@ class HeliosTrainModule(TrainModule):
                 f"global batch size ({self.trainer.global_batch_size:,d}) must be divisible by "
                 f"micro-batch size ({self.rank_microbatch_size:,d}) x DP world size ({ws})"
             )
+        if self.scheduler is not None:
+            if hasattr(self.scheduler, "warmup_steps"):
+                assert (
+                    self.warmup_duration is not None
+                ), "warmup_duration must be set if using a scheduler with warmup steps"
+                logger.info("Converting warmup duration to steps")
+                warmup_steps = self.trainer.convert_duration_to_steps(
+                    self.warmup_duration
+                )
+                self.scheduler.warmup_steps = warmup_steps
 
     def state_dict(self) -> dict[str, Any]:
         """Get the state dict."""

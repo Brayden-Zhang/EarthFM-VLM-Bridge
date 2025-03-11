@@ -45,7 +45,7 @@ LOSS_REGISTRY = ClassRegistry[Loss]()
 class PatchDiscriminationLoss(Loss):
     """Loss function for patch discrimination task."""
 
-    name = "Patch Discrimination"
+    name = "PatchDisc"
 
     def __init__(
         self,
@@ -179,7 +179,7 @@ class L2Loss(Loss):
 class CrossEntropyLoss(Loss):
     """Loss function for cross entropy."""
 
-    name = "Cross Entropy"
+    name = "CrossEntropy"
 
     def compute(
         self, predictions: TokensAndMasks, targets: TokensAndMasks, **kwargs: Any

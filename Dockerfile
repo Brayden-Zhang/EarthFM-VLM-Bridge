@@ -20,5 +20,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # You might need multiple of these statements to copy all the folders you need for your experiment.
 COPY helios/ /stage/helios/
 COPY scripts/latent_mim.py /stage/latent_mim.py
+COPY scripts/galileo.py /stage/galileo.py
 COPY data/norm_configs /stage/data/norm_configs
 ENV PYTHONPATH="${PYTHONPATH}:/stage/"

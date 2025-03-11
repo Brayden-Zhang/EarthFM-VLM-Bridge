@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 # Geobench classification
-METRIC_NAME = "Top-1 Accuracy"
+METRIC_NAME = "accuracy"
 NAME_PREFIX = "Geobench"
 GEOBENCH_DIR = UPath("/weka/dfive-default/presto-geobench/dataset/geobench")
 
@@ -107,12 +107,13 @@ class DownstreamEvaluatorCallback(Callback):
     """Runs in-loop evaluations periodically during training."""
 
     evaluators: list[DownstreamEvaluator] = field(default_factory=list)
-    eval_interval: int = 10
-    eval_duration: Duration = field(default_factory=lambda: Duration.epochs(10))
+    eval_duration: Duration = field(default_factory=lambda: Duration.epochs(1))
 
     def post_step(self) -> None:
         """Run the evaluators."""
-        if self.step <= 1 or self.step % self.eval_interval != 0:
+        # Compute the evaluation interval in steps.
+        eval_interval_steps = self.trainer.convert_duration_to_steps(self.eval_duration)
+        if self.step <= 1 or self.step % eval_interval_steps != 0:
             return
 
         for evaluator in self.evaluators:
@@ -135,7 +136,7 @@ class DownstreamTaskConfig:
     name: str
     batch_size: int = 128
     num_workers: int = 8
-    pooling_type: PoolingType = PoolingType.MAX
+    pooling_type: PoolingType = PoolingType.MEAN
     norm_stats_from_pretrained: bool = True
 
 
@@ -144,8 +145,7 @@ class DownstreamEvaluatorCallbackConfig(CallbackConfig):
     """Config for the downstream evaluator callback."""
 
     tasks: list[DownstreamTaskConfig]
-    eval_interval: int = 10
-    eval_duration: Duration = field(default_factory=lambda: Duration.epochs(10))
+    eval_duration: Duration = field(default_factory=lambda: Duration.epochs(1))
     enabled: bool = True
 
     def build(self, trainer: Trainer) -> Callback | None:
@@ -169,6 +169,5 @@ class DownstreamEvaluatorCallbackConfig(CallbackConfig):
 
         return DownstreamEvaluatorCallback(
             evaluators=evaluators,
-            eval_interval=self.eval_interval,
             eval_duration=self.eval_duration,
         )
