@@ -1,28 +1,30 @@
-"""Post-process ingested NAIP data into the Helios dataset."""
+"""Post-process ingested SRTM elevation data into the Helios dataset."""
 
 import argparse
 import csv
 import multiprocessing
+from datetime import datetime, timezone
 
 import tqdm
-from rslearn.data_sources import Item
 from rslearn.dataset import Window
 from rslearn.utils.mp import star_imap_unordered
-from rslearn.utils.raster_format import GeotiffRasterFormat
 from upath import UPath
 
 from helios.data.constants import Modality, TimeSpan
 from helios.dataset.utils import get_modality_fname
 
-from ..constants import METADATA_COLUMNS
+from ..constants import GEOTIFF_RASTER_FORMAT, METADATA_COLUMNS
 from ..util import get_modality_temp_meta_fname, get_window_metadata
 
+START_TIME = datetime(2000, 1, 1, tzinfo=timezone.utc)
+END_TIME = datetime(2001, 1, 1, tzinfo=timezone.utc)
+
 # Layer name in the input rslearn dataset.
-LAYER_NAME = "naip"
+LAYER_NAME = "srtm"
 
 
-def convert_naip(window_path: UPath, helios_path: UPath) -> None:
-    """Add NAIP data for this window to the Helios dataset.
+def convert_srtm(window_path: UPath, helios_path: UPath) -> None:
+    """Add SRTM elevation data for this window to the Helios dataset.
 
     Args:
         window_path: the rslearn window directory to read data from.
@@ -30,42 +32,25 @@ def convert_naip(window_path: UPath, helios_path: UPath) -> None:
     """
     window = Window.load(window_path)
     window_metadata = get_window_metadata(window)
-    layer_datas = window.load_layer_datas()
-    raster_format = GeotiffRasterFormat()
 
-    # NAIP is just one mosaic.
-    item_groups = layer_datas[LAYER_NAME].serialized_item_groups
-    if len(item_groups) == 0:
+    if not window.is_layer_completed(LAYER_NAME):
         return
-    item_group = item_groups[0]
 
-    # Get start and end of mosaic.
-    start_time = None
-    end_time = None
-    for item_data in item_group:
-        item = Item.deserialize(item_data)
-        if start_time is None or item.geometry.time_range[0] < start_time:
-            start_time = item.geometry.time_range[0]
-        if end_time is None or item.geometry.time_range[1] > end_time:
-            end_time = item.geometry.time_range[1]
-
-    # Assert for type checking: we already checked that len(item_groups) > 0 so the
-    # times should never be None.
-    assert start_time is not None and end_time is not None  # nosec
-
-    assert len(Modality.NAIP.band_sets) == 1
-    band_set = Modality.NAIP.band_sets[0]
+    assert len(Modality.SRTM.band_sets) == 1
+    band_set = Modality.SRTM.band_sets[0]
     raster_dir = window.get_raster_dir(LAYER_NAME, band_set.bands)
-    image = raster_format.decode_raster(raster_dir, window.projection, window.bounds)
+    image = GEOTIFF_RASTER_FORMAT.decode_raster(
+        raster_dir, window.projection, window.bounds
+    )
     dst_fname = get_modality_fname(
         helios_path,
-        Modality.NAIP,
+        Modality.SRTM,
         TimeSpan.STATIC,
         window_metadata,
         band_set.get_resolution(),
         "tif",
     )
-    raster_format.encode_raster(
+    GEOTIFF_RASTER_FORMAT.encode_raster(
         path=dst_fname.parent,
         projection=window.projection,
         bounds=window.bounds,
@@ -73,7 +58,7 @@ def convert_naip(window_path: UPath, helios_path: UPath) -> None:
         fname=dst_fname.name,
     )
     metadata_fname = get_modality_temp_meta_fname(
-        helios_path, Modality.NAIP, TimeSpan.STATIC, window.name
+        helios_path, Modality.SRTM, TimeSpan.STATIC, window.name
     )
     metadata_fname.parent.mkdir(parents=True, exist_ok=True)
     with metadata_fname.open("w") as f:
@@ -86,8 +71,8 @@ def convert_naip(window_path: UPath, helios_path: UPath) -> None:
                 row=window_metadata.row,
                 tile_time=window_metadata.time.isoformat(),
                 image_idx="0",
-                start_time=start_time.isoformat(),
-                end_time=end_time.isoformat(),
+                start_time=START_TIME.isoformat(),
+                end_time=END_TIME.isoformat(),
             )
         )
 
@@ -121,18 +106,17 @@ if __name__ == "__main__":
     ds_path = UPath(args.ds_path)
     helios_path = UPath(args.helios_path)
 
-    metadata_fnames = ds_path.glob("windows/res_0.625/*/metadata.json")
     jobs = []
-    for metadata_fname in metadata_fnames:
+    for window_dir in (ds_path / "windows" / "res_10").iterdir():
         jobs.append(
             dict(
-                window_path=metadata_fname.parent,
+                window_path=window_dir,
                 helios_path=helios_path,
             )
         )
 
     p = multiprocessing.Pool(args.workers)
-    outputs = star_imap_unordered(p, convert_naip, jobs)
+    outputs = star_imap_unordered(p, convert_srtm, jobs)
     for _ in tqdm.tqdm(outputs, total=len(jobs)):
         pass
     p.close()

@@ -12,6 +12,7 @@
         }
       ],
       "data_source": {
+        "cache_dir": "cache/planetary_computer",
         "ingest": false,
         "name": "rslearn.data_sources.planetary_computer.Sentinel1",
         "query": {
@@ -44,6 +45,7 @@
         }
       ],
       "data_source": {
+        "cache_dir": "cache/planetary_computer",
         "duration": "30d",
         "ingest": false,
         "name": "rslearn.data_sources.planetary_computer.Sentinel1",
@@ -74,6 +76,7 @@
         }
       ],
       "data_source": {
+        "cache_dir": "cache/planetary_computer",
         "duration": "30d",
         "ingest": false,
         "name": "rslearn.data_sources.planetary_computer.Sentinel1",
@@ -104,6 +107,7 @@
         }
       ],
       "data_source": {
+        "cache_dir": "cache/planetary_computer",
         "duration": "30d",
         "ingest": false,
         "name": "rslearn.data_sources.planetary_computer.Sentinel1",
@@ -134,6 +138,7 @@
         }
       ],
       "data_source": {
+        "cache_dir": "cache/planetary_computer",
         "duration": "30d",
         "ingest": false,
         "name": "rslearn.data_sources.planetary_computer.Sentinel1",
@@ -164,6 +169,7 @@
         }
       ],
       "data_source": {
+        "cache_dir": "cache/planetary_computer",
         "duration": "30d",
         "ingest": false,
         "name": "rslearn.data_sources.planetary_computer.Sentinel1",
@@ -194,6 +200,7 @@
         }
       ],
       "data_source": {
+        "cache_dir": "cache/planetary_computer",
         "duration": "30d",
         "ingest": false,
         "name": "rslearn.data_sources.planetary_computer.Sentinel1",
@@ -224,6 +231,7 @@
         }
       ],
       "data_source": {
+        "cache_dir": "cache/planetary_computer",
         "duration": "30d",
         "ingest": false,
         "name": "rslearn.data_sources.planetary_computer.Sentinel1",
@@ -254,6 +262,7 @@
         }
       ],
       "data_source": {
+        "cache_dir": "cache/planetary_computer",
         "duration": "30d",
         "ingest": false,
         "name": "rslearn.data_sources.planetary_computer.Sentinel1",
@@ -284,6 +293,7 @@
         }
       ],
       "data_source": {
+        "cache_dir": "cache/planetary_computer",
         "duration": "30d",
         "ingest": false,
         "name": "rslearn.data_sources.planetary_computer.Sentinel1",
@@ -314,6 +324,7 @@
         }
       ],
       "data_source": {
+        "cache_dir": "cache/planetary_computer",
         "duration": "30d",
         "ingest": false,
         "name": "rslearn.data_sources.planetary_computer.Sentinel1",
@@ -344,6 +355,7 @@
         }
       ],
       "data_source": {
+        "cache_dir": "cache/planetary_computer",
         "duration": "30d",
         "ingest": false,
         "name": "rslearn.data_sources.planetary_computer.Sentinel1",
@@ -374,6 +386,7 @@
         }
       ],
       "data_source": {
+        "cache_dir": "cache/planetary_computer",
         "duration": "30d",
         "ingest": false,
         "name": "rslearn.data_sources.planetary_computer.Sentinel1",

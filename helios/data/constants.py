@@ -232,8 +232,60 @@ class Modality:
         ignore_when_parsing=False,
     )
 
+    SRTM = ModalitySpec(
+        name="srtm",
+        tile_resolution_factor=16,
+        band_sets=[BandSet(["srtm"], 16)],
+        is_multitemporal=False,
+        ignore_when_parsing=False,
+    )
+
     OPENSTREETMAP = ModalitySpec(
         name="openstreetmap",
+        tile_resolution_factor=16,
+        band_sets=[
+            BandSet(
+                [
+                    "aerialway_pylon",
+                    "aerodrome",
+                    "airstrip",
+                    "amenity_fuel",
+                    "building",
+                    "chimney",
+                    "communications_tower",
+                    "crane",
+                    "flagpole",
+                    "fountain",
+                    "generator_wind",
+                    "helipad",
+                    "highway",
+                    "leisure",
+                    "lighthouse",
+                    "obelisk",
+                    "observatory",
+                    "parking",
+                    "petroleum_well",
+                    "power_plant",
+                    "power_substation",
+                    "power_tower",
+                    "river",
+                    "runway",
+                    "satellite_dish",
+                    "silo",
+                    "storage_tank",
+                    "taxiway",
+                    "water_tower",
+                    "works",
+                ],
+                1,
+            )
+        ],
+        is_multitemporal=False,
+        ignore_when_parsing=True,
+    )
+
+    OPENSTREETMAP_RASTER = ModalitySpec(
+        name="openstreetmap_raster",
         tile_resolution_factor=16,
         band_sets=[
             BandSet(

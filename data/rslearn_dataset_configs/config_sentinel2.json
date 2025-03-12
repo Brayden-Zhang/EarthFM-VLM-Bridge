@@ -600,5 +600,16 @@
       },
       "type": "raster"
     }
+  },
+  "tile_store": {
+    "class_path": "rslearn.tile_stores.default.DefaultTileStore",
+    "init_args": {
+      "geotiff_options": {
+        "compress": "zstd",
+        "predictor": 2,
+        "zstd_level": 1
+      },
+      "path_suffix": "/tmp/rslearn_helios_tile_store"
+    }
   }
 }

@@ -329,6 +329,10 @@ def create_windows_with_highres_time(
             total=len(lonlats),
         )
     )
+    print(f"got {len(highres_tiles)} initial high-res tiles")
+    # De-duplicate in case user gave some lonlats that fall in the same tile.
+    highres_tiles = list(set(highres_tiles))
+    print(f"have {len(highres_tiles)} after de-duplication")
 
     # List timestamps.
     get_highres_times_jobs = []

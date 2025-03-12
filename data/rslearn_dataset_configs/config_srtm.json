@@ -1,0 +1,19 @@
+{
+  "layers": {
+    "srtm": {
+      "band_sets": [
+        {
+          "bands": [
+            "srtm"
+          ],
+          "dtype": "int32"
+        }
+      ],
+      "data_source": {
+        "name": "rslearn.data_sources.earthdata_srtm.SRTM"
+      },
+      "resampling_method": "nearest",
+      "type": "raster"
+    }
+  }
+}

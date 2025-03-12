@@ -125,7 +125,7 @@ def convert_freq(
 
         for band_set in modality.band_sets:
             # Compute bounds of this raster adjusted for the resolution.
-            _, adjusted_bounds = get_adjusted_projection_and_bounds(
+            adjusted_projection, adjusted_bounds = get_adjusted_projection_and_bounds(
                 modality, band_set, window.projection, window.bounds
             )
 
@@ -142,7 +142,9 @@ def convert_freq(
                 window.bounds,
                 adjusted_bounds,
             )
-            image = GEOTIFF_RASTER_FORMAT.decode_raster(raster_dir, adjusted_bounds)
+            image = GEOTIFF_RASTER_FORMAT.decode_raster(
+                raster_dir, adjusted_projection, adjusted_bounds
+            )
             expected_image_size = band_set.get_expected_image_size(
                 window_metadata.get_resolution_factor()
             )
@@ -260,7 +262,7 @@ def convert_monthly(
 
         for band_set in modality.band_sets:
             # Compute bounds of this raster adjusted for the resolution.
-            _, adjusted_bounds = get_adjusted_projection_and_bounds(
+            adjusted_projection, adjusted_bounds = get_adjusted_projection_and_bounds(
                 modality, band_set, window.projection, window.bounds
             )
 
@@ -272,7 +274,9 @@ def convert_monthly(
             if not raster_dir.exists():
                 break
 
-            image = GEOTIFF_RASTER_FORMAT.decode_raster(raster_dir, adjusted_bounds)
+            image = GEOTIFF_RASTER_FORMAT.decode_raster(
+                raster_dir, adjusted_projection, adjusted_bounds
+            )
             expected_image_size = band_set.get_expected_image_size(
                 modality.tile_resolution_factor
             )

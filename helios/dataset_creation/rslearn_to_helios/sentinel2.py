@@ -25,7 +25,9 @@ def convert_sentinel2(window_path: UPath, helios_path: UPath) -> None:
         window_path: the rslearn window directory to read data from.
         helios_path: Helios dataset path to write to.
     """
-    convert_freq(window_path, helios_path, LAYER_FREQ, Modality.SENTINEL2)
+    convert_freq(
+        window_path, helios_path, LAYER_FREQ, Modality.SENTINEL2, unprepared_okay=True
+    )
     convert_monthly(window_path, helios_path, LAYER_MONTHLY, Modality.SENTINEL2)
 
 
@@ -58,12 +60,12 @@ if __name__ == "__main__":
     ds_path = UPath(args.ds_path)
     helios_path = UPath(args.helios_path)
 
-    metadata_fnames = ds_path.glob("windows/res_10/*/metadata.json")
     jobs = []
-    for metadata_fname in metadata_fnames:
+    group_dir = ds_path / "windows" / "res_10"
+    for window_dir in group_dir.iterdir():
         jobs.append(
             dict(
-                window_path=metadata_fname.parent,
+                window_path=window_dir,
                 helios_path=helios_path,
             )
         )

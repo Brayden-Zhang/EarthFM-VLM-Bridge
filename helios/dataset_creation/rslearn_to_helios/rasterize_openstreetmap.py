@@ -1,6 +1,7 @@
 """Create openstreetmap_raster from openstreetmap in the Helios dataset."""
 
 import argparse
+import csv
 import json
 import multiprocessing
 from collections.abc import Callable
@@ -11,18 +12,20 @@ import skimage.draw
 import tqdm
 from rasterio.crs import CRS
 from rslearn.utils.geometry import Projection
+from rslearn.utils.mp import star_imap_unordered
 from upath import UPath
+
+from helios.data.constants import Modality, TimeSpan
+from helios.dataset.util import get_modality_dir
 
 from ..constants import GEOTIFF_RASTER_FORMAT
 
 WINDOW_SIZE = 256
-# Factor by which coordinates in openstreetmap are zoomed in.
-IN_FACTOR = 16
 # Factor to zoom in for output. So output will be 1024x1024.
 FACTOR = 4
 OUTPUT_SIZE = WINDOW_SIZE * FACTOR
 OUTPUT_RESOLUTION = 10 / FACTOR
-OUTPUT_MODALITY = "10_openstreetmap_raster"
+MODALITY_NAME = "openstreetmap_raster"
 
 CATEGORIES = [
     "aerialway_pylon",
@@ -122,10 +125,12 @@ def draw_line_string(
         array[category_id, rows[valid], cols[valid]] = 1
 
 
-def rasterize_openstreetmap(in_fname: UPath) -> None:
+def rasterize_openstreetmap(helios_path: UPath, in_fname: UPath) -> None:
     """Rasterize OpenStreetMap data.
 
     Args:
+        helios_path: path to Helios dataset where OpenStreetMap vector data has been
+            written.
         in_fname: the input filename containing the GeoJSON data. Outputs will be
             written to a corresponding name in the openstreetmap_raster folder.
     """
@@ -186,11 +191,10 @@ def rasterize_openstreetmap(in_fname: UPath) -> None:
             raise ValueError(f"cannot handle geometry type {geometry['type']}")
 
     # Upload the rasterized data as GeoTIFF.
-    out_fname = (
-        in_fname.parent.parent
-        / OUTPUT_MODALITY
-        / f"{crs}_{col}_{row}_{OUTPUT_RESOLUTION}.tif"
+    out_modality_dir = get_modality_dir(
+        helios_path, Modality.OPENSTREETMAP_RASTER, TimeSpan.STATIC
     )
+    out_fname = out_modality_dir / f"{crs}_{col}_{row}_{OUTPUT_RESOLUTION}.tif"
     bounds = (
         col * OUTPUT_SIZE,
         row * OUTPUT_SIZE,
@@ -228,9 +232,39 @@ if __name__ == "__main__":
 
     helios_path = UPath(args.helios_path)
 
-    geojson_fnames = list((helios_path / "10_openstreetmap").iterdir())
+    rasterize_jobs = []
+    for geojson_fname in (helios_path / "10_openstreetmap").iterdir():
+        rasterize_jobs.append(
+            dict(
+                helios_path=helios_path,
+                in_fname=geojson_fname,
+            )
+        )
     p = multiprocessing.Pool(args.workers)
-    outputs = p.imap_unordered(rasterize_openstreetmap, geojson_fnames)
-    for _ in tqdm.tqdm(outputs, total=len(geojson_fnames)):
+    outputs = star_imap_unordered(p, rasterize_openstreetmap, rasterize_jobs)
+    for _ in tqdm.tqdm(outputs, total=len(rasterize_jobs)):
         pass
     p.close()
+
+    # Also copy the metadata CSV but with image_idx replaced from "N/A" to "0".
+    src_modality_dir = get_modality_dir(
+        helios_path, Modality.OPENSTREETMAP, TimeSpan.STATIC
+    )
+    src_metadata_fname = helios_path / f"{src_modality_dir.name}.csv"
+    dst_modality_dir = get_modality_dir(
+        helios_path, Modality.OPENSTREETMAP_RASTER, TimeSpan.STATIC
+    )
+    dst_metadata_fname = helios_path / f"{dst_modality_dir.name}.csv"
+    with src_metadata_fname.open() as f:
+        reader = csv.DictReader(f)
+        fieldnames = reader.fieldnames
+        if fieldnames is None:
+            raise ValueError(f"got None for field names in {src_metadata_fname}")
+        csv_rows = list(reader)
+    for csv_row in csv_rows:
+        if csv_row["image_idx"] != "N/A":
+            raise ValueError("expected image_idx = N/A")
+        csv_row["image_idx"] = "0"
+    with dst_metadata_fname.open("w") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writerows(csv_rows)

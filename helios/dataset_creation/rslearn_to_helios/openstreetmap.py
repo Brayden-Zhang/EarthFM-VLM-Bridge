@@ -16,7 +16,6 @@ from datetime import datetime, timezone
 
 import tqdm
 from rslearn.dataset import Window
-from rslearn.utils.geometry import Projection
 from rslearn.utils.mp import star_imap_unordered
 from rslearn.utils.vector_format import GeojsonCoordinateMode, GeojsonVectorFormat
 from upath import UPath
@@ -34,9 +33,7 @@ END_TIME = datetime(2025, 1, 1, tzinfo=timezone.utc)
 # Layer name in the input rslearn dataset.
 LAYER_NAME = "openstreetmap"
 
-RESOLUTION = 0.625
-# Coordinates of OSM features are 16x zoomed in from the 10 m/pixel tiles.
-FACTOR = 16
+RESOLUTION = 10
 
 
 def convert_openstreetmap(window_path: UPath, helios_path: UPath) -> None:
@@ -47,23 +44,26 @@ def convert_openstreetmap(window_path: UPath, helios_path: UPath) -> None:
         helios_path: Helios dataset path to write to.
     """
     window = Window.load(window_path)
+    layer_datas = window.load_layer_datas()
+
+    if LAYER_NAME not in layer_datas:
+        return
+
+    layer_data = layer_datas[LAYER_NAME]
     window_metadata = get_window_metadata(window)
     vector_format = GeojsonVectorFormat(coordinate_mode=GeojsonCoordinateMode.CRS)
 
-    if not window.is_layer_completed(LAYER_NAME):
-        return
-
     # Load the vector data.
-    # decode_vector requires bounds to be passed, but the window bounds need to be
-    # adjusted by the zoom offset to match that of the stored data.
-    layer_dir = window.get_layer_dir(LAYER_NAME)
-    adjusted_bounds = (
-        window.bounds[0] * FACTOR,
-        window.bounds[1] * FACTOR,
-        window.bounds[2] * FACTOR,
-        window.bounds[3] * FACTOR,
-    )
-    features = vector_format.decode_vector(layer_dir, adjusted_bounds)
+    # It may end up in multiple layers if there are different OpenStreetMap GeoJSONs
+    # that match to the window due to just using their bounding box instead of actual
+    # extent. So we need to concatenate the features across all of the layers.
+    features = []
+    for group_idx in range(len(layer_data.serialized_item_groups)):
+        layer_dir = window.get_layer_dir(LAYER_NAME, group_idx=group_idx)
+        cur_features = vector_format.decode_vector(
+            layer_dir, window.projection, window.bounds
+        )
+        features.extend(cur_features)
 
     # Upload the data.
     dst_fname = get_modality_fname(
@@ -77,7 +77,6 @@ def convert_openstreetmap(window_path: UPath, helios_path: UPath) -> None:
     dst_fname.parent.mkdir(parents=True, exist_ok=True)
     vector_format.encode_to_file(
         fname=dst_fname,
-        projection=Projection(window.projection.crs, RESOLUTION, -RESOLUTION),
         features=features,
     )
 

@@ -39,7 +39,9 @@ def convert_worldcover(window_path: UPath, helios_path: UPath) -> None:
     assert len(Modality.WORLDCOVER.band_sets) == 1
     band_set = Modality.WORLDCOVER.band_sets[0]
     raster_dir = window.get_raster_dir(LAYER_NAME, band_set.bands)
-    image = GEOTIFF_RASTER_FORMAT.decode_raster(raster_dir, window.bounds)
+    image = GEOTIFF_RASTER_FORMAT.decode_raster(
+        raster_dir, window.projection, window.bounds
+    )
     dst_fname = get_modality_fname(
         helios_path,
         Modality.WORLDCOVER,
