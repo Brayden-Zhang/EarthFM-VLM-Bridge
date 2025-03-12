@@ -126,7 +126,7 @@ class PatchDiscriminationLoss(Loss):
                     labels.flatten(0, 1),
                     reduction="none",
                 ) * (self.tau * 2)
-                loss_multiplier = self._expand_and_reciprocate(torch.tensor[c])
+                loss_multiplier = self._expand_and_reciprocate(c)
                 loss = (loss * loss_multiplier).sum() / c
                 losses.append(loss)
                 start = end
