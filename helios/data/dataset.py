@@ -346,16 +346,17 @@ class HeliosDataset(Dataset):
         self.h5py_dir = self.tile_path / h5py_folder
         os.makedirs(self.h5py_dir, exist_ok=True)
 
+        if self.normalize:
+            # Initialize both predefined and computed normalizers
+            self.normalizer_predefined = Normalizer(Strategy.PREDEFINED)
+            self.normalizer_computed = Normalizer(Strategy.COMPUTED)
+
         # Check for existing HDF5 files
         self.h5py_files = self._get_existing_h5_files()
         if len(self.h5py_files) < len(self.samples):
             self._create_per_sample_h5py_storage()
             self.h5py_files = self._get_existing_h5_files()
 
-        if self.normalize:
-            # Initialize both predefined and computed normalizers
-            self.normalizer_predefined = Normalizer(Strategy.PREDEFINED)
-            self.normalizer_computed = Normalizer(Strategy.COMPUTED)
         self._fs_local_rank = get_fs_local_rank()
         self._work_dir: Path | None = None  # type: ignore
         self._work_dir_set = False
