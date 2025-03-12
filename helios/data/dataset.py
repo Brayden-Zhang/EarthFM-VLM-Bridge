@@ -342,7 +342,7 @@ class HeliosDataset(Dataset):
             raise ValueError("No samples provided")
         self.samples = self._filter_samples(samples)  # type: ignore
         # select the first half of the samples
-        self.samples = self.samples[: len(self.samples) // 2]
+        self.samples = self.samples[: len(self.samples) // 3]
         self.dtype = dtype
         self.normalize = normalize
         self.h5py_dir = self.tile_path / h5py_folder
