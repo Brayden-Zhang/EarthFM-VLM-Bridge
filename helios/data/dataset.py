@@ -344,6 +344,7 @@ class HeliosDataset(Dataset):
         self.dtype = dtype
         self.normalize = normalize
         self.h5py_dir = self.tile_path / h5py_folder
+        os.makedirs(self.h5py_dir, exist_ok=True)
 
         # Check for existing HDF5 files
         self.h5py_files = self._get_existing_h5_files()
