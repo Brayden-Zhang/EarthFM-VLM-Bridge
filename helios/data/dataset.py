@@ -330,6 +330,8 @@ def collate_helios(
 
         for i, sample in enumerate(batch):
             modality_data = getattr(sample, field)
+            if field == "sentinel1" and i == 2:
+                modality_data = None
             if modality_data is not None:
                 modality_data = torch.from_numpy(modality_data)
                 if expected_shape is None:
@@ -361,12 +363,6 @@ def collate_helios(
             )
             missing_modalities_masks[field][missing_data_indices] = True
         collated_dict[field] = torch.stack(modality_data_stack, dim=0)
-    # # check the collated dict for nans
-    # for field, modality in collated_dict.items():
-    #     if modality is not None:
-    #         if modality.isnan().any():
-    #             logger.info(f"modality {field} has nans: {modality[modality.isnan()]}")
-    #             raise ValueError(f"modality {field} has nans")
     collated_dict["missing_modalities_masks"] = missing_modalities_masks
 
     return HeliosSample(**collated_dict)

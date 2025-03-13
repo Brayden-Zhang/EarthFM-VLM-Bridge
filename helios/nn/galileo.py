@@ -50,14 +50,14 @@ class Galileo(nn.Module, DistributedMixins):
         """Forward pass for the Latent MIM Style."""
         # TODO: Input And outputs here are not consistent between encoder and decoder need a tokensandmaks++
         latent = self.encoder(x, patch_size=patch_size)
-        decoded = self.decoder_a(latent, timestamps=x.timestamps, patch_size=patch_size)
+        decoded = self.decoder_a(latent)
         return decoded
 
     def forward_b(self, x: MaskedHeliosSample, patch_size: int) -> TokensAndMasks:
         """Forward pass for the Latent MIM Style."""
         # TODO: Input And outputs here are not consistent between encoder and decoder need a tokensandmaks++
         latent = self.encoder(x, patch_size=patch_size)
-        decoded = self.decoder_b(latent, timestamps=x.timestamps, patch_size=patch_size)
+        decoded = self.decoder_b(latent)
         return decoded
 
 

@@ -126,7 +126,7 @@ def build_train_module_config(
     }
     token_exit_cfg_b = {modality: 0 for modality in common.supported_modality_names}
 
-    WARMUP_EPOCHS = 10
+    WARMUP_EPOCHS = 0
     dp_config = DataParallelConfig(name=DataParallelType.ddp)
 
     # TODO: would need a scheduler config and registry to be able to change this with overrides
@@ -154,9 +154,9 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
     # things should be set during building
     # TODO: Include collate function here
 
-    NUM_WORKERS = 8
+    NUM_WORKERS = 0
     NUM_THREADS = 0
-    GLOBAL_BATCH_SIZE = 128
+    GLOBAL_BATCH_SIZE = 32
 
     dataloader_config = HeliosDataLoaderConfig(
         global_batch_size=GLOBAL_BATCH_SIZE,
@@ -192,7 +192,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
         name=common.run_name,
         project=WANDB_PROJECT,
         entity=WANDB_USERNAME,
-        enabled=True,  # set to False to avoid wandb errors
+        enabled=False,  # set to False to avoid wandb errors
     )
     EVAL_INTERVAL_EPOCHS = 5
     EVAL_TASKS = [
