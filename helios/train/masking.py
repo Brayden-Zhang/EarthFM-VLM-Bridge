@@ -193,7 +193,9 @@ class MaskingStrategy(ABC):
         """
         pass
 
-    def apply_missing_mask(self, mask: torch.Tensor, missing_mask: torch.Tensor | None = None) -> torch.Tensor:
+    def apply_missing_mask(
+        self, mask: torch.Tensor, missing_mask: torch.Tensor | None = None
+    ) -> torch.Tensor:
         """Apply a missing mask to the input data.
 
         Args:
@@ -335,14 +337,10 @@ class TimeMaskingStrategy(MaskingStrategy):
                 modality = Modality.get(modality_name)
                 shape = instance.shape
                 if not modality.is_multitemporal:
-                    mask = self._create_random_mask(
-                        modality, shape,device
-                    )
+                    mask = self._create_random_mask(modality, shape, device)
                 else:
                     if temporal_mask is None:
-                        temporal_mask = self._create_temporal_mask(
-                            shape, device
-                        )
+                        temporal_mask = self._create_temporal_mask(shape, device)
                     b_s = shape[-1]
                     b, h, w = list(shape[:-2]) + [1] * (3 - len(shape[:-2]))
                     mask = repeat(
@@ -451,9 +449,7 @@ class SpaceMaskingStrategy(MaskingStrategy):
                 modality = Modality.get(modality_name)
                 shape = instance.shape
                 if not modality.is_spatial:
-                    mask = self._create_random_mask(
-                        modality, shape, missing_mask, device
-                    )
+                    mask = self._create_random_mask(modality, shape, device)
                 else:
                     if spatial_mask is None:
                         spatial_mask = self._create_spatial_mask(
@@ -662,7 +658,6 @@ class RandomMaskingStrategy(MaskingStrategy):
                     device: torch.device | None = instance.device
                 else:
                     device = None
-
 
                 mask = self._create_random_mask(
                     Modality.get(modality_name), instance.shape, device

@@ -14,9 +14,11 @@ from torch import Tensor, nn
 from helios.data.constants import Modality, ModalitySpec
 from helios.dataset.utils import get_modality_specs_from_names
 from helios.nn.attention import Block
-from helios.nn.encodings import (get_1d_sincos_pos_encoding,
-                                 get_2d_sincos_pos_encoding_with_resolution,
-                                 get_month_encoding_table)
+from helios.nn.encodings import (
+    get_1d_sincos_pos_encoding,
+    get_2d_sincos_pos_encoding_with_resolution,
+    get_month_encoding_table,
+)
 from helios.nn.flexi_patch_embed import FlexiPatchEmbed
 from helios.train.masking import MaskedHeliosSample, MaskValue
 
@@ -247,7 +249,6 @@ class FlexiHeliosPatchEmbeddings(nn.Module):
         modality_tokens, modality_masks = [], []
         for idx, channel_set_indices in enumerate(modality_spec.bandsets_as_indices()):
             modality_specific_kwargs = {}
-            # TODO: update to use the modlaity spec property here
             if not modality_spec.is_spatial:
                 # static in time
                 token_mask = modality_mask[..., idx]
@@ -261,11 +262,9 @@ class FlexiHeliosPatchEmbeddings(nn.Module):
                 patchified_data = self.per_modality_embeddings[modality][
                     self._get_embedding_module_name(modality, idx)
                 ](patchified_data, **modality_specific_kwargs)
-                if  patchified_data.isnan().any():
-                    logger.info(f"patchified_data is nan: {patchified_data[patchified_data.isnan()]} for modality {modality}")
             else:
                 logger.info(f"modality {modality} is not seen by encoder")
-                patchified_data = torch.empty(
+                patchified_data = torch.zeros(
                     modality_data.shape[0],
                     *patchified_dims,
                     self.embedding_size,
@@ -641,158 +640,6 @@ class FlexiHeliosBase(nn.Module):
             original_masks_dict[masked_modality_name] = x[masked_modality_name]
         return tokens_only_dict, original_masks_dict, modalities_to_dims_dict
 
-    # TODO: GIVE more explicit function names
-    @staticmethod
-    def split_x_y(
-        tokens: Tensor, mask: Tensor
-    ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
-        """Splits tokens into three groups based on mask values.
-
-        This function:
-        1. Sorts tokens according to the mask and gathers them in order.
-        2. Chooses tokens to be decoded (x) based on the mask value DECODER.
-        3. Chooses tokens to be used as context (y) based on the mask value ONLINE_ENCODER.
-        4. Identifies missing tokens (z) based on the mask value MISSING.
-        5. Returns boolean masks for x, y, and z along with indices to revert to the original ordering.
-
-        Args:
-            tokens: Tokens to split of shape [B, T, D].
-            mask: Mask of shape [B, T].
-
-        Returns:
-            unmasked_tokens: Tokens to be used as context of shape [B, Y_len, D].
-            tokens_to_decode: Tokens to be decoded of shape [B, X_len, D].
-            unmasked_tokens_mask: Binary mask for y tokens of shape [B, Y_len].
-            tokens_to_decode_mask: Binary mask for x tokens of shape [B, X_len].
-            indices: Indices for restoring the original token ordering of shape [B, T].
-        """
-        org_mask_dtype = mask.dtype
-        # Sort tokens by mask value (descending order)
-        sorted_mask, indices = torch.sort(
-            mask.int(), dim=1, descending=True, stable=True
-        )
-        tokens = tokens.gather(1, indices[:, :, None].expand_as(tokens))
-
-        # Create binary masks for each category
-        binarized_missing_mask = sorted_mask == MaskValue.MISSING.value
-        binarized_decoder_mask = sorted_mask == MaskValue.DECODER.value
-        missing_or_decoded_mask = binarized_missing_mask | binarized_decoder_mask
-        binarized_online_encoder_mask = sorted_mask == MaskValue.ONLINE_ENCODER.value
-
-        # Calculate per-sample counts for each category
-        missing_counts = binarized_missing_mask.sum(dim=1)  # [B]
-        decoder_counts = binarized_decoder_mask.sum(dim=1)  # [B]
-        encoder_counts = binarized_online_encoder_mask.sum(dim=1)  # [B]
-        missing_or_decoded_counts = missing_or_decoded_mask.sum(dim=1)  # [B]
-
-        max_length_of_unmasked_tokens = encoder_counts.max()
-        max_length_of_missing_or_decoded_tokens = missing_or_decoded_counts.max()
-        # Create padded tensors for each category
-        B, T, D = tokens.shape
-
-        if missing_counts.sum() > 0:
-            tokens_to_decode = torch.zeros(
-                (B, max_length_of_missing_or_decoded_tokens, D),
-                device=tokens.device,
-                dtype=tokens.dtype,
-            )
-            tokens_to_decode_mask = torch.zeros(
-                (B, max_length_of_missing_or_decoded_tokens),
-                device=tokens.device,
-                dtype=org_mask_dtype,
-            )
-            unmasked_tokens = torch.zeros(
-                (B, max_length_of_unmasked_tokens, D),
-                device=tokens.device,
-                dtype=tokens.dtype,
-            )
-            unmasked_tokens_mask = torch.zeros(
-                (B, max_length_of_unmasked_tokens),
-                device=tokens.device,
-                dtype=org_mask_dtype,
-            )
-            for b in range(B):
-                # Get counts for this batch
-                missing_count = missing_counts[b]
-                decoder_count = decoder_counts[b]
-                encoder_count = encoder_counts[b]
-                decoder_start = missing_count
-
-                if decoder_count > 0:
-                    decoder_end = decoder_start + decoder_count
-                    tokens_to_decode[b, decoder_start:decoder_end] = tokens[
-                        b, decoder_start : decoder_start + decoder_count
-                    ]
-                    tokens_to_decode_mask[b, decoder_start:decoder_end] = 1
-                if encoder_count > 0:
-                    # Given the current masking there will never be extra tokens that need to be masked but perhaps this could happen in future
-                    encoder_start = -encoder_count
-                    unmasked_tokens[b, encoder_start:] = tokens[b, encoder_start:]
-                    unmasked_tokens_mask[b, encoder_start:] = 1
-        else:
-            # the y mask is going to be used to determine which of the y values take. True values
-            # take part in the attention (we don't take the inverse here, unlike in the decoder)
-            tokens_to_decode = tokens[:, :max_length_of_missing_or_decoded_tokens]
-            tokens_to_decode_mask = binarized_decoder_mask[
-                :, :max_length_of_missing_or_decoded_tokens
-            ]
-
-            unmasked_tokens = tokens[:, -max_length_of_unmasked_tokens:]
-            # the x_mask is just going to be used in the reconstruction, to know which
-            # x tokens to add back into the token list. TODO is this even necessary? it could
-            # get padded with noise tokens since we don't care about reconstruction at all
-            # for a whole bunch of tokens
-            unmasked_tokens_mask = binarized_online_encoder_mask[
-                :, -max_length_of_unmasked_tokens:
-            ]
-
-        return (
-            unmasked_tokens,
-            tokens_to_decode,
-            unmasked_tokens_mask,
-            tokens_to_decode_mask,
-            indices,
-        )
-
-    @staticmethod
-    def combine_x_y(
-        unmasked_tokens: Tensor,
-        tokens_to_decode: Tensor,
-        unmasked_tokens_mask: Tensor,
-        tokens_to_decode_mask: Tensor,
-        indices: Tensor,
-    ) -> Tensor:
-        """Reintegrate the separated token sequences into their original order.
-
-        The token masks zero out positions which are not used/needed,
-        and the final scatter step re-applies the original ordering tracked in 'indices'.
-
-        Args:
-            unmasked_tokens: Query tokens of shape [B, X_len, D].
-            tokens_to_decode: Key/value tokens of shape [B, Y_len, D].
-            unmasked_tokens_mask: Binary mask for unmasked tokens of shape [B, X_len].
-            tokens_to_decode_mask: Binary mask for tokens to decode of shape [B, Y_len].
-            indices: Indices for restoring the original token ordering of shape [B, T].
-
-        Returns:
-            A merged tokens tensor of shape [B, T, D] with all tokens in their
-            original positions.
-        """
-        # Get dimensions
-        B, T = indices.shape[0], indices.shape[1]
-        D = unmasked_tokens.shape[-1]
-        tokens = torch.zeros(
-            (B, T, D), dtype=unmasked_tokens.dtype, device=unmasked_tokens.device
-        )
-        tokens[:, -tokens_to_decode.shape[1] :] = (
-            tokens_to_decode * tokens_to_decode_mask.unsqueeze(-1)
-        )
-        tokens[
-            :, : unmasked_tokens.shape[1]
-        ] += unmasked_tokens * unmasked_tokens_mask.unsqueeze(-1)
-        tokens = tokens.scatter(1, indices[:, :, None].expand_as(tokens), tokens)
-        return tokens
-
     @staticmethod
     def split_and_expand_per_modality(
         x: Tensor, modalities_to_dims_dict: dict[str, tuple]
@@ -1013,6 +860,158 @@ class Encoder(FlexiHeliosBase):
             exit_ids_seq = None
         return exit_ids_seq
 
+    # TODO: GIVE more explicit function names
+    @staticmethod
+    def split_x_y(
+        tokens: Tensor, mask: Tensor
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
+        """Splits tokens into three groups based on mask values.
+
+        This function:
+        1. Sorts tokens according to the mask and gathers them in order.
+        2. Chooses tokens to be decoded (x) based on the mask value DECODER.
+        3. Chooses tokens to be used as context (y) based on the mask value ONLINE_ENCODER.
+        4. Identifies missing tokens (z) based on the mask value MISSING.
+        5. Returns boolean masks for x, y, and z along with indices to revert to the original ordering.
+
+        Args:
+            tokens: Tokens to split of shape [B, T, D].
+            mask: Mask of shape [B, T].
+
+        Returns:
+            unmasked_tokens: Tokens to be used as context of shape [B, Y_len, D].
+            tokens_to_decode: Tokens to be decoded of shape [B, X_len, D].
+            unmasked_tokens_mask: Binary mask for y tokens of shape [B, Y_len].
+            tokens_to_decode_mask: Binary mask for x tokens of shape [B, X_len].
+            indices: Indices for restoring the original token ordering of shape [B, T].
+        """
+        org_mask_dtype = mask.dtype
+        # Sort tokens by mask value (descending order)
+        sorted_mask, indices = torch.sort(
+            mask.int(), dim=1, descending=True, stable=True
+        )
+        tokens = tokens.gather(1, indices[:, :, None].expand_as(tokens))
+
+        # Create binary masks for each category
+        binarized_missing_mask = sorted_mask == MaskValue.MISSING.value
+        binarized_decoder_mask = sorted_mask == MaskValue.DECODER.value
+        missing_or_decoded_mask = binarized_missing_mask | binarized_decoder_mask
+        binarized_online_encoder_mask = sorted_mask == MaskValue.ONLINE_ENCODER.value
+
+        # Calculate per-sample counts for each category
+        missing_counts = binarized_missing_mask.sum(dim=1)  # [B]
+        decoder_counts = binarized_decoder_mask.sum(dim=1)  # [B]
+        encoder_counts = binarized_online_encoder_mask.sum(dim=1)  # [B]
+        missing_or_decoded_counts = missing_or_decoded_mask.sum(dim=1)  # [B]
+
+        max_length_of_unmasked_tokens = encoder_counts.max()
+        max_length_of_missing_or_decoded_tokens = missing_or_decoded_counts.max()
+        # Create padded tensors for each category
+        B, T, D = tokens.shape
+
+        if missing_counts.sum() > 0:
+            tokens_to_decode = torch.zeros(
+                (B, max_length_of_missing_or_decoded_tokens, D),
+                device=tokens.device,
+                dtype=tokens.dtype,
+            )
+            tokens_to_decode_mask = torch.zeros(
+                (B, max_length_of_missing_or_decoded_tokens),
+                device=tokens.device,
+                dtype=org_mask_dtype,
+            )
+            unmasked_tokens = torch.zeros(
+                (B, max_length_of_unmasked_tokens, D),
+                device=tokens.device,
+                dtype=tokens.dtype,
+            )
+            unmasked_tokens_mask = torch.zeros(
+                (B, max_length_of_unmasked_tokens),
+                device=tokens.device,
+                dtype=org_mask_dtype,
+            )
+            for b in range(B):
+                # Get counts for this batch
+                missing_count = missing_counts[b]
+                decoder_count = decoder_counts[b]
+                encoder_count = encoder_counts[b]
+                decoder_start = missing_count
+
+                if decoder_count > 0:
+                    decoder_end = decoder_start + decoder_count
+                    tokens_to_decode[b, decoder_start:decoder_end] = tokens[
+                        b, decoder_start : decoder_start + decoder_count
+                    ]
+                    tokens_to_decode_mask[b, decoder_start:decoder_end] = 1
+                if encoder_count > 0:
+                    # Given the current masking there will never be extra tokens that need to be masked but perhaps this could happen in future
+                    encoder_start = -encoder_count
+                    unmasked_tokens[b, encoder_start:] = tokens[b, encoder_start:]
+                    unmasked_tokens_mask[b, encoder_start:] = 1
+        else:
+            # the y mask is going to be used to determine which of the y values take. True values
+            # take part in the attention (we don't take the inverse here, unlike in the decoder)
+            tokens_to_decode = tokens[:, :max_length_of_missing_or_decoded_tokens]
+            tokens_to_decode_mask = binarized_decoder_mask[
+                :, :max_length_of_missing_or_decoded_tokens
+            ]
+
+            unmasked_tokens = tokens[:, -max_length_of_unmasked_tokens:]
+            # the x_mask is just going to be used in the reconstruction, to know which
+            # x tokens to add back into the token list. TODO is this even necessary? it could
+            # get padded with noise tokens since we don't care about reconstruction at all
+            # for a whole bunch of tokens
+            unmasked_tokens_mask = binarized_online_encoder_mask[
+                :, -max_length_of_unmasked_tokens:
+            ]
+
+        return (
+            unmasked_tokens,
+            tokens_to_decode,
+            unmasked_tokens_mask,
+            tokens_to_decode_mask,
+            indices,
+        )
+
+    @staticmethod
+    def combine_x_y(
+        unmasked_tokens: Tensor,
+        tokens_to_decode: Tensor,
+        unmasked_tokens_mask: Tensor,
+        tokens_to_decode_mask: Tensor,
+        indices: Tensor,
+    ) -> Tensor:
+        """Reintegrate the separated token sequences into their original order.
+
+        The token masks zero out positions which are not used/needed,
+        and the final scatter step re-applies the original ordering tracked in 'indices'.
+
+        Args:
+            unmasked_tokens: Query tokens of shape [B, X_len, D].
+            tokens_to_decode: Key/value tokens of shape [B, Y_len, D].
+            unmasked_tokens_mask: Binary mask for unmasked tokens of shape [B, X_len].
+            tokens_to_decode_mask: Binary mask for tokens to decode of shape [B, Y_len].
+            indices: Indices for restoring the original token ordering of shape [B, T].
+
+        Returns:
+            A merged tokens tensor of shape [B, T, D] with all tokens in their
+            original positions.
+        """
+        # Get dimensions
+        B, T = indices.shape[0], indices.shape[1]
+        D = unmasked_tokens.shape[-1]
+        tokens = torch.zeros(
+            (B, T, D), dtype=unmasked_tokens.dtype, device=unmasked_tokens.device
+        )
+        tokens[:, -tokens_to_decode.shape[1] :] = (
+            tokens_to_decode * tokens_to_decode_mask.unsqueeze(-1)
+        )
+        tokens[:, : unmasked_tokens.shape[1]] += (
+            unmasked_tokens * unmasked_tokens_mask.unsqueeze(-1)
+        )
+        tokens = tokens.scatter(1, indices[:, :, None].expand_as(tokens), tokens)
+        return tokens
+
     def apply_attn(
         self,
         x: dict[str, Tensor],
@@ -1123,7 +1122,6 @@ class Encoder(FlexiHeliosBase):
         """
         # TODO: Add step to validate the exit config is valid
         patchified_tokens_and_masks = self.patch_embeddings.forward(x, patch_size)
-
 
         if (exit_after_n_layers is None) or (exit_after_n_layers > 0):
             patchified_tokens_and_masks = self.apply_attn(
@@ -1248,6 +1246,158 @@ class Predictor(FlexiHeliosBase):
 
         return output_dict
 
+    # TODO: GIVE more explicit function names
+    @staticmethod
+    def split_x_y(
+        tokens: Tensor, mask: Tensor
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
+        """Splits tokens into three groups based on mask values.
+
+        This function:
+        1. Sorts tokens according to the mask and gathers them in order.
+        2. Chooses tokens to be decoded (x) based on the mask value DECODER.
+        3. Chooses tokens to be used as context (y) based on the mask value ONLINE_ENCODER.
+        4. Identifies missing tokens (z) based on the mask value MISSING.
+        5. Returns boolean masks for x, y, and z along with indices to revert to the original ordering.
+
+        Args:
+            tokens: Tokens to split of shape [B, T, D].
+            mask: Mask of shape [B, T].
+
+        Returns:
+            unmasked_tokens: Tokens to be used as context of shape [B, Y_len, D].
+            tokens_to_decode: Tokens to be decoded of shape [B, X_len, D].
+            unmasked_tokens_mask: Binary mask for y tokens of shape [B, Y_len].
+            tokens_to_decode_mask: Binary mask for x tokens of shape [B, X_len].
+            indices: Indices for restoring the original token ordering of shape [B, T].
+        """
+        org_mask_dtype = mask.dtype
+        # Sort tokens by mask value (descending order)
+        sorted_mask, indices = torch.sort(
+            mask.int(), dim=1, descending=True, stable=True
+        )
+        tokens = tokens.gather(1, indices[:, :, None].expand_as(tokens))
+
+        # Create binary masks for each category
+        binarized_missing_mask = sorted_mask == MaskValue.MISSING.value
+        binarized_decoder_mask = sorted_mask == MaskValue.DECODER.value
+        missing_or_decoded_mask = binarized_missing_mask | binarized_decoder_mask
+        binarized_online_encoder_mask = sorted_mask == MaskValue.ONLINE_ENCODER.value
+
+        # Calculate per-sample counts for each category
+        missing_counts = binarized_missing_mask.sum(dim=1)  # [B]
+        decoder_counts = binarized_decoder_mask.sum(dim=1)  # [B]
+        encoder_counts = binarized_online_encoder_mask.sum(dim=1)  # [B]
+        missing_or_decoded_counts = missing_or_decoded_mask.sum(dim=1)  # [B]
+
+        max_length_of_unmasked_tokens = encoder_counts.max()
+        max_length_of_missing_or_decoded_tokens = missing_or_decoded_counts.max()
+        # Create padded tensors for each category
+        B, T, D = tokens.shape
+
+        if missing_counts.sum() > 0:
+            tokens_to_decode = torch.zeros(
+                (B, max_length_of_missing_or_decoded_tokens, D),
+                device=tokens.device,
+                dtype=tokens.dtype,
+            )
+            tokens_to_decode_mask = torch.zeros(
+                (B, max_length_of_missing_or_decoded_tokens),
+                device=tokens.device,
+                dtype=org_mask_dtype,
+            )
+            unmasked_tokens = torch.zeros(
+                (B, max_length_of_unmasked_tokens, D),
+                device=tokens.device,
+                dtype=tokens.dtype,
+            )
+            unmasked_tokens_mask = torch.zeros(
+                (B, max_length_of_unmasked_tokens),
+                device=tokens.device,
+                dtype=org_mask_dtype,
+            )
+            for b in range(B):
+                # Get counts for this batch
+                missing_count = missing_counts[b]
+                decoder_count = decoder_counts[b]
+                encoder_count = encoder_counts[b]
+                decoder_start = missing_count
+
+                if decoder_count > 0:
+                    decoder_end = decoder_start + decoder_count
+                    tokens_to_decode[b, decoder_start:decoder_end] = tokens[
+                        b, decoder_start : decoder_start + decoder_count
+                    ]
+                    tokens_to_decode_mask[b, decoder_start:decoder_end] = 1
+                if encoder_count > 0:
+                    # Given the current masking there will never be extra tokens that need to be masked but perhaps this could happen in future
+                    encoder_start = -encoder_count
+                    unmasked_tokens[b, encoder_start:] = tokens[b, encoder_start:]
+                    unmasked_tokens_mask[b, encoder_start:] = 1
+        else:
+            # the y mask is going to be used to determine which of the y values take. True values
+            # take part in the attention (we don't take the inverse here, unlike in the decoder)
+            tokens_to_decode = tokens[:, :max_length_of_missing_or_decoded_tokens]
+            tokens_to_decode_mask = binarized_decoder_mask[
+                :, :max_length_of_missing_or_decoded_tokens
+            ]
+
+            unmasked_tokens = tokens[:, -max_length_of_unmasked_tokens:]
+            # the x_mask is just going to be used in the reconstruction, to know which
+            # x tokens to add back into the token list. TODO is this even necessary? it could
+            # get padded with noise tokens since we don't care about reconstruction at all
+            # for a whole bunch of tokens
+            unmasked_tokens_mask = binarized_online_encoder_mask[
+                :, -max_length_of_unmasked_tokens:
+            ]
+
+        return (
+            unmasked_tokens,
+            tokens_to_decode,
+            unmasked_tokens_mask,
+            tokens_to_decode_mask,
+            indices,
+        )
+
+    @staticmethod
+    def combine_x_y(
+        unmasked_tokens: Tensor,
+        tokens_to_decode: Tensor,
+        unmasked_tokens_mask: Tensor,
+        tokens_to_decode_mask: Tensor,
+        indices: Tensor,
+    ) -> Tensor:
+        """Reintegrate the separated token sequences into their original order.
+
+        The token masks zero out positions which are not used/needed,
+        and the final scatter step re-applies the original ordering tracked in 'indices'.
+
+        Args:
+            unmasked_tokens: Query tokens of shape [B, X_len, D].
+            tokens_to_decode: Key/value tokens of shape [B, Y_len, D].
+            unmasked_tokens_mask: Binary mask for unmasked tokens of shape [B, X_len].
+            tokens_to_decode_mask: Binary mask for tokens to decode of shape [B, Y_len].
+            indices: Indices for restoring the original token ordering of shape [B, T].
+
+        Returns:
+            A merged tokens tensor of shape [B, T, D] with all tokens in their
+            original positions.
+        """
+        # Get dimensions
+        B, T = indices.shape[0], indices.shape[1]
+        D = unmasked_tokens.shape[-1]
+        tokens = torch.zeros(
+            (B, T, D), dtype=unmasked_tokens.dtype, device=unmasked_tokens.device
+        )
+        tokens[:, -tokens_to_decode.shape[1] :] = (
+            tokens_to_decode * tokens_to_decode_mask.unsqueeze(-1)
+        )
+        tokens[:, : unmasked_tokens.shape[1]] += (
+            unmasked_tokens * unmasked_tokens_mask.unsqueeze(-1)
+        )
+        tokens = tokens.scatter(1, indices[:, :, None].expand_as(tokens), tokens)
+        return tokens
+
     def apply_attn(
         self,
         x: dict[str, Tensor],
@@ -1313,23 +1463,10 @@ class Predictor(FlexiHeliosBase):
         modalities_to_process = get_modalities_to_process(
             available_modalities, self.supported_modality_names
         )
+
         for modality in modalities_to_process:
             masked_modality_name = MaskedHeliosSample.get_masked_modality_name(modality)
-            # Check if the mask exists, if not, create a default mask with all zeros
-            if masked_modality_name in tokens_and_masks:
-                modality_mask = tokens_and_masks[masked_modality_name]
-            else:
-                # Create a default mask with all zeros (no tokens to be replaced)
-                modality_data = tokens_and_masks[modality]
-                modality_mask = torch.zeros(
-                    modality_data.shape[
-                        :-1
-                    ],  # all dimensions except the last (embedding)
-                    dtype=torch.float32,  # should be configurable
-                    device=modality_data.device,
-                    requires_grad=modality_data.requires_grad,
-                )
-
+            modality_mask = tokens_and_masks[masked_modality_name]
             # patchify masked data
             per_modality_output_tokens = []
             modality_data = tokens_and_masks[modality]
@@ -1350,6 +1487,7 @@ class Predictor(FlexiHeliosBase):
                     logger.info(
                         f"modality_data in decoding {modality}: {modality_data.shape} is empty"
                     )
+                    # DO NOT PASS EMPTY TENSORS INTO ANY LAYER OR RISK MYSTERY NANS!!
                     output_data = torch.empty(
                         modality_data.shape[0],
                         *modality_specific_dims,
@@ -1445,7 +1583,5 @@ class PredictorConfig(Config):
         logger.info(f"Predictor kwargs: {kwargs}")
         return Predictor(**kwargs)
 
-
-# TODO: add multiple combo of variables for encoder and predictor, and being able to build them directly, no need to specify each parameter, e.g., encoder_tiny, encoder_small, encoder_base, encoder_large, etc.
 
 # TODO: add multiple combo of variables for encoder and predictor, and being able to build them directly, no need to specify each parameter, e.g., encoder_tiny, encoder_small, encoder_base, encoder_large, etc.
