@@ -186,21 +186,26 @@ class DownstreamEvaluatorCallbackConfig(CallbackConfig):
         if not self.enabled:
             return None
 
-        evaluators: list[Evaluator] = [
-            DownstreamEvaluator(
-                dataset=task.dataset,
-                trainer=trainer,
-                batch_size=task.batch_size,
-                num_workers=task.num_workers,
-                pooling_type=task.pooling_type,
-                norm_stats_from_pretrained=task.norm_stats_from_pretrained,
-                device=trainer.device,
-                probe_lr=task.probe_lr,
-                patch_size=task.patch_size,
+        evaluators: list[Evaluator] = []
+        # check that probe_lr is set for segmentation tasks
+        for task in self.tasks:
+            config = DATASET_TO_CONFIG[task.dataset]
+            if config.task_type == TaskType.SEGMENTATION:
+                if task.probe_lr is None:
+                    raise ValueError(f"probe_lr cannot be None for {task.dataset}")
+            evaluators.append(
+                DownstreamEvaluator(
+                    dataset=task.dataset,
+                    trainer=trainer,
+                    batch_size=task.batch_size,
+                    num_workers=task.num_workers,
+                    pooling_type=task.pooling_type,
+                    norm_stats_from_pretrained=task.norm_stats_from_pretrained,
+                    device=trainer.device,
+                    probe_lr=task.probe_lr,
+                    patch_size=task.patch_size,
+                )
             )
-            for task in self.tasks
-        ]
-
         return DownstreamEvaluatorCallback(
             evaluators=evaluators,
             eval_duration=self.eval_duration,
