@@ -335,7 +335,7 @@ class HeliosDataset(Dataset):
         """
         self.tile_path = tile_path
         self.supported_modalities = supported_modalities
-        # Note: if samples are provided, use them, if not, get them from the tile directory
+        # If samples are provided, use them, if not, get them from the tile directory
         if not samples:
             samples = self._get_samples()  # type: ignore
         if len(samples) == 0:
@@ -343,29 +343,16 @@ class HeliosDataset(Dataset):
         self.samples = self._filter_samples(samples)  # type: ignore
         self.dtype = dtype
         self.normalize = normalize
-        self.h5py_dir = self.tile_path / h5py_folder
+        self.h5py_dir = UPath("/root") / h5py_folder
         os.makedirs(self.h5py_dir, exist_ok=True)
 
         if self.normalize:
-            # Initialize both predefined and computed normalizers
             self.normalizer_predefined = Normalizer(Strategy.PREDEFINED)
             self.normalizer_computed = Normalizer(Strategy.COMPUTED)
-
-        # Check for existing HDF5 files
-        self.h5py_files = self._get_existing_h5_files()
-        if len(self.h5py_files) < len(self.samples):
-            self._create_per_sample_h5py_storage()
-            self.h5py_files = self._get_existing_h5_files()
 
         self._fs_local_rank = get_fs_local_rank()
         self._work_dir: Path | None = None  # type: ignore
         self._work_dir_set = False
-
-    def _get_existing_h5_files(self) -> set[str]:
-        """Get list of existing HDF5 sample files in the directory."""
-        return set(
-            f.split(".")[0] for f in os.listdir(self.h5py_dir) if f.endswith(".h5")
-        )
 
     @property
     def fingerprint_version(self) -> str:
@@ -509,8 +496,6 @@ class HeliosDataset(Dataset):
         logger.info(f"Number of samples after filtering: {len(filtered_samples)}")
         logger.info("Distribution of samples after filtering:")
         self._log_modality_distribution(filtered_samples)
-        # Use half of the samples
-        filtered_samples = filtered_samples[: len(filtered_samples) // 2]
         return filtered_samples
 
     def get_latlon(self, sample: SampleInformation) -> np.ndarray:
@@ -686,77 +671,33 @@ class HeliosDataset(Dataset):
         except Exception:
             return self.normalizer_predefined.normalize(modality, image)
 
-    # def __getitem__(self, index: int) -> HeliosSample:
-    #     """Get the item at the given index."""
-    #     sample = self.samples[index]
-    #     sample_dict = {}
-    #     for modality in sample.modalities:
-    #         sample_modality = sample.modalities[modality]
-    #         image = self.load_sample(sample_modality, sample)
-    #         # Convert Sentinel1 data to dB
-    #         if modality == Modality.SENTINEL1:
-    #             image = convert_to_db(image)
-    #         # Normalize data and convert to dtype
-    #         if self.normalize:
-    #             image = self.normalize_image(modality, image)
-    #         sample_dict[modality.name] = image.astype(self.dtype)
-    #         # Get latlon and timestamps from Sentinel2 data
-    #         if modality == Modality.SENTINEL2_L2A:
-    #             sample_dict["latlon"] = self.get_latlon(sample).astype(self.dtype)
-    #             sample_dict["timestamps"] = self._get_timestamps(sample)
-    #     return HeliosSample(**sample_dict)
-
-    def _create_per_sample_h5py_storage(self) -> None:
-        """Create individual HDF5 files for each sample if not already stored."""
-        print(f"🛠️ Creating individual HDF5 files in {self.h5py_dir}...")
-
-        for idx, sample in enumerate(tqdm(self.samples, desc="Saving to HDF5")):
-            sample_id = f"sample_{idx:05d}"
-            h5_path = os.path.join(self.h5py_dir, f"{sample_id}.h5")
-
-            if sample_id in self.h5py_files:
-                continue  # Skip if already saved
-
-            with h5py.File(h5_path, "w") as h5file:
-                sample_data = self._load_sample(sample)
-                for key, value in sample_data.as_dict().items():
-                    if value is not None:
-                        h5file.create_dataset(key, data=value, compression="gzip")
-
-            print(f"Saved {h5_path}")
-
-    def _load_sample(self, sample: SampleInformation) -> ArrayTensor:
-        """Load and process a single sample."""
-        sample_dict = {}
-        for modality in sample.modalities:
-            sample_modality = sample.modalities[modality]
-            image = self.load_sample(sample_modality, sample)
-
-            if modality == Modality.SENTINEL1:
-                image = convert_to_db(image)
-
-            if self.normalize:
-                image = self.normalize_image(modality, image)
-
-            sample_dict[modality.name] = image.astype(self.dtype)
-
-            if modality == Modality.SENTINEL2_L2A:
-                sample_dict["latlon"] = self.get_latlon(sample).astype(self.dtype)
-                sample_dict["timestamps"] = self._get_timestamps(sample)
-
-        return HeliosSample(**sample_dict)
-
     def __getitem__(self, index: int) -> HeliosSample:
-        """Retrieve a sample from its respective HDF5 file."""
-        sample_id = f"sample_{index:05d}"
-        h5_path = os.path.join(self.h5py_dir, f"{sample_id}.h5")
-
-        if not os.path.exists(h5_path):
-            raise FileNotFoundError(f"HDF5 file not found: {h5_path}")
-
-        with h5py.File(h5_path, "r") as h5file:
-            sample_dict = {key: np.array(h5file[key]) for key in h5file.keys()}
-
+        """Get the sample at the given index."""
+        sample = self.samples[index]
+        sample_dict = {}
+        h5_file_path = self.h5py_dir / f"sample_{index}.h5"
+        # If the h5 file does not exist, create it
+        if not h5_file_path.exists():
+            for modality in sample.modalities:
+                sample_modality = sample.modalities[modality]
+                image = self.load_sample(sample_modality, sample)
+                # Convert Sentinel1 data to dB
+                if modality == Modality.SENTINEL1:
+                    image = convert_to_db(image)
+                # Normalize data and convert to dtype
+                if self.normalize:
+                    image = self.normalize_image(modality, image)
+                sample_dict[modality.name] = image.astype(self.dtype)
+                # Get latlon and timestamps from Sentinel2 data
+                if modality == Modality.SENTINEL2_L2A:
+                    sample_dict["latlon"] = self.get_latlon(sample).astype(self.dtype)
+                    sample_dict["timestamps"] = self._get_timestamps(sample)
+            with h5py.File(h5_file_path, "w") as f:
+                for modality_name, image in sample_dict.items():
+                    f.create_dataset(modality_name, data=image)
+        else:
+            with h5py.File(h5_file_path, "r") as f:
+                sample_dict = {k: v[()] for k, v in f.items()}
         return HeliosSample(**sample_dict)
 
 
