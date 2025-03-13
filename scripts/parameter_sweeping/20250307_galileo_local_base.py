@@ -76,3 +76,4 @@ for lr, wd, warmup in itertools.product(LEARNING_RATES, WEIGHT_DECAYS, WARMUP_EP
 
     # Execute the command
     subprocess.run(command, shell=True, check=True)  # nosec
+    break
