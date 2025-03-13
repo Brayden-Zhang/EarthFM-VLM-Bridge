@@ -1054,19 +1054,7 @@ class Predictor(FlexiHeliosBase):
         for modality in modalities_to_process:
             x_modality = x[modality]
             mask_name = MaskedHeliosSample.get_masked_modality_name(modality)
-
-            # Check if the mask exists, if not, create a default mask with all zeros
-            if mask_name in x:
-                mask_modality = x[mask_name]
-            else:
-                # Create a default mask with all zeros (no tokens to be replaced)
-                mask_modality = torch.zeros(
-                    x_modality.shape[:-1],  # all dimensions except the last (embedding)
-                    dtype=torch.float32,
-                    device=x_modality.device,
-                    requires_grad=x_modality.requires_grad,
-                )
-
+            mask_modality = x[mask_name]
             # A boolean mask: True where tokens must be replaced by the mask token
             kept_mask = mask_modality == MaskValue.DECODER.value
 
