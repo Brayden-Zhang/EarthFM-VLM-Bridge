@@ -316,7 +316,7 @@ def collate_helios(
 
     # First, find a reference sample to get dtypes from
     # We'll use sentinel2_l2a as our reference since it's always required
-    reference_dtype = batch[0].sentinel2_l2a.dtype
+    reference_dtype = torch.from_numpy(batch[0].sentinel2_l2a).dtype
     sample_fields = set(batch[0].modalities).union(
         modality.name for modality in supported_modalities
     )
@@ -329,13 +329,19 @@ def collate_helios(
         found_dtype = None
 
         for i, sample in enumerate(batch):
-            modality_data = torch.from_numpy(getattr(sample, field))
+            modality_data = getattr(sample, field)
+            if field =="sentinel1" and i == 2:
+                logger.info(f"sample {i} has no sentinel1")
+                # artificially create a missing modality
+                modality_data = None
             if modality_data is not None:
+                modality_data = torch.from_numpy(modality_data)
                 if expected_shape is None:
                     expected_shape = modality_data.shape
                     found_dtype = modality_data.dtype
                 modality_data_stack.append(modality_data)
             else:
+                logger.info(f"missing data for modality: {field}")
                 missing_data_indices.append(i)
                 modality_data_stack.append(None)  # Placeholder
 
@@ -346,10 +352,10 @@ def collate_helios(
 
         # Second pass: fill in missing data with empty tensors of the right shape and dtype
         dtype_to_use = found_dtype if found_dtype is not None else reference_dtype
-
+        logger.info(f"expected_shape: {expected_shape}, dtype_to_use: {dtype_to_use}")
         for i in missing_data_indices:
-            modality_data_stack[i] = torch.empty(
-                expected_shape, dtype=dtype_to_use,
+            modality_data_stack[i] = torch.full(
+                expected_shape, float('nan'), dtype=dtype_to_use,
             )
         if missing_data_indices:
             missing_modalities_masks[field] = torch.zeros(
@@ -357,6 +363,12 @@ def collate_helios(
             )
             missing_modalities_masks[field][missing_data_indices] = True
         collated_dict[field] = torch.stack(modality_data_stack, dim=0)
+    # # check the collated dict for nans
+    # for field, modality in collated_dict.items():
+    #     if modality is not None:
+    #         if modality.isnan().any():
+    #             logger.info(f"modality {field} has nans: {modality[modality.isnan()]}")
+    #             raise ValueError(f"modality {field} has nans")
     collated_dict["missing_modalities_masks"] = missing_modalities_masks
 
     return HeliosSample(**collated_dict)
@@ -515,16 +527,21 @@ class HeliosDataset(Dataset):
         for sample in samples:
             if sample.grid_tile.resolution_factor != resolution_factor:
                 continue
-            # Check if all the modalities are available that are read in
+            # Check if all the modalities are supported that are read in
             if not all(
-                modality in sample.modalities
-                for modality in self.supported_modalities
+                modality in self.supported_modalities
+                for modality in sample.modalities
                 if not modality.ignore_when_parsing
             ):
+                continue
+            if sample.time_span != TimeSpan.YEAR:
                 continue
             # check if sample modalities have s1 and s2
             has_s1 = Modality.SENTINEL1 in sample.modalities
             has_s2 = Modality.SENTINEL2_L2A in sample.modalities
+            if not has_s2:
+                # If any of our samples don't have S2 this will be a problem
+                continue
             if has_s1:
                 sentinel1_months = len(
                     set(sample.modalities[Modality.SENTINEL1].images)
@@ -541,8 +558,6 @@ class HeliosDataset(Dataset):
                 # Check if S1 and S2 all have the same 12 months of data
                 if sentinel1_months != sentinel2_months:
                     continue
-            if sample.time_span != TimeSpan.YEAR:
-                continue
             filtered_samples.append(sample)
         logger.info(f"Number of samples after filtering: {len(filtered_samples)}")
         logger.info("Distribution of samples after filtering:")

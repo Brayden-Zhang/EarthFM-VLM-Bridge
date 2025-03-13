@@ -55,14 +55,20 @@ class LatentMIM(nn.Module, DistributedMixins):
         # total_value = 0
         # for modality in x.modalities:
         #     total_value += getattr(x, modality).sum()
-        # logger.info(f"total value input: {total_value}")
+        # logger.info(f"total value input: {total_value}"
+        # logger.info(f"sentinel1_mask num_missing: {(x.sentinel1_mask == 3).sum()}")
+        # for modality in x.modalities:
+        #     modality_value = getattr(x, modality)
+        #     if modality_value.isnan().any():
+        #         logger.info(f"modality value is nan before encoder: {modality} {modality_value[modality_value.isnan()]}")
+        #         raise ValueError(f"modality value is nan: {modality}")
         latent = self.encoder(x, patch_size=patch_size)
         # total_value = 0
-        # for modality in x.modalities:
-        #     modality_value = getattr(latent, modality).sum()
-        #     logger.info(f"modality value: {modality} {modality_value}")
-        #     total_value += modality_value
-        # logger.info(f"total value after encoder: {total_value}")
+        for modality in x.modalities:
+            modality_value = getattr(latent, modality)
+            if modality_value.isnan().any():
+                logger.info(f"modality value is nan before decoder: {modality} {modality_value[modality_value.isnan()]}")
+
         # total_value = 0
         decoded = self.decoder(latent)
         # for modality in x.modalities:

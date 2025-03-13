@@ -227,7 +227,13 @@ class MaskingStrategy(ABC):
 
         mask = torch.as_tensor(flat_mask_tokens, device=device)
         if missing_mask is not None:
-            flat_mask_tokens[missing_mask] = MaskValue.MISSING.value
+            mask[missing_mask] = MaskValue.MISSING.value
+        # Log how many encoded decoding and missing tokens for each modality
+        logger.info(f"modality: {modality}")
+        logger.info(f"encoded tokens: {(mask == MaskValue.ONLINE_ENCODER.value).sum()}")
+        logger.info(f"target encoder only tokens: {(mask == MaskValue.TARGET_ENCODER_ONLY.value).sum()}")
+        logger.info(f"decoding tokens: {(mask == MaskValue.DECODER.value).sum()}")
+        logger.info(f"missing tokens: {(mask == MaskValue.MISSING.value).sum()}")
         # want to use the helios sample right here
         mask = mask.view(*shape)
         return mask

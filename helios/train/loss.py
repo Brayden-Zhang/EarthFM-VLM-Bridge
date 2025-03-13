@@ -80,7 +80,6 @@ class PatchDiscriminationLoss(Loss):
             The computed loss value.
         """
         all_preds, all_masks = predictions.flatten_tokens_and_masks()
-        logger.info(f"all preds sum and std: {all_preds.sum()}, {all_preds.std()}")
         all_targets = targets.flatten_tokens_and_masks()[0]
         logger.info(
             f"all targets sum and std: {all_targets.sum()}, {all_targets.std()}"
@@ -89,20 +88,18 @@ class PatchDiscriminationLoss(Loss):
         # First way: even indices
         even_indices = torch.arange(0, all_masks.shape[-1], 2, device=all_masks.device)
         even_sum = all_masks[:, even_indices].sum()
-        logger.info(f"Sum of even indices in all_masks: {even_sum}")
 
         # Second way: odd indices
         odd_indices = torch.arange(1, all_masks.shape[-1], 2, device=all_masks.device)
         odd_sum = all_masks[:, odd_indices].sum()
-        logger.info(f"Sum of odd indices in all_masks: {odd_sum}")
         decoder_mask = all_masks == MaskValue.DECODER.value
-        logger.info(
-            f"decoder_mask: {decoder_mask.shape} decoder mask value {decoder_mask.sum(dim=-1)}"
-        )
-        logger.info(f"pred: {all_preds[decoder_mask].shape}")
         pred = all_preds[decoder_mask].unsqueeze(dim=0)
-        logger.info(f"pred: {pred.shape}")
         target = all_targets[decoder_mask].unsqueeze(dim=0)
+        # check pred or target is nan
+        if pred.isnan().any():
+            logger.info(f"pred is nan: {pred[pred.isnan()]}")
+        if target.isnan().any():
+            logger.info(f"target is nan: {target[target.isnan()]}")
         bs, nt, _ = pred.shape
 
         if self.pred2unit:
@@ -115,7 +112,6 @@ class PatchDiscriminationLoss(Loss):
 
         scores = torch.einsum("npd,nqd->npq", pred, target) / self.tau
         count = (all_masks == MaskValue.DECODER.value).sum(dim=-1)
-        logger.info(f"count: {count}")
         if self.mask_other_samples:
             logit_mask = torch.full_like(scores, -torch.finfo(scores.dtype).max)
             start = 0
@@ -123,8 +119,6 @@ class PatchDiscriminationLoss(Loss):
                 end = start + c
                 logit_mask[:, start:end, start:end] = 0
                 start += c
-            logger.info(f"logit_mask: {logit_mask.shape}")
-            logger.info(f"scores: {scores.shape}")
             scores = scores + logit_mask
 
         labels = torch.arange(nt, dtype=torch.long, device=pred.device)[None].repeat(

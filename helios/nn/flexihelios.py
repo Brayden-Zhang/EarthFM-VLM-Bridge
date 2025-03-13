@@ -261,6 +261,8 @@ class FlexiHeliosPatchEmbeddings(nn.Module):
                 patchified_data = self.per_modality_embeddings[modality][
                     self._get_embedding_module_name(modality, idx)
                 ](patchified_data, **modality_specific_kwargs)
+                if  patchified_data.isnan().any():
+                    logger.info(f"patchified_data is nan: {patchified_data[patchified_data.isnan()]} for modality {modality}")
             else:
                 logger.info(f"modality {modality} is not seen by encoder")
                 patchified_data = torch.empty(
@@ -1042,9 +1044,6 @@ class Encoder(FlexiHeliosBase):
         new_mask = mask != MaskValue.ONLINE_ENCODER.value
 
         tokens, indices, new_mask = self.remove_masked_tokens(x, new_mask)
-        logger.info(
-            f"sum and std of tokens we do attention on: {tokens.sum()} {tokens.std()}"
-        )
         if exit_ids_seq is not None:
             exit_ids_seq, _, _ = self.remove_masked_tokens(exit_ids_seq, mask)
             # still linear projections
@@ -1084,11 +1083,11 @@ class Encoder(FlexiHeliosBase):
             )
         # we apply the norm before we add the removed tokens,
         # so that the norm is only computed against "real" tokens
-        logger.info(
+        logger.debug(
             f"sum and std of tokens before norm: {tokens.sum()} {tokens.std()} shape {tokens.shape}"
         )
         tokens = self.norm(tokens)
-        logger.info(f"sum and std of tokens after norm: {tokens.sum()} {tokens.std()}")
+        logger.debug(f"sum and std of tokens after norm: {tokens.sum()} {tokens.std()}")
         # we don't care about the mask returned by add_removed_tokens, since we will
         # just use the original, unclipped mask here
         tokens, _ = self.add_removed_tokens(tokens, indices, new_mask)
@@ -1124,6 +1123,8 @@ class Encoder(FlexiHeliosBase):
         """
         # TODO: Add step to validate the exit config is valid
         patchified_tokens_and_masks = self.patch_embeddings.forward(x, patch_size)
+
+
         if (exit_after_n_layers is None) or (exit_after_n_layers > 0):
             patchified_tokens_and_masks = self.apply_attn(
                 x=patchified_tokens_and_masks,
@@ -1133,11 +1134,6 @@ class Encoder(FlexiHeliosBase):
                 exit_after_n_layers=exit_after_n_layers,
                 token_exit_cfg=token_exit_cfg,
             )
-        total_value = 0
-        for modality in x.modalities:
-            modality_value = patchified_tokens_and_masks[modality].sum()
-            logger.info(f"modality value after attn: {modality} {modality_value}")
-            total_value += modality_value
         return TokensAndMasks(**patchified_tokens_and_masks)
 
 

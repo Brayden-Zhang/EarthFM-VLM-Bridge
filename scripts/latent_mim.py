@@ -107,7 +107,7 @@ def build_train_module_config(
     )
     token_exit_cfg = {modality: 0 for modality in common.supported_modality_names}
 
-    WARMUP_EPOCHS = 10
+    WARMUP_EPOCHS = 0
     dp_config = DataParallelConfig(name=DataParallelType.ddp)
 
     # TODO: would need a scheduler config and registry to be able to change this with overrides
@@ -164,14 +164,14 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
     CANCEL_CHECK_INTERVAL = 1
     LOAD_STRATEGY = LoadStrategy.if_available
     WANDB_USERNAME = "eai-ai2"  # nosec
-    WANDB_PROJECT = "helios-train"
+    WANDB_PROJECT = "helios-debug"
     checkpointer_config = CheckpointerConfig(work_dir=common.save_folder)
     wandb_callback = HeliosWandBCallback(
         name=common.run_name,
         project=WANDB_PROJECT,
         entity=WANDB_USERNAME,
         upload_dataset_distribution_pre_train=False,
-        enabled=True,  # set to False to avoid wandb errors
+        enabled=False,  # set to False to avoid wandb errors
     )
     EVAL_INTERVAL_EPOCHS = 5
     EVAL_TASKS = [
