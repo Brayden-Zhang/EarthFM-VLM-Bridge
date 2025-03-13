@@ -612,7 +612,8 @@ def test_modality_mask_and_unmask() -> None:
         timestamps=timestamps,
         worldcover=torch.ones((b, h, w, worldcover_num_bands)),
     )
-    total_modalities = len(batch.as_dict()) - 1
+    # count all modalities except timestamps
+    total_modalities = len(batch.modalities) - 1
     encode_ratio, decode_ratio = 0.25, 0.5
     masked_sample = ModalityMaskingStrategy(
         encode_ratio=encode_ratio,
