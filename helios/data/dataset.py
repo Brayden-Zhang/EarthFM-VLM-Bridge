@@ -347,7 +347,9 @@ class HeliosDataset(Dataset):
         self.h5py_dir = (
             self.tile_path
             / h5py_folder
-            / "_".join([modality.name for modality in self.supported_modalities])
+            / "_".join(
+                sorted([modality.name for modality in self.supported_modalities])
+            )
             / str(len(self.samples))
         )
         os.makedirs(self.h5py_dir, exist_ok=True)
@@ -371,7 +373,7 @@ class HeliosDataset(Dataset):
         sha256_hash = hashlib.sha256()
         sha256_hash.update(
             f"tile_path={self.tile_path},"
-            f"supported_modalities={[m.name for m in self.supported_modalities]},"
+            f"supported_modalities={sorted([m.name for m in self.supported_modalities])},"
             f"sample_size={len(self.samples)},"
             f"dtype={self.dtype}".encode()
         )
