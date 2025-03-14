@@ -237,8 +237,9 @@ class MaskingStrategy(ABC):
         else:
             flat_mask_tokens = self.generator.permuted(flat_mask_tokens)
 
-        mask = torch.as_tensor(flat_mask_tokens, device=device)
-        mask = mask.view(*shape)
+        mask = flat_mask_tokens.reshape(*shape)
+
+        mask = torch.as_tensor(mask, device=device)
         return mask
 
     @property
@@ -346,7 +347,7 @@ class TimeMaskingStrategy(MaskingStrategy):
                     mask = repeat(
                         temporal_mask, "b t -> b h w t b_s", h=h, w=w, b_s=b_s
                     )
-                    mask = mask.view(*shape)
+                    mask = mask.view(*shape).contiguous()
                 missing_mask = missing_mask_dict.get(modality_name, None)
                 mask = self.apply_missing_mask(mask, missing_mask)
                 output_dict[modality_name] = instance
@@ -457,7 +458,7 @@ class SpaceMaskingStrategy(MaskingStrategy):
                         )
                     time_and_bandsets = np.prod(shape[3:])
                     mask = repeat(spatial_mask, "... -> ... n", n=time_and_bandsets)
-                    mask = mask.view(*shape)
+                    mask = mask.view(*shape).contiguous()
                 missing_mask = missing_mask_dict.get(modality_name, None)
                 mask = self.apply_missing_mask(mask, missing_mask)
                 output_dict[modality_name] = instance
@@ -529,7 +530,7 @@ class ModalityMaskingStrategy(MaskingStrategy):
             b_s = shape[-1]
             b, h, w, t = list(shape[:-1]) + [1] * (4 - len(shape[:-1]))
             mask = repeat(modality_mask, "b -> b h w t b_s", h=h, w=w, b_s=b_s, t=t)
-            mask = mask.view(*shape)
+            mask = mask.view(*shape).contiguous()
             missing_mask = missing_mask_dict.get(modality, None)
             mask = self.apply_missing_mask(mask, missing_mask)
             output_dict[MaskedHeliosSample.get_masked_modality_name(modality)] = mask
