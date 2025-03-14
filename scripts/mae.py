@@ -38,12 +38,12 @@ STEPS_PER_EPOCH = 100
 
 def build_model_config(common: CommonComponents) -> MAEConfig:
     """Build the model config for an experiment."""
-    MAX_PATCH_SIZE = 32  # NOTE: actual patch_size <= max_patch_size
+    MAX_PATCH_SIZE = 8  # NOTE: actual patch_size <= max_patch_size
     TOKEN_BUDGET = 1500
     # IF HW MIN is too small , then we cna have microbatches with very uneven token budgets
     # which may cause issues
-    H_W_TO_SAMPLE_MIN = 8
-    H_W_TO_SAMPLE_MAX = 8
+    H_W_TO_SAMPLE_MIN = 5
+    H_W_TO_SAMPLE_MAX = 13
     ENCODER_EMBEDDING_SIZE = 256
     DECODER_EMBEDDING_SIZE = 256
     ENCODER_DEPTH = 4

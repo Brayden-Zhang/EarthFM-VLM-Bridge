@@ -20,8 +20,8 @@ class MAE(nn.Module, DistributedMixins):
         decoder: nn.Module,
         transform: Transform,
         token_budget: int = 1500,
-        h_w_to_sample_min: int = 8,
-        h_w_to_sample_max: int = 8,
+        h_w_to_sample_min: int = 2,
+        h_w_to_sample_max: int = 13,
     ):
         """Initialize the MAE Module.
 
@@ -43,7 +43,6 @@ class MAE(nn.Module, DistributedMixins):
 
     def forward(self, x: MaskedHeliosSample, patch_size: int) -> TokensAndMasks:
         """Forward pass for the MAE Module."""
-        # TODO: Input And outputs here are not consistent between encoder and decoder need a tokensandmaks++
         latent = self.encoder(x, patch_size=patch_size)
         decoded = self.decoder(latent, timestamps=x.timestamps, patch_size=patch_size)
         return decoded
@@ -57,8 +56,8 @@ class MAEConfig(Config):
     decoder_config: "PredictorConfig"
     transform_type: str = "no_transform"
     token_budget: int = 1500
-    h_w_to_sample_min: int = 8
-    h_w_to_sample_max: int = 8
+    h_w_to_sample_min: int = 2
+    h_w_to_sample_max: int = 13
 
     def validate(self) -> None:
         """Validate the configuration."""
