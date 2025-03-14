@@ -693,13 +693,9 @@ class HeliosDataset(Dataset):
                 for modality_name, image in sample_dict.items():
                     f.create_dataset(modality_name, data=image)
         else:
-            import time
-
-            start_time = time.time()
+            # took about 0.02 seconds to read h5 data
             with h5py.File(h5_file_path, "r") as f:
                 sample_dict = {k: v[()] for k, v in f.items()}
-            end_time = time.time()
-            logger.info(f"Time taken to read h5 data: {end_time - start_time} seconds")
         # Apply normalization
         if self.normalize:
             for modality in sample.modalities:

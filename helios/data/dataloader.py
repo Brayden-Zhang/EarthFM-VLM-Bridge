@@ -177,7 +177,7 @@ class HeliosDataLoader(DataLoaderBase):
             _IterableDatasetWrapper(self),
             batch_size=None,
             num_workers=self.num_workers,
-            pin_memory=False,
+            pin_memory=self.target_device_type == "cuda" and self.num_workers > 0,
             prefetch_factor=self.prefetch_factor,
             persistent_workers=self.persistent_workers
             if self.num_workers > 0
@@ -407,7 +407,7 @@ class HeliosDataLoaderConfig(Config):
     num_threads: int | None = None
     num_workers: int = 0
     prefetch_factor: int | None = None
-    target_device_type: str = "cpu"
+    target_device_type: str = "cuda"
     drop_last: bool = True
 
     def validate(self) -> None:
