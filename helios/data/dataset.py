@@ -2,6 +2,7 @@
 
 import hashlib
 import logging
+import multiprocessing as mp
 import os
 import random
 import tempfile
@@ -363,7 +364,7 @@ class HeliosDataset(Dataset):
         sha256_hash.update(
             f"tile_path={self.tile_path},"
             f"supported_modalities={sorted([m.name for m in self.supported_modalities])},"
-            f"sample_size={len(self.sample_indices)},"
+            f"sample_size={len(self)},"
             f"dtype={self.dtype}".encode()
         )
         return sha256_hash.hexdigest()
@@ -397,7 +398,9 @@ class HeliosDataset(Dataset):
         """Check if the working directory was explicitly set."""
         return self._work_dir_set
 
-    def process_sample_into_h5(self,index_sample_tuple: tuple[int, SampleInformation]) -> None:
+    def process_sample_into_h5(
+        self, index_sample_tuple: tuple[int, SampleInformation]
+    ) -> None:
         """Process a sample into an h5 file."""
         i, sample = index_sample_tuple
         h5_file_path = self._get_h5_file_path(i)
@@ -405,19 +408,13 @@ class HeliosDataset(Dataset):
             return
         self._create_h5_file(sample, h5_file_path)
 
-
     def create_h5_dataset(self, samples: list[SampleInformation]) -> int:
         """Create a dataset of the samples in h5 format in a shared weka directory under the given fingerprint.
 
         Returns:
             The last index of the samples that was processed.
         """
-        # TODO: Make this multi-processed so it is much faster
-        from tqdm import tqdm
-        import multiprocessing as mp
-
         total_sample_indices = len(samples)
-
 
         # Determine number of processes to use (leave one core free)
         num_processes = max(1, mp.cpu_count() - 2)
@@ -426,12 +423,13 @@ class HeliosDataset(Dataset):
         # Create a pool of workers
         with mp.Pool(processes=num_processes) as pool:
             # Process samples in parallel and track progress with tqdm
-            results = list(tqdm(
-                pool.imap(self.process_sample_into_h5, enumerate(samples)),
-                total=total_sample_indices,
-                desc="Creating H5 files"
-            ))
-
+            _ = list(
+                tqdm(
+                    pool.imap(self.process_sample_into_h5, enumerate(samples)),
+                    total=total_sample_indices,
+                    desc="Creating H5 files",
+                )
+            )
 
         logger.info(f"Processed all {total_sample_indices} H5 files")
         sample_indices = np.arange(total_sample_indices)
@@ -605,7 +603,9 @@ class HeliosDataset(Dataset):
         lon, lat = transformer.transform(x, y)
         return np.array([lat, lon])
 
-    def get_geographic_distribution(self, samples: list[SampleInformation]) -> np.ndarray:
+    def get_geographic_distribution(
+        self, samples: list[SampleInformation]
+    ) -> np.ndarray:
         """Get the geographic distribution of the dataset.
 
         Returns:
@@ -803,7 +803,9 @@ class HeliosDataset(Dataset):
         with h5py.File(h5_file_path, "r") as f:
             sample_dict = {k: v[()] for k, v in f.items()}
         # Sample modalities should be written into the metadata of the h5 dataset
-        sample_modalities = list([Modality.get(key) for key in sample_dict.keys() if key != "timestamps"])
+        sample_modalities = list(
+            [Modality.get(key) for key in sample_dict.keys() if key != "timestamps"]
+        )
         if self.normalize:
             for modality in sample_modalities:
                 sample_dict[modality.name] = self.normalize_image(

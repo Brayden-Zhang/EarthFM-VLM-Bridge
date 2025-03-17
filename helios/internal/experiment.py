@@ -199,7 +199,7 @@ def launch(config: HeliosExperimentConfig) -> None:
     logger.info("Launching the experiment")
     logger.info(config)
     # Set follow=False if you don't want to stream the logs to the terminal
-    config.launch.launch(follow=True)
+    config.launch.launch(follow=False)
 
 
 def prep(config: HeliosExperimentConfig) -> None:
@@ -215,6 +215,7 @@ def prep(config: HeliosExperimentConfig) -> None:
     data_loader.reshuffle(epoch=1)
     # Also may want to create the first index of shuffling here for starters
 
+
 def launch_prep(config: HeliosExperimentConfig) -> None:
     """Launch the preparation of the dataset for an experiment."""
     assert config.launch is not None
@@ -222,7 +223,9 @@ def launch_prep(config: HeliosExperimentConfig) -> None:
     config.launch.num_nodes = 1
     logger.info(config)
     logger.info("Launching the preparation of the dataset...")
-    logger.info("Follow along until the dataset is prepared and saved to Weka then stop the script")
+    logger.info(
+        "Follow along until the dataset is prepared and saved to Weka then stop the script"
+    )
     config.launch.launch(follow=True, torchrun=False)
 
 
