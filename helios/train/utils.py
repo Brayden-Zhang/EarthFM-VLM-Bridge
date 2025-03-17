@@ -36,16 +36,7 @@ def split_batch(batch: HeliosSample, microbatch_size: int) -> list[HeliosSample]
         microbatch_dict = {}
         for field_name, data in batch_dict.items():
             assert data is not None
-            # Handle missing_modalities_masks specially since it's a dictionary
-            if field_name == "missing_modalities_masks":
-                # Create a new dictionary with sliced tensors
-                sliced_masks = {}
-                for modality, mask in data.items():
-                    sliced_masks[modality] = mask[start:end]
-                microbatch_dict[field_name] = sliced_masks
-            else:
-                # Otherwise, assume the first dimension is batch dimension and slice it
-                microbatch_dict[field_name] = data[start:end]
+            microbatch_dict[field_name] = data[start:end]
 
         # Create a new HeliosSample from the sliced fields
         microbatches.append(HeliosSample(**microbatch_dict))

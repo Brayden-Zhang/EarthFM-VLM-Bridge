@@ -190,9 +190,11 @@ class MaskingStrategy(ABC):
         """
         pass
 
-    def get_missing_mask(self, instance: ArrayTensor) -> ArrayTensor:
+    def get_missing_mask(self, instance: torch.Tensor) -> torch.Tensor:
         """Get the missing mask for the input data."""
-        return instance == MISSING_VALUE
+        missing_mask = instance == MISSING_VALUE
+        mask = missing_mask.all(dim=tuple(range(1, instance.ndim)))
+        return mask
 
     def apply_missing_mask(
         self, mask: torch.Tensor, missing_mask: torch.Tensor | None = None
@@ -348,7 +350,7 @@ class TimeMaskingStrategy(MaskingStrategy):
                         temporal_mask, "b t -> b h w t b_s", h=h, w=w, b_s=b_s
                     )
                     mask = mask.view(*shape).contiguous()
-                missing_mask = instance == MISSING_VALUE
+                missing_mask = self.get_missing_mask(instance)
                 mask = self.apply_missing_mask(mask, missing_mask)
                 output_dict[modality_name] = instance
                 output_dict[
@@ -426,7 +428,6 @@ class SpaceMaskingStrategy(MaskingStrategy):
         Returns:
             MaskedHeliosSample containing the masked data and mask
         """
-        missing_mask_dict = batch.missing_modalities_masks
         output_dict: dict[str, ArrayTensor | None] = {}
         spatial_mask = None
         for modality_name in batch.modalities:
@@ -459,7 +460,7 @@ class SpaceMaskingStrategy(MaskingStrategy):
                     time_and_bandsets = np.prod(shape[3:])
                     mask = repeat(spatial_mask, "... -> ... n", n=time_and_bandsets)
                     mask = mask.view(*shape).contiguous()
-                missing_mask = missing_mask_dict.get(modality_name, None)
+                missing_mask = self.get_missing_mask(instance)
                 mask = self.apply_missing_mask(mask, missing_mask)
                 output_dict[modality_name] = instance
                 output_dict[
@@ -495,7 +496,6 @@ class ModalityMaskingStrategy(MaskingStrategy):
             MaskedHeliosSample containing the masked data and mask
         """
         output_dict: dict[str, ArrayTensor | None] = {"timestamps": batch.timestamps}
-        missing_mask_dict = batch.missing_modalities_masks
         present_modalities = [b for b in batch.modalities if b != "timestamps"]
 
         num_present_modalities = len(present_modalities)
@@ -532,7 +532,7 @@ class ModalityMaskingStrategy(MaskingStrategy):
             mask = repeat(modality_mask, "b -> b h w t b_s", h=h, w=w, b_s=b_s, t=t)
             # Ensure we don't do index_put_ on expanded tensors is deprecated.
             mask = mask.view(*shape).contiguous()
-            missing_mask = missing_mask_dict.get(modality, None)
+            missing_mask = self.get_missing_mask(instance)
             mask = self.apply_missing_mask(mask, missing_mask)
             output_dict[MaskedHeliosSample.get_masked_modality_name(modality)] = mask
 
@@ -641,7 +641,6 @@ class RandomMaskingStrategy(MaskingStrategy):
             MaskedHeliosSample containing the masked data and mask
         """
         output_dict: dict[str, ArrayTensor | None] = {}
-        missing_mask_dict = batch.missing_modalities_masks
         for modality_name in batch.modalities:
             instance = getattr(batch, modality_name)
             if instance is None:
@@ -663,7 +662,7 @@ class RandomMaskingStrategy(MaskingStrategy):
                 mask = self._create_random_mask(
                     Modality.get(modality_name), instance.shape, device
                 )
-                missing_mask = missing_mask_dict.get(modality_name, None)
+                missing_mask = self.get_missing_mask(instance)
                 mask = self.apply_missing_mask(mask, missing_mask)
                 output_dict[modality_name] = instance
                 output_dict[

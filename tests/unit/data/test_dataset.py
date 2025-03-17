@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import torch
 
-from helios.data.constants import Modality
+from helios.data.constants import MISSING_VALUE, Modality
 from helios.data.dataset import HeliosSample, collate_helios
 
 
@@ -62,7 +62,6 @@ def test_collate_helios(
             Modality.LATLON,
         ],
     )
-    print(collated_sample.missing_modalities_masks)
 
     # Check that all required fields are present
     assert collated_sample.sentinel2_l2a is not None
@@ -78,22 +77,10 @@ def test_collate_helios(
     assert collated_sample.latlon.shape[0] == 3
     assert collated_sample.timestamps.shape[0] == 3
 
-    # Check missing modalities masks
-    assert "sentinel1" in collated_sample.missing_modalities_masks
-    assert "worldcover" in collated_sample.missing_modalities_masks
-    assert "latlon" not in collated_sample.missing_modalities_masks
-    assert "timestamps" not in collated_sample.missing_modalities_masks
-
     # Check the missing modality mask values
-    expected_s1_mask = torch.tensor([0, 1, 0])
-    assert torch.equal(
-        collated_sample.missing_modalities_masks["sentinel1"], expected_s1_mask
-    )
+    assert torch.all(collated_sample.sentinel1[1] == MISSING_VALUE)
 
-    expected_wc_mask = torch.tensor([0, 0, 1])
-    assert torch.equal(
-        collated_sample.missing_modalities_masks["worldcover"], expected_wc_mask
-    )
+    assert torch.all(collated_sample.worldcover[2] == MISSING_VALUE)
 
 
 class TestHeliosSample:
@@ -116,7 +103,6 @@ class TestHeliosSample:
         hw_to_sample = list(range(4, 13))
         patch_size = 2
         max_tokens_per_instance = 100
-        missing_modalities_masks = collated_sample.missing_modalities_masks
         subset_sample = collated_sample.subset(
             patch_size=patch_size,
             max_tokens_per_instance=max_tokens_per_instance,
@@ -133,16 +119,6 @@ class TestHeliosSample:
         assert subset_sample.worldcover.shape[0] == 3
 
         # Check that the missing modality masks are preserved
-        for attribute in collated_sample.missing_modalities_masks.keys():
-            if attribute == "missing_modalities_masks":
-                continue
-            assert torch.equal(
-                subset_sample.missing_modalities_masks[attribute],
-                missing_modalities_masks[attribute],
-            )
-
-    # Next step will be to write the masking code
-    # Then to modify the patch encoders
-    # We don't want the missing tokens to be encluded in the token budget or in the
-    # encode decode ratio
-    # lastly, to make the filtering modifications more configurable
+        # Check the missing modality mask values
+        assert torch.all(subset_sample.sentinel1[1] == MISSING_VALUE)
+        assert torch.all(subset_sample.worldcover[2] == MISSING_VALUE)

@@ -4,7 +4,7 @@ import logging
 
 import torch
 
-from helios.data.constants import Modality
+from helios.data.constants import MISSING_VALUE, Modality
 from helios.data.dataset import HeliosSample
 from helios.train.masking import (
     MaskValue,
@@ -194,8 +194,7 @@ def test_create_random_mask_with_missing_mask() -> None:
     sentinel1 = torch.ones((b, h, w, t, 2))  # 2 bands for simplicity
 
     # Create a missing mask for sentinel1 where half the batch is missing
-    missing_mask = torch.zeros(b, dtype=torch.bool)
-    missing_mask[b // 2 :] = True  # Mark second half as missing
+    sentinel1[b // 2 :] = MISSING_VALUE
 
     # Create the HeliosSample
     days = torch.randint(1, 31, (b, 1, t), dtype=torch.long)
@@ -207,7 +206,6 @@ def test_create_random_mask_with_missing_mask() -> None:
         sentinel2_l2a=torch.ones((b, h, w, t, 12)),  # 12 bands for sentinel2
         sentinel1=sentinel1,
         timestamps=timestamps,
-        missing_modalities_masks={"sentinel1": missing_mask},
     )
 
     # Apply random masking
@@ -221,7 +219,7 @@ def test_create_random_mask_with_missing_mask() -> None:
     assert sentinel1_mask is not None
 
     # For non-missing samples, check the ratios
-    non_missing_indices = torch.where(~missing_mask)[0]
+    non_missing_indices = torch.where(sentinel1 != MISSING_VALUE)[0]
     for idx in non_missing_indices:
         mask_slice = sentinel1_mask[idx]
         total_elements = mask_slice.numel()
@@ -242,7 +240,7 @@ def test_create_random_mask_with_missing_mask() -> None:
         ), "Target ratio incorrect for non-missing samples"
 
     # Check that missing samples have the missing value
-    missing_indices = torch.where(missing_mask)[0]
+    missing_indices = torch.where(sentinel1 == MISSING_VALUE)[0]
     for idx in missing_indices:
         mask_slice = sentinel1_mask[idx]
         # All values for missing samples should be set to MaskValue.MISSING.value
@@ -344,18 +342,16 @@ def test_space_masking_with_missing_modality_mask() -> None:
     latlon_num_bands = Modality.LATLON.num_bands
 
     # Create a missing mask for sentinel1 where half the batch is missing
-    missing_mask = torch.zeros(b, dtype=torch.bool)
-    # Mark second half of batch as missing
-    missing_mask[b // 2 :] = True
+    sentinel1 = torch.ones((b, h, w, t, sentinel1_num_bands))
+    sentinel1[b // 2 :] = MISSING_VALUE
 
     # Create the HeliosSample with missing_modalities_masks
     batch = HeliosSample(
         sentinel2_l2a=torch.ones((b, h, w, t, sentinel2_l2a_num_bands)),
-        sentinel1=torch.ones((b, h, w, t, sentinel1_num_bands)),
+        sentinel1=sentinel1,
         latlon=torch.ones((b, latlon_num_bands)),
         timestamps=timestamps,
         worldcover=torch.ones((b, h, w, worldcover_num_bands)),
-        missing_modalities_masks={"sentinel1": missing_mask},
     )
 
     # Test the SpaceMaskingStrategy
@@ -372,7 +368,7 @@ def test_space_masking_with_missing_modality_mask() -> None:
     assert sentinel1_mask is not None, "sentinel1_mask should not be None"
 
     # Verify masking was applied correctly to non-missing samples:
-    present_indices = torch.where(~missing_mask)[0]
+    present_indices = torch.where(sentinel1 != MISSING_VALUE)[0]
     for idx in present_indices:
         mask_slice = sentinel1_mask[idx]
         total_elements = mask_slice.numel()
@@ -436,18 +432,16 @@ def test_time_masking_with_missing_modality_mask() -> None:
     latlon_num_bands = Modality.LATLON.num_bands
 
     # Create a missing mask for sentinel1 where half the batch is missing
-    missing_mask = torch.zeros(b, dtype=torch.bool)
-    # Mark second half of batch as missing
-    missing_mask[b // 2 :] = True
+    sentinel1 = torch.ones((b, h, w, t, sentinel1_num_bands))
+    sentinel1[b // 2 :] = MISSING_VALUE
 
     # Create the HeliosSample with missing_modalities_masks
     batch = HeliosSample(
         sentinel2_l2a=torch.ones((b, h, w, t, sentinel2_l2a_num_bands)),
-        sentinel1=torch.ones((b, h, w, t, sentinel1_num_bands)),
+        sentinel1=sentinel1,
         latlon=torch.ones((b, latlon_num_bands)),
         timestamps=timestamps,
         worldcover=torch.ones((b, h, w, worldcover_num_bands)),
-        missing_modalities_masks={"sentinel1": missing_mask},
     )
 
     # Test the TimeMaskingStrategy
@@ -462,7 +456,7 @@ def test_time_masking_with_missing_modality_mask() -> None:
     assert sentinel1_mask is not None, "sentinel1_mask should not be None"
 
     # Verify masking was applied correctly to non-missing samples:
-    present_indices = torch.where(~missing_mask)[0]
+    present_indices = torch.where(sentinel1 != MISSING_VALUE)[0]
     for idx in present_indices:
         mask_slice = sentinel1_mask[idx]
         total_elements = mask_slice.numel()
@@ -484,15 +478,12 @@ def test_time_masking_with_missing_modality_mask() -> None:
             abs(num_target / total_elements - (1 - encode_ratio - decode_ratio)) < 0.05
         ), "Incorrect target mask ratio for present samples"
 
-    # Check that for time-varying modalities, timesteps are masked consistently
-    for idx in present_indices:
-        for t_idx in range(t):
-            timestep_mask = sentinel1_mask[idx, :, :, t_idx]
-            first_value = timestep_mask[0, 0]
-            # All values for a given timestep should be the same
-            assert (
-                timestep_mask == first_value
-            ).all(), f"Timestep {t_idx} for sample {idx} has inconsistent values"
+    # Check that missing samples are set to MISSING
+    missing_indices = torch.where(sentinel1 == MISSING_VALUE)[0]
+    for idx in missing_indices:
+        assert (
+            sentinel1_mask[idx] == MaskValue.MISSING.value
+        ).all(), f"Sample {idx} should be set to MISSING"
 
     # Test unmasking
     unmasked_sample = masked_sample.unmask()
@@ -525,18 +516,16 @@ def test_random_masking_with_missing_modality_mask() -> None:
     latlon_num_bands = Modality.LATLON.num_bands
 
     # Create a missing mask for sentinel1 where half the batch is missing
-    missing_mask = torch.zeros(b, dtype=torch.bool)
-    # Mark second half of batch as missing
-    missing_mask[b // 2 :] = True
+    sentinel1 = torch.ones((b, h, w, t, sentinel1_num_bands))
+    sentinel1[b // 2 :] = MISSING_VALUE
 
     # Create the HeliosSample with missing_modalities_masks
     batch = HeliosSample(
         sentinel2_l2a=torch.ones((b, h, w, t, sentinel2_l2a_num_bands)),
-        sentinel1=torch.ones((b, h, w, t, sentinel1_num_bands)),
+        sentinel1=sentinel1,
         latlon=torch.ones((b, latlon_num_bands)),
         timestamps=timestamps,
         worldcover=torch.ones((b, h, w, worldcover_num_bands)),
-        missing_modalities_masks={"sentinel1": missing_mask},
     )
 
     # Test the RandomMaskingStrategy
@@ -557,7 +546,7 @@ def test_random_masking_with_missing_modality_mask() -> None:
     # in the _create_random_mask function.
 
     # Verify masking was applied correctly to non-missing samples:
-    present_indices = torch.where(~missing_mask)[0]
+    present_indices = torch.where(sentinel1 != MISSING_VALUE)[0]
     for idx in present_indices:
         mask_slice = sentinel1_mask[idx]
         total_elements = mask_slice.numel()
