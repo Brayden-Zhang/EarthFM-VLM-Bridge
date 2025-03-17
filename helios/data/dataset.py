@@ -335,6 +335,7 @@ class HeliosDataset(Dataset):
         self.supported_modalities = supported_modalities
         self.h5py_folder = h5py_folder
         self.dtype = dtype
+        # Let us see if pickling the normalizers is slow
         self.normalize = normalize
 
         if self.normalize:
@@ -345,7 +346,8 @@ class HeliosDataset(Dataset):
         self._work_dir: Path | None = None  # type: ignore
         self._work_dir_set = False
         self._h5py_dir: Path | None = None  # type: ignore
-        self.sample_indices: np.ndarray | None = None  # type: ignore
+        self.sample_indices: np.ndarray | None = None
+        self.latlon_distribution: np.ndarray | None = None
 
     @property
     def fingerprint_version(self) -> str:
@@ -355,11 +357,13 @@ class HeliosDataset(Dataset):
     @property
     def fingerprint(self) -> str:
         """Can be used to identify/compare a dataset."""
+        if not self.is_dataset_prepared:
+            raise RuntimeError("Dataset must be prepared before creating a fingerprint")
         sha256_hash = hashlib.sha256()
         sha256_hash.update(
             f"tile_path={self.tile_path},"
             f"supported_modalities={sorted([m.name for m in self.supported_modalities])},"
-            f"sample_size={len(self.samples)},"
+            f"sample_size={len(self.sample_indices)},"
             f"dtype={self.dtype}".encode()
         )
         return sha256_hash.hexdigest()
@@ -393,6 +397,15 @@ class HeliosDataset(Dataset):
         """Check if the working directory was explicitly set."""
         return self._work_dir_set
 
+    def process_sample_into_h5(self,index_sample_tuple: tuple[int, SampleInformation]) -> None:
+        """Process a sample into an h5 file."""
+        i, sample = index_sample_tuple
+        h5_file_path = self._get_h5_file_path(i)
+        if h5_file_path.exists():
+            return
+        self._create_h5_file(sample, h5_file_path)
+
+
     def create_h5_dataset(self, samples: list[SampleInformation]) -> int:
         """Create a dataset of the samples in h5 format in a shared weka directory under the given fingerprint.
 
@@ -400,22 +413,53 @@ class HeliosDataset(Dataset):
             The last index of the samples that was processed.
         """
         # TODO: Make this multi-processed so it is much faster
-        for i, sample in enumerate(samples):
-            h5_file_path = self._get_h5_file_path(i)
-            if h5_file_path.exists():
-                logger.info(f"H5 file {h5_file_path} already exists, skipping")
-                continue
-            self._create_h5_file(sample, h5_file_path)
-            last_i = i
-        return last_i
+        from tqdm import tqdm
+        import multiprocessing as mp
 
-    def get_h5py_dir_path(self, num_samples: int) -> Path:
+        total_sample_indices = len(samples)
+
+
+        # Determine number of processes to use (leave one core free)
+        num_processes = max(1, mp.cpu_count() - 2)
+        logger.info(f"Creating H5 dataset using {num_processes} processes")
+
+        # Create a pool of workers
+        with mp.Pool(processes=num_processes) as pool:
+            # Process samples in parallel and track progress with tqdm
+            results = list(tqdm(
+                pool.imap(self.process_sample_into_h5, enumerate(samples)),
+                total=total_sample_indices,
+                desc="Creating H5 files"
+            ))
+
+
+        logger.info(f"Processed all {total_sample_indices} H5 files")
+        sample_indices = np.arange(total_sample_indices)
+        # Not sure if we need this or we can just have an int here
+        return sample_indices
+
+    @property
+    def h5py_dir(self) -> Path:
         """Get the h5py directory.
 
         This should be unique to the specific dataset fingerprint
         """
+        if self._h5py_dir is None:
+            raise ValueError("h5py_dir has not been set. Call set_h5py_dir first.")
+        return self._h5py_dir
+
+    def set_h5py_dir(self, num_samples: int) -> None:
+        """Set the h5py directory.
+
+        This can only be set once to ensure consistency.
+
+        Args:
+            num_samples: Number of samples in the dataset
+        """
         if self._h5py_dir is not None:
-            return self._h5py_dir
+            logger.warning("h5py_dir is already set, ignoring new value")
+            return
+
         self._h5py_dir = (
             self.tile_path
             / self.h5py_folder
@@ -424,8 +468,8 @@ class HeliosDataset(Dataset):
             )
             / str(num_samples)
         )
-        os.makedirs(self.h5py_dir, exist_ok=True)
-        return self._h5py_dir
+        logger.info(f"Setting h5py_dir to {self._h5py_dir}")
+        os.makedirs(self._h5py_dir, exist_ok=True)
 
     def prepare(self, samples: list[SampleInformation] | None = None) -> None:
         """Prepare the dataset.
@@ -433,15 +477,19 @@ class HeliosDataset(Dataset):
         THIS SHOULD BE CALLED BY THE MAIN PROCESS ONLY and should happen
         before any other process tries to use the dataset
         """
+        logger.info("Preparing dataset...")
         if samples is None:
             samples = self._get_samples()  # type: ignore
         if len(samples) == 0:
             raise ValueError("No samples provided")
         samples = self._filter_samples(samples)  # type: ignore
+        # probably is faster to do this just once in some way by saving to a with the dataset file and reading it in
+        self.latlon_distribution = self.get_geographic_distribution(samples)
         num_samples = len(samples)
-        self.h5py_dir = self.get_h5py_dir_path(num_samples)
-        highest_sample_index = self.create_h5_dataset(samples)
-        self.sample_indices = np.arange(highest_sample_index + 1)
+        self.set_h5py_dir(num_samples)
+        self.sample_indices = np.arange(num_samples)
+        # self.sample_indices = self.create_h5_dataset(samples)
+        # Likely will want to save the distirbtion information here as well and then delete it after it used
 
     @property
     def is_dataset_prepared(self) -> bool:
@@ -557,7 +605,7 @@ class HeliosDataset(Dataset):
         lon, lat = transformer.transform(x, y)
         return np.array([lat, lon])
 
-    def get_geographic_distribution(self) -> np.ndarray:
+    def get_geographic_distribution(self, samples: list[SampleInformation]) -> np.ndarray:
         """Get the geographic distribution of the dataset.
 
         Returns:
@@ -565,7 +613,7 @@ class HeliosDataset(Dataset):
             coordinates for each of the N samples in the dataset.
         """
         latlons = []
-        for sample in self.samples:
+        for sample in samples:
             latlon = self.get_latlon(sample)
             latlons.append(latlon)
         latlons = np.vstack(latlons)
@@ -626,7 +674,7 @@ class HeliosDataset(Dataset):
         """Get the length of the dataset."""
         if self.sample_indices is None:
             raise ValueError("Dataset is not prepared")
-        return len(self.sample_indices)
+        return self.sample_indices.shape[0]
 
     def compute_normalization_values(
         self,
@@ -755,7 +803,7 @@ class HeliosDataset(Dataset):
         with h5py.File(h5_file_path, "r") as f:
             sample_dict = {k: v[()] for k, v in f.items()}
         # Sample modalities should be written into the metadata of the h5 dataset
-        sample_modalities = sample_dict.keys()
+        sample_modalities = list([Modality.get(key) for key in sample_dict.keys() if key != "timestamps"])
         if self.normalize:
             for modality in sample_modalities:
                 sample_dict[modality.name] = self.normalize_image(

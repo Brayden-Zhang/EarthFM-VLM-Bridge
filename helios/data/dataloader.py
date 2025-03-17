@@ -66,6 +66,8 @@ class HeliosDataLoader(DataLoaderBase):
         )
         self.dataset = dataset
         assert isinstance(self.dataset, HeliosDataset)  # type: ignore
+        if not self.dataset.is_dataset_prepared:
+            raise RuntimeError("Dataset must be prepared before creating a dataloader")
         self.collator = collator
         self.seed = seed
         self.shuffle = shuffle

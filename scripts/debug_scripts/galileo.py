@@ -1,4 +1,7 @@
-"""Trying to prototype fitting everything into olmo core."""
+"""Script for Debugging Galileo.
+
+These Settings are meant to help you get quick results on a single GPU in minimal time
+"""
 
 import logging
 
@@ -34,7 +37,6 @@ from helios.train.masking import MaskingConfig
 from helios.train.train_module.galileo import GalileoTrainModuleConfig
 
 logger = logging.getLogger(__name__)
-
 
 def build_model_config(common: CommonComponents) -> GalileoConfig:
     """Build the model config for an experiment."""
@@ -90,7 +92,7 @@ def build_train_module_config(
 ) -> GalileoTrainModuleConfig:
     """Build the train module config for an experiment."""
     LR = 0.002
-    RANK_MICROBATCH_SIZE = 16
+    RANK_MICROBATCH_SIZE = 32
     ENCODE_RATIO = 0.1
     DECODE_RATIO = 0.75
     WD = 0.02
@@ -154,11 +156,12 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
     """Build the dataloader config for an experiment."""
     # things should be set during building
     # TODO: Include collate function here
-
-    NUM_WORKERS = 4
-    NUM_THREADS = 0
-    GLOBAL_BATCH_SIZE = 16
-    PREFETCH_FACTOR = 2
+    NUM_WORKERS = 8
+    NUM_THREADS = 2
+    logger.warning(f"Using {NUM_WORKERS} workers and {NUM_THREADS} threads")
+    logger.warning("Set NUM_WORKERS and NUM_THREADS to 0 if you want to just start the run to debug without caring about results")
+    GLOBAL_BATCH_SIZE = 32
+    PREFETCH_FACTOR = 4
 
     dataloader_config = HeliosDataLoaderConfig(
         global_batch_size=GLOBAL_BATCH_SIZE,
@@ -195,8 +198,11 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
         name=common.run_name,
         project=WANDB_PROJECT,
         entity=WANDB_USERNAME,
+        upload_modality_data_band_distribution_pre_train=False,
+        upload_dataset_distribution_pre_train=False,
         enabled=True,  # set to False to avoid wandb errors
     )
+    logger.warning("WANDB Distribution Uploads are disabled for Debugging")
     EVAL_INTERVAL_EPOCHS = 1
     EVAL_TASKS = [
         DownstreamTaskConfig(
