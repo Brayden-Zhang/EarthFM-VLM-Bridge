@@ -11,11 +11,11 @@ from dataclasses import dataclass
 from math import floor
 from pathlib import Path
 from typing import Any, NamedTuple
-import psutil
 
 import h5py
 import numpy as np
 import pandas as pd
+import psutil
 import torch
 from einops import rearrange
 from olmo_core.aliases import PathOrStr
@@ -26,23 +26,14 @@ from torch.utils.data import Dataset
 from tqdm import tqdm
 from upath import UPath
 
-from helios.data.constants import (
-    BASE_RESOLUTION,
-    IMAGE_TILE_SIZE,
-    PROJECTION_CRS,
-    TIMESTAMPS,
-    Modality,
-    ModalitySpec,
-    TimeSpan,
-)
+from helios.data.constants import (BASE_RESOLUTION, IMAGE_TILE_SIZE,
+                                   PROJECTION_CRS, TIMESTAMPS, Modality,
+                                   ModalitySpec, TimeSpan)
 from helios.data.normalize import Normalizer, Strategy
 from helios.data.utils import convert_to_db, update_streaming_stats
 from helios.dataset.parse import ModalityTile, parse_helios_dataset
-from helios.dataset.sample import (
-    SampleInformation,
-    image_tiles_to_samples,
-    load_image_for_sample,
-)
+from helios.dataset.sample import (SampleInformation, image_tiles_to_samples,
+                                   load_image_for_sample)
 from helios.dataset.utils import get_modality_specs_from_names
 from helios.types import ArrayTensor
 
@@ -241,7 +232,6 @@ class HeliosSample(NamedTuple):
         max_tokens_per_instance
         """
         max_height_width = max(self.height, self.width)
-        logger.info(f"Max height/width: {max_height_width}")
         max_height_width_tokens = int(max_height_width / patch_size)
         hw_to_sample = [x for x in hw_to_sample if x <= max_height_width_tokens]
         if len(hw_to_sample) == 0:
@@ -283,17 +273,6 @@ class HeliosSample(NamedTuple):
                 new_data_dict[attribute] = modality
         return HeliosSample(**new_data_dict)
 
-# def get_mem_info(pid: int) -> dict[str, int]:
-#   res = {}
-#   for mmap in psutil.Process(pid).memory_maps():
-#     logger.info(f"Memory map: {mmap}")
-#     res['rss'] += mmap.rss
-#     res['pss'] += mmap.pss
-#     res['uss'] += mmap.private_clean + mmap.private_dirty
-#     res['shared'] += mmap.shared_clean + mmap.shared_dirty
-#     if mmap.path.startswith('/'):  # looks like a file path
-#       res['shared_file'] += mmap.shared_clean + mmap.shared_dirty
-#   return res
 
 def collate_helios(batch: list[HeliosSample]) -> HeliosSample:
     """Collate function that automatically handles any modalities present in the samples."""

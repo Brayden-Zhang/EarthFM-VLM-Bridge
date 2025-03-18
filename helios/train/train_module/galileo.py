@@ -13,25 +13,22 @@ from olmo_core.float8 import Float8Config
 from olmo_core.optim import OptimConfig
 from olmo_core.optim.scheduler import Scheduler
 from olmo_core.train.common import Duration, ReduceType
-from olmo_core.train.train_module.transformer import (
-    TransformerActivationCheckpointingConfig,
-)
+from olmo_core.train.train_module.transformer import \
+    TransformerActivationCheckpointingConfig
 
 from helios.data.constants import Modality
 from helios.data.dataset import HeliosSample
 from helios.nn.latent_mim import LatentMIM
 from helios.train.loss import LossConfig
 from helios.train.masking import MaskedHeliosSample, MaskingConfig
-from helios.train.train_module.train_module import (
-    HeliosTrainModule,
-    HeliosTrainModuleConfig,
-)
+from helios.train.train_module.train_module import (HeliosTrainModule,
+                                                    HeliosTrainModuleConfig)
 from helios.train.utils import split_batch
 
 logger = getLogger(__name__)
-import logging
-import psutil
 import os
+
+import psutil
 
 
 def log_memory_usage_for_process(process):
@@ -43,8 +40,10 @@ def log_memory_usage_for_process(process):
         uss = 0
         shared = 0
 
-        # Log the process memory usage
-        logger.info(f"Process (PID {process.pid}) memory usage: RSS={rss / (1024 * 1024 * 1024):.2f} GB")
+        # # Log the process memory usage
+        # logger.info(
+        #     f"Process (PID {process.pid}) memory usage: RSS={rss / (1024 * 1024 * 1024):.2f} GB"
+        # )
 
         # Iterate over memory maps
         for mmap in process.memory_maps():
@@ -57,6 +56,7 @@ def log_memory_usage_for_process(process):
     except psutil.NoSuchProcess:
         # The process may have terminated between the time we got the list and now
         return 0, 0, 0, 0
+
 
 def log_total_memory_usage():
     """Log total memory usage for the main process and its children."""
@@ -87,8 +87,11 @@ def log_total_memory_usage():
         total_shared += shared
 
     # Log the total memory usage
-    logger.info(f"Total memory usage: RSS={total_rss / (1024 * 1024 * 1024):.2f} GB, PSS={total_pss / (1024 * 1024 * 1024):.2f} GB, USS={total_uss / (1024 * 1024 * 1024):.2f} GB, Shared={total_shared / (1024 * 1024 * 1024):.2f} GB")
+    # logger.info(
+    #     f"Total memory usage: RSS={total_rss / (1024 * 1024 * 1024):.2f} GB, PSS={total_pss / (1024 * 1024 * 1024):.2f} GB, USS={total_uss / (1024 * 1024 * 1024):.2f} GB, Shared={total_shared / (1024 * 1024 * 1024):.2f} GB"
+    # )
     return total_pss / (1024 * 1024 * 1024)
+
 
 @dataclass
 class GalileoTrainModuleConfig(HeliosTrainModuleConfig):
@@ -290,7 +293,12 @@ class GalileoTrainModule(HeliosTrainModule):
         NOTE: For contrastive losses, the loss is invariant to the global batch size across GPUS as well
         """
         total_pss = log_total_memory_usage()
-        self.trainer.record_metric("worker_memory/total_pss", total_pss, ReduceType.mean)
+        self.trainer.record_metric(
+            "worker_memory/total_pss_summed", total_pss, ReduceType.sum
+        )
+        self.trainer.record_metric(
+            "worker_memory/total_pss", total_pss, ReduceType.mean
+        )
         self.update_target_encoder()
         # Set the model to train mode
         self.model.train()
@@ -318,9 +326,9 @@ class GalileoTrainModule(HeliosTrainModule):
                         self.model.encoder.max_patch_size,
                     )
                 )
-                logger.info(f"Patch size: {patch_size}")
-                logger.info(f"Token budget: {token_budget}")
-                logger.info(f"H / W to sample: {h_w_to_sample}")
+                # logger.info(f"Patch size: {patch_size}")
+                # logger.info(f"Token budget: {token_budget}")
+                # logger.info(f"H / W to sample: {h_w_to_sample}")
                 microbatch = self.model.transform.apply(microbatch)
                 subsampled_batch = microbatch.subset(
                     patch_size, token_budget, h_w_to_sample
