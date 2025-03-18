@@ -34,6 +34,7 @@ SUPPORTED_MODALITIES = [
     Modality.SENTINEL1.name,
     Modality.WORLDCOVER.name,
     Modality.OPENSTREETMAP_RASTER.name,
+    Modality.SRTM.name,
 ]
 
 # Base command template
