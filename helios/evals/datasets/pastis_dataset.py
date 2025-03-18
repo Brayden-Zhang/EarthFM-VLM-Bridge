@@ -1,82 +1,143 @@
 """PASTIS dataset class."""
 
-# Dataset is between September 2018 to November 2019
+# # Dataset is between September 2018 to November 2019
 
-# load this torch object: /weka/dfive-default/presto_eval_sets/pastis/pastis_train.pt
-# print out the shape of the object inside
+# # load this torch object: /weka/dfive-default/presto_eval_sets/pastis/pastis_train.pt
+# # print out the shape of the object inside
 
-import torch
+# import torch
 
-pastis_train = torch.load("/weka/dfive-default/presto_eval_sets/pastis/pastis_train.pt")
+# pastis_train = torch.load("/weka/dfive-default/presto_eval_sets/pastis/pastis_train.pt")
 
-unique_months = set()
-
-for item in pastis_train:
-    print(item, pastis_train[item].shape)
-    if item == "months":
-        for item2 in pastis_train[item]:
-            unique_months.add("_".join(str(item2)))
-
-print(unique_months)
+# unique_months = set()
 
 # for item in pastis_train:
-#     if item == "images":
+#     print(item, pastis_train[item].shape)
+#     if item == "months":
 #         for item2 in pastis_train[item]:
-#             # print min and max of the tensor at dimension 1
-#             print(item2.min(), item2.max())
-# range -1 to 18
+#             unique_months.add("_".join(str(item2)))
+
+# print(unique_months)
+
+# # for item in pastis_train:
+# #     if item == "images":
+# #         for item2 in pastis_train[item]:
+# #             # print min and max of the tensor at dimension 1
+# #             print(item2.min(), item2.max())
+# # range -1 to 18
+
+# target_set = set()
+
+# for item in pastis_train:
+#     if item == "targets":
+#         for item2 in pastis_train[item]:
+#             target_set.add(int(item2.max()))
+
+# print(target_set)  #
+
+# # tensor(-132.6000) tensor(14567.)
+
+# # # images torch.Size([5820, 12, 13, 64, 64])
+# # # months torch.Size([5820, 12])
+# # # targets torch.Size([5820, 64, 64])
+
+# # # already subset to 64 * 64 images
+
+# # # tensor([ 9, 10, 11, 12,  1,  2,  3,  4,  5,  6,  7,  8])
+# # # tensor([ 9, 10, 11, 12,  1,  2,  3,  4,  5,  6,  7,  8])
+
+import json
+from pathlib import Path
+
+import einops
+import torch
+import torch.multiprocessing
+from torch.utils.data import Dataset
+from upath import UPath
+
+from helios.data.constants import Modality
+from helios.data.dataset import HeliosSample
+from helios.train.masking import MaskedHeliosSample
+
+torch.multiprocessing.set_sharing_strategy("file_system")
+
+PASTIS_DIR = UPath("/weka/dfive-default/presto_eval_sets/pastis")
 
 
-for item in pastis_train:
-    if item == "targets":
-        for item2 in pastis_train[item]:
-            print(item2.min(), item2.max())
+class PASTISDataset(Dataset):
+    """PASTIS dataset class."""
 
-# tensor(-132.6000) tensor(14567.)
+    def __init__(
+        self,
+        path_to_splits: Path,
+        split: str,
+        partition: str,
+        norm_stats_from_pretrained: bool = True,
+        norm_method: str = "norm_no_clip",
+    ):
+        """Init PASTIS dataset.
 
-# # images torch.Size([5820, 12, 13, 64, 64])
-# # months torch.Size([5820, 12])
-# # targets torch.Size([5820, 64, 64])
+        Args:
+            path_to_splits: Path where .pt objects returned by process_mados have been saved
+            split: Split to use
+            partition: Partition to use
+            norm_stats_from_pretrained: Whether to use normalization stats from pretrained model
+            norm_method: Normalization method to use, only when norm_stats_from_pretrained is False
+        """
+        assert split in ["train", "val", "valid", "test"]
+        if split == "valid":
+            split = "val"
 
-# # already subset to 64 * 64 images
+        self.split = split
+        self.norm_method = norm_method
 
-# # tensor([ 9, 10, 11, 12,  1,  2,  3,  4,  5,  6,  7,  8])
-# # tensor([ 9, 10, 11, 12,  1,  2,  3,  4,  5,  6,  7,  8])
+        self.norm_stats_from_pretrained = norm_stats_from_pretrained
+        # If normalize with pretrained stats, we initialize the normalizer here
+        if self.norm_stats_from_pretrained:
+            from helios.data.normalize import Normalizer, Strategy
 
-# import json
-# import os
-# from pathlib import Path
+            self.normalizer_computed = Normalizer(Strategy.COMPUTED)
 
-# import numpy as np
-# import torch
-# import torch.multiprocessing
-# import torch.nn.functional as F
-# from einops import repeat
-# from PIL import Image
-# from torch.utils.data import Dataset
-# from upath import UPath
+        torch_obj = torch.load(path_to_splits / f"pastis_{split}.pt")
+        self.images = torch_obj["images"]
+        self.labels = torch_obj["targets"]
+        self.months = torch_obj["months"]
 
-# from helios.data.constants import Modality
-# from helios.data.dataset import HeliosSample
-# from helios.train.masking import MaskedHeliosSample
+        if (partition != "default") and (split == "train"):
+            with open(path_to_splits / f"{partition}_partition.json") as json_file:
+                subset_indices = json.load(json_file)
 
-# from .constants import EVAL_S2_BAND_NAMES, EVAL_TO_HELIOS_S2_BANDS
-# from .normalize import normalize_bands
+            self.images = self.images[subset_indices]
+            self.labels = self.labels[subset_indices]
+            self.months = self.months[subset_indices]
 
-# torch.multiprocessing.set_sharing_strategy("file_system")
+    def __len__(self) -> int:
+        """Length of the dataset."""
+        return self.images.shape[0]
 
-# PASTIS_DIR = UPath("/weka/dfive-default/presto_eval_sets/pastis")
+    def __getitem__(self, idx: int) -> tuple[MaskedHeliosSample, torch.Tensor]:
+        """Return a single PASTIS data instance."""
+        image = self.images[idx]  # (12, 13, 64, 64)
+        labels = self.labels[idx]  # (64, 64)
+        months = self.months[idx]  # (12)
 
+        image = einops.rearrange(image, "t c h w -> h w t c")
+        if self.norm_stats_from_pretrained:
+            image = self.normalizer_computed.normalize(Modality.SENTINEL2_L2A, image)
 
-# class PASTISDataset(Dataset):
-#     """PASTIS dataset class."""
+        timestamps = []
+        for month in months:
+            if month != 1:
+                year = 2018
+            else:
+                year = 2019
+            timestamps.append(torch.tensor([1, month, year], dtype=torch.long))
+        timestamps = torch.stack(timestamps)
 
-#     default_day_month_year = [1, 9, 2018]
+        masked_sample = MaskedHeliosSample.from_heliossample(
+            HeliosSample(
+                sentinel2_l2a=torch.tensor(image).float(), timestamps=timestamps
+            )
+        )
 
-#     def __init__(
-#         self,
-#         path_to_splits: Path,
-#         split: str,
-#         partition: str,
-#         norm_stats_from_pretrained: bool = False,
-#     )
+        return masked_sample, labels
