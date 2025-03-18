@@ -82,7 +82,7 @@ for lr, wd, warmup in itertools.product(LEARNING_RATES, WEIGHT_DECAYS, WARMUP_EP
         lr=lr,
         wd=wd,
         warmup=warmup,
-        supported_modality_names=SUPPORTED_MODALITIES,
+        supported_modality_names=str(SUPPORTED_MODALITIES).replace("'", '"'),
     )
 
     print(f"Launching: {command}")
