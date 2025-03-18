@@ -244,6 +244,8 @@ class FlexiHeliosPatchEmbeddings(nn.Module):
     def _get_patch_embedding_module_for_modality(self, modality: str) -> nn.Module:
         """Get the patch embedding module for a modality."""
         modality_spec = Modality.get(modality)
+        # Get the zoom factor to adjust the patch size per modality
+        zoom_factor = modality_spec.zoom_factor
         # Based on the modality name we choose the way to embed the data
 
         # I likely will need to know about what the embedding strategy is in the forward as well
@@ -266,7 +268,7 @@ class FlexiHeliosPatchEmbeddings(nn.Module):
                     self._get_embedding_module_name(modality, idx): FlexiPatchEmbed(
                         in_chans=len(channel_set_idxs),
                         embedding_size=self.embedding_size,
-                        patch_size=self.max_patch_size,
+                        patch_size=self.max_patch_size * zoom_factor,
                     )
                     for idx, channel_set_idxs in enumerate(
                         modality_spec.bandsets_as_indices()

@@ -208,9 +208,10 @@ class MaskingStrategy:
     ) -> ArrayTensor:
         mask_shape = list(shape)
         mask_shape[-1] = modality.num_band_sets
+        zoom_factor = modality.zoom_factor
         if modality.is_spatial:
-            mask_shape[1] //= patch_size
-            mask_shape[2] //= patch_size
+            mask_shape[1] //= patch_size * zoom_factor
+            mask_shape[2] //= patch_size * zoom_factor
 
         b = shape[0]
         num_tokens = np.prod(mask_shape[1:])
@@ -253,7 +254,10 @@ class MaskingStrategy:
         mask = mask.view(*mask_shape)
         if modality.is_spatial:
             mask = repeat(
-                mask, "b h w ... -> b (h hp) (w wp) ...", hp=patch_size, wp=patch_size
+                mask,
+                "b h w ... -> b (h hp) (w wp) ...",
+                hp=patch_size * zoom_factor,
+                wp=patch_size * zoom_factor,
             )
         return mask
 
@@ -400,10 +404,11 @@ class SpaceMaskingStrategy(MaskingStrategy):
             raise ValueError("Non-spatial modality {modality}")
 
         b, h, w = shape[:3]
+        zoom_factor = modality.zoom_factor
 
         assert (h % patch_size == 0) and (w % patch_size == 0)
-        h_p = h // patch_size
-        w_p = w // patch_size
+        h_p = h // (patch_size * zoom_factor)
+        w_p = w // (patch_size * zoom_factor)
 
         patches = h_p * w_p
         encode_patches = int(self.encode_ratio * patches)
@@ -424,8 +429,8 @@ class SpaceMaskingStrategy(MaskingStrategy):
         random_batch_mask = self.generator.permuted(batch_mask, axis=1)
         patch_mask = rearrange(random_batch_mask, "b (h w) -> b h w", h=h_p, w=w_p)
 
-        mask = np.repeat(patch_mask, repeats=patch_size, axis=1)
-        mask = np.repeat(mask, repeats=patch_size, axis=2)
+        mask = np.repeat(patch_mask, repeats=patch_size * zoom_factor, axis=1)
+        mask = np.repeat(mask, repeats=patch_size * zoom_factor, axis=2)
         mask = torch.as_tensor(mask, device=device)
         return mask
 
