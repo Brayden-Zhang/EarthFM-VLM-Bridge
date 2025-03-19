@@ -197,21 +197,29 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
         entity=WANDB_USERNAME,
         enabled=True,  # set to False to avoid wandb errors
     )
-    EVAL_INTERVAL_EPOCHS = 5
+    # EVAL_INTERVAL_EPOCHS = 5
     EVAL_TASKS = [
+        # DownstreamTaskConfig(
+        #     dataset="m-eurosat",
+        #     batch_size=128,
+        #     num_workers=8,
+        #     pooling_type=PoolingType.MEAN,
+        #     norm_stats_from_pretrained=True,
+        # ),
+        # DownstreamTaskConfig(
+        #     dataset="mados",
+        #     batch_size=128,
+        #     num_workers=8,
+        #     pooling_type=PoolingType.MEAN,
+        #     norm_stats_from_pretrained=False,
+        #     probe_lr=0.1,
+        # ),
         DownstreamTaskConfig(
-            dataset="m-eurosat",
+            dataset="floods",
             batch_size=128,
             num_workers=8,
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
-        ),
-        DownstreamTaskConfig(
-            dataset="mados",
-            batch_size=128,
-            num_workers=8,
-            pooling_type=PoolingType.MEAN,
-            norm_stats_from_pretrained=False,
             probe_lr=0.1,
         ),
     ]
@@ -234,7 +242,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             "downstream_evaluator",
             DownstreamEvaluatorCallbackConfig(
                 tasks=EVAL_TASKS,
-                eval_duration=Duration.epochs(EVAL_INTERVAL_EPOCHS),
+                eval_duration=Duration.steps(1),
             ),
         )
     )
