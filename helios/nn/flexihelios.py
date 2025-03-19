@@ -442,7 +442,7 @@ class FlexiHeliosCompositeEncodings(nn.Module):
         # TODO: Improve this implementation it is quite bad
 
         modality = Modality.get(modality_name)
-        logger.info(f"Applying encodings to modality {modality}")
+        logger.debug(f"Applying encodings to modality {modality}")
 
         if modality_tokens.ndim == 3:
             # modality_tokens = [B, Band_Sets, D]; static in space, static in time
@@ -483,9 +483,6 @@ class FlexiHeliosCompositeEncodings(nn.Module):
             assert timestamps is not None
             months = timestamps[:, :, 1]
             month_embed = self.month_embed(months)
-            logger.info(f"month_embed shape: {month_embed.shape}")
-            logger.info(f"ein_string: {ein_string}")
-            logger.info(f"ein_dict: {ein_dict}")
             month_embed = repeat(month_embed, f"b t d -> {ein_string}", **ein_dict)
             modality_embed[..., n * 2 : n * 3] += month_embed.to(device)
         if modality.is_spatial:

@@ -167,7 +167,7 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
     logger.warning(
         "Set NUM_WORKERS and NUM_THREADS to 0 if you want to just start the run to debug without caring about results"
     )
-    GLOBAL_BATCH_SIZE = 16
+    GLOBAL_BATCH_SIZE =
     PREFETCH_FACTOR = None
 
     # GBS * PREFETCH_FACTOR * NUM_WORKERS is the total number of instances that can be put into prefetch queue
