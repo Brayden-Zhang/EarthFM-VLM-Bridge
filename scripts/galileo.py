@@ -215,7 +215,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
         #     probe_lr=0.1,
         # ),
         DownstreamTaskConfig(
-            dataset="floods",
+            dataset="sen1floods11",
             batch_size=128,
             num_workers=8,
             pooling_type=PoolingType.MEAN,
