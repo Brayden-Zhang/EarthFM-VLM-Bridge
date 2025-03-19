@@ -37,7 +37,6 @@ from helios.train.train_module.galileo import GalileoTrainModuleConfig
 
 logger = logging.getLogger(__name__)
 
-# TODO: Update all the configurations related to the new changes like token budget and min max patch size which are currently hardcoded
 MAX_PATCH_SIZE = 8  # NOTE: actual patch_size <= max_patch_size
 MIN_PATCH_SIZE = 1
 

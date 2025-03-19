@@ -489,7 +489,7 @@ class HeliosDataset(Dataset):
         if self.is_dataset_prepared:
             logger.info("Dataset is already prepared")
             return
-
+        samples = []
         if self.h5py_dir is None:
             logger.warning("h5py_dir is not set, Generating H5 files from raw tile directory")
             if samples is None:
@@ -499,7 +499,6 @@ class HeliosDataset(Dataset):
             samples = self._filter_samples(samples)  # type: ignore
             num_samples = len(samples)
             self.set_h5py_dir(num_samples)
-            self.latlon_distribution = self.get_geographic_distribution(samples)
 
             logger.info("Attempting to create H5 files may take some time...")
             self.create_h5_dataset(samples)
@@ -507,6 +506,7 @@ class HeliosDataset(Dataset):
             logger.info("H5 files already exist, skipping creation")
             logger.info(f"H5 files exist in {self.h5py_dir}")
             num_samples = int(self.h5py_dir.name)
+        self.latlon_distribution = self.get_geographic_distribution(samples)
         self.sample_indices = np.arange(num_samples)
 
     @property
@@ -644,6 +644,8 @@ class HeliosDataset(Dataset):
         """
         if self.latlon_distribution_path.exists():
             return np.load(self.latlon_distribution_path)
+        if len(samples) == 0:
+            raise ValueError("No samples provided")
         latlons = []
         for sample in samples:
             latlon = self.get_latlon(sample)

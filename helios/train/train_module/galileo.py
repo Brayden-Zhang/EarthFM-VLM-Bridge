@@ -28,71 +28,6 @@ from helios.train.train_module.train_module import (HeliosTrainModule,
 from helios.train.utils import split_batch
 
 logger = getLogger(__name__)
-import os
-
-import psutil
-
-
-def log_memory_usage_for_process(process):
-    """Log memory usage for a given process and return memory stats."""
-    try:
-        memory_info = process.memory_info()
-        rss = memory_info.rss
-        pss = 0
-        uss = 0
-        shared = 0
-
-        # # Log the process memory usage
-        # logger.info(
-        #     f"Process (PID {process.pid}) memory usage: RSS={rss / (1024 * 1024 * 1024):.2f} GB"
-        # )
-
-        # Iterate over memory maps
-        for mmap in process.memory_maps():
-            pss += mmap.pss
-            uss += mmap.private_clean + mmap.private_dirty
-            shared += mmap.shared_clean + mmap.shared_dirty
-
-        return rss, pss, uss, shared
-
-    except psutil.NoSuchProcess:
-        # The process may have terminated between the time we got the list and now
-        return 0, 0, 0, 0
-
-
-def log_total_memory_usage():
-    """Log total memory usage for the main process and its children."""
-    # Get the current process (main process)
-    main_process = psutil.Process(os.getpid())
-
-    # Initialize total memory usage counters
-    total_rss = 0
-    total_pss = 0
-    total_uss = 0
-    total_shared = 0
-
-    # Log memory usage for the main process
-    logger.info("Logging memory usage for main process")
-    rss, pss, uss, shared = log_memory_usage_for_process(main_process)
-    total_rss += rss
-    total_pss += pss
-    total_uss += uss
-    total_shared += shared
-
-    # Iterate over child processes and log their memory usage
-    logger.info("Logging memory usage for child processes")
-    for child in main_process.children(recursive=True):
-        rss, pss, uss, shared = log_memory_usage_for_process(child)
-        total_rss += rss
-        total_pss += pss
-        total_uss += uss
-        total_shared += shared
-
-    # Log the total memory usage
-    # logger.info(
-    #     f"Total memory usage: RSS={total_rss / (1024 * 1024 * 1024):.2f} GB, PSS={total_pss / (1024 * 1024 * 1024):.2f} GB, USS={total_uss / (1024 * 1024 * 1024):.2f} GB, Shared={total_shared / (1024 * 1024 * 1024):.2f} GB"
-    # )
-    return total_pss / (1024 * 1024 * 1024)
 
 
 @dataclass
@@ -336,7 +271,7 @@ class GalileoTrainModule(HeliosTrainModule):
                 loss_val = get_local_tensor(loss)
                 total_batch_loss += loss_val
 
-                # Skip bad batches# Skip bad batches
+                # Skip bad batches
                 if torch.isnan(loss).any() or torch.isinf(loss).any():
                     logger.warning(
                         f"NaN or Inf detected in loss at microbatch {microbatch_idx}, stopping training for this batch."
