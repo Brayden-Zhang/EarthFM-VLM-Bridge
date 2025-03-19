@@ -40,6 +40,7 @@ def test_helios_dataset(
     assert item.sentinel2_l2a.shape == (256, 256, 12, 12)  # type: ignore
     assert item.sentinel1.shape == (256, 256, 12, 2)  # type: ignore
     assert item.worldcover.shape == (256, 256, 1, 1)  # type: ignore
+    assert item.openstreetmap_raster.shape == (256, 256, 1, 30)  # type: ignore
     assert item.latlon.shape == (2,)  # type: ignore
     assert item.timestamps.shape == (12, 3)  # type: ignore
 
@@ -64,9 +65,9 @@ class TestHeliosDataset:
         # checking that sample data is loaded in the order corresponding to the bandset indices
         # These are manually extracted values from each band and dependent on the seed (call with conftest.py)
         expected_values = [
-            [135, 10, 36, 92],
-            [135, 31, 130, 28, 10, 88],
-            [135, 37],
+            [33, 159, 251, 15],
+            [189, 119, 97, 61, 215, 57],
+            [83, 43],
         ]
         data_matches_expected = []
         for bandset_index, expected_value_lst in zip(
