@@ -42,10 +42,12 @@ def get_eval_dataset(
             partition=partition,
             norm_stats_from_pretrained=norm_stats_from_pretrained,
         )
-    elif eval_dataset == "floods":
+    elif eval_dataset == "sen1floods11":
         return Sen1Floods11Dataset(
             path_to_splits=FLOODS_DIR,
             split=split,
             partition=partition,
             norm_stats_from_pretrained=norm_stats_from_pretrained,
         )
+    else:
+        raise ValueError(f"Unrecognized eval_dataset {eval_dataset}")
