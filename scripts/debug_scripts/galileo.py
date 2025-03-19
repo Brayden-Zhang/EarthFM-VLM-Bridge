@@ -42,6 +42,7 @@ from helios.train.train_module.galileo import GalileoTrainModuleConfig
 
 logger = logging.getLogger(__name__)
 
+# TODO: Update all the configurations related to the new changes like token budget and min max patch size which are currently hardcoded
 
 def build_model_config(common: CommonComponents) -> GalileoConfig:
     """Build the model config for an experiment."""
@@ -97,7 +98,7 @@ def build_train_module_config(
 ) -> GalileoTrainModuleConfig:
     """Build the train module config for an experiment."""
     LR = 0.002
-    RANK_MICROBATCH_SIZE = 16
+    RANK_MICROBATCH_SIZE = 32
     ENCODE_RATIO = 0.1
     DECODE_RATIO = 0.75
     WD = 0.02
@@ -161,13 +162,13 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
     """Build the dataloader config for an experiment."""
     # things should be set during building
     # TODO: Include collate function here
-    NUM_WORKERS = 0
+    NUM_WORKERS = 2
     NUM_THREADS = 0  # How fast we can actually create batches with some overhead
     logger.warning(f"Using {NUM_WORKERS} workers and {NUM_THREADS} threads")
     logger.warning(
         "Set NUM_WORKERS and NUM_THREADS to 0 if you want to just start the run to debug without caring about results"
     )
-    GLOBAL_BATCH_SIZE =
+    GLOBAL_BATCH_SIZE = 64
     PREFETCH_FACTOR = None
 
     # GBS * PREFETCH_FACTOR * NUM_WORKERS is the total number of instances that can be put into prefetch queue

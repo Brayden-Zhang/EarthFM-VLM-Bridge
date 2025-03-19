@@ -355,8 +355,6 @@ def _get_batch_item_params_iterator(indices: np.ndarray, patch_size: list[int], 
         if instances_processed % rank_batch_size == 0:
             patch_size = np.random.choice(patch_size_array)
             sampled_hw_p = np.random.choice(sampled_hw_p_array)
-            logger.info(f"patch size: {patch_size}, sampled_hw_p: {sampled_hw_p}")
-            logger.info(f"patch size type: {type(patch_size)}, sampled_hw_p type: {type(sampled_hw_p)}")
         yield idx, int(patch_size), int(sampled_hw_p)
         instances_processed += 1
 
