@@ -237,7 +237,7 @@ class HeliosSample(NamedTuple):
     def subset(
         self, patch_size: int, max_tokens_per_instance: int, sampled_hw_p: int
     ) -> "HeliosSample":
-        """Subset a HelioSample.
+        """Subset a HelioSample that is unbatched ie no batch dimension.
 
         patch_size: the patch size being applied to this sample
         max_tokens_per_instance: the token budget when subsetting. This is used
@@ -254,14 +254,6 @@ class HeliosSample(NamedTuple):
         of timesteps allowable so that the total tokens (per instance) is >=
         max_tokens_per_instance
         """
-        # max_height_width = max(self.height, self.width)
-        # max_height_width_tokens = int(max_height_width / patch_size)
-        # hw_to_sample = [x for x in hw_to_sample if x <= max_height_width_tokens]
-        # if len(hw_to_sample) == 0:
-        #     raise ValueError(
-        #         "max height/width allowed by sample smaller than values in hw_to_sample"
-        #     )
-        # sampled_hw_p = random.choice(hw_to_sample)
         max_t = self._get_max_t_within_token_budget(
             sampled_hw_p, max_tokens_per_instance
         )
@@ -275,7 +267,6 @@ class HeliosSample(NamedTuple):
             if attribute == "timestamps":
                 new_data_dict[attribute] = modality[start_t : start_t + max_t]
                 continue
-
             # remember to add the batching back in
             modality_spec = Modality.get(attribute)
             if modality_spec.is_spacetime_varying:

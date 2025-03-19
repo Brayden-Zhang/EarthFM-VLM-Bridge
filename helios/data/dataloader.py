@@ -22,7 +22,7 @@ from olmo_core.utils import get_default_device, roundrobin, threaded_generator
 from torch.utils.data import default_collate
 from upath import UPath
 
-from helios.data.constants import Modality
+from helios.data.constants import Modality, IMAGE_TILE_SIZE
 from helios.data.dataset import HeliosDataset, HeliosSample
 
 logger = logging.getLogger(__name__)
@@ -364,7 +364,9 @@ def _get_batch_item_params_iterator(
     for idx in indices:
         if instances_processed % rank_batch_size == 0:
             patch_size = np.random.choice(patch_size_array)
-            sampled_hw_p = np.random.choice(sampled_hw_p_array)
+            max_height_width_tokens = int(IMAGE_TILE_SIZE / patch_size)
+            filtered_sampled_hw_p_array = sampled_hw_p_array[sampled_hw_p_array <= max_height_width_tokens]
+            sampled_hw_p = np.random.choice(filtered_sampled_hw_p_array)
         yield idx, int(patch_size), int(sampled_hw_p)
         instances_processed += 1
 
