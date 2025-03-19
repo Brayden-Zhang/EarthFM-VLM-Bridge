@@ -317,8 +317,6 @@ class GalileoTrainModule(HeliosTrainModule):
         # total_pss = log_total_memory_usage()
 
         # self.trainer.record_metric("worker_memory/total_pss", total_pss, ReduceType.mean)
-        if dry_run:
-            return
         self.update_target_encoder()
         # Set the model to train mode
         self.model.train()
@@ -378,14 +376,15 @@ class GalileoTrainModule(HeliosTrainModule):
                 del decoded, target_output
                 loss.backward()
 
+        if dry_run:
+            return
+
         self.trainer.record_metric(
             f"train/{self.base_loss_a.name}+{self.base_loss_b.name}",
             total_batch_loss,
             ReduceType.mean,
         )
 
-        if dry_run:
-            return
 
         # del batch  # In case this helps with memory utilization.
         # del masked_batch

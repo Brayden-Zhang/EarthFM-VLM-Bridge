@@ -278,25 +278,27 @@ class HeliosDataLoader(DataLoaderBase):
         # TODO: This should be a feature of the modality spec
         output_dict = {}
         if Modality.SENTINEL2_L2A in self.dataset.supported_modalities:
-            mock_sentinel2_l2a = torch.rand(1, 256, 256, 12, 12)
+            mock_sentinel2_l2a = np.random.rand(256, 256, 12, 12).astype(np.float32)
             output_dict["sentinel2_l2a"] = mock_sentinel2_l2a
         if Modality.SENTINEL1 in self.dataset.supported_modalities:
-            mock_sentinel1 = torch.rand(1, 256, 256, 12, 2)
+            mock_sentinel1 = np.random.rand(256, 256, 12, 2).astype(np.float32)
             output_dict["sentinel1"] = mock_sentinel1
         if Modality.WORLDCOVER in self.dataset.supported_modalities:
-            mock_worldcover = torch.rand(1, 256, 256, 1, 1)
+            mock_worldcover = np.random.rand(256, 256, 1, 1).astype(np.float32)
             output_dict["worldcover"] = mock_worldcover
         if Modality.LATLON in self.dataset.supported_modalities:
-            mock_latlon = torch.rand(1, 2)
+            mock_latlon = np.random.rand(2).astype(np.float32)
             output_dict["latlon"] = mock_latlon
-        days = torch.randint(0, 25, (1, 1, 12), dtype=torch.long)
-        months = torch.randint(0, 12, (1, 1, 12), dtype=torch.long)
-        years = torch.randint(2018, 2020, (1, 1, 12), dtype=torch.long)
-        timestamps = torch.cat([days, months, years], dim=1)
-        timestamps = rearrange(timestamps, "b t c -> b c t")
+        days = np.random.randint(0, 25, (12, 1))
+        months = np.random.randint(0, 12, (12, 1))
+        years = np.random.randint(2018, 2020, (12, 1))
+        timestamps = np.concatenate([days, months, years], axis=1)  # shape: (12, 3)
+        logger.info(f"timestamps: {timestamps.shape}")
         output_dict["timestamps"] = timestamps
-        #  TODO: Temporary hardcoded fix later
-        return 1, HeliosSample(**output_dict).subset(1, 1500, 6)
+
+        patch_size = 1
+        collated_sample = self.collator([(patch_size, HeliosSample(**output_dict).subset(patch_size, 1500, 6))])
+        return collated_sample
 
     def fast_forward(self, global_step: int) -> np.ndarray:
         """Fast forward the data loader to a specific global step and return the batch_indices."""
