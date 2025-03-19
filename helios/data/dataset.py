@@ -321,15 +321,17 @@ class HeliosDataset(Dataset):
 
     def __init__(
         self,
-        tile_path: UPath,
+        h5py_dir: UPath | None,
         supported_modalities: list[ModalitySpec],
         dtype: DType,
+        tile_path: UPath | None = None,
         normalize: bool = True,
         h5py_folder: str = "h5py_data",
-        attempt_to_create_h5_files: bool = False,
     ):
         """Initialize the dataset.
 
+        To use an already created h5py directory, set h5py_dir to the path of the h5py directory.
+        To use a raw tile directory, set tile_path to the path of the tile directory, this will create the h5py files in a prepare step before training.
         Warning from OLMo-core:
             In distributed settings, be sure that the :data:`work_dir` is shared among all local ranks
             and :data:`fs_local_rank` is set accordingly. Once those fields are set you should then call
@@ -341,12 +343,23 @@ class HeliosDataset(Dataset):
             dtype: The dtype of the data.
             normalize: If True, apply normalization to the data, if False, do not apply normalization
             h5py_folder: The folder to store the h5py files.
-            attempt_to_create_h5_files: If True, attempt to create the h5py files, we should only do this if we have not yet created the files for the dataset
-
         Returns:
             None
         """
-        self.tile_path = tile_path
+        if h5_dir_path is None and tile_path is None:
+            raise ValueError("Either h5_dir_path or tile_path must be provided")
+        if h5_dir_path is not None and tile_path is not None:
+            raise ValueError("Only one of h5_dir_path or tile_path can be provided")
+        if h5_dir_path is not None:
+            self._h5py_dir = h5_dir_path
+            self.tile_path = h5_dir_path.parent.parent
+            predefined_supported_modalities = [Modality.get(modality) for modality in h5_dir_path.parent.name.split("_")]
+            if predefined_supported_modalities != supported_modalities:
+                raise ValueError("The predefined supported modalities do not match the supported modalities")
+        else:
+            self.tile_path = tile_path
+            self._h5py_dir: Path | None = None  # type: ignore
+
         self.supported_modalities = supported_modalities
         self.h5py_folder = h5py_folder
         self.dtype = dtype
@@ -358,7 +371,6 @@ class HeliosDataset(Dataset):
         self._fs_local_rank = get_fs_local_rank()
         self._work_dir: Path | None = None  # type: ignore
         self._work_dir_set = False
-        self._h5py_dir: Path | None = None  # type: ignore
         self.sample_indices: np.ndarray | None = None
         self.latlon_distribution: np.ndarray | None = None
         self.attempt_to_create_h5_files = attempt_to_create_h5_files
@@ -442,11 +454,7 @@ class HeliosDataset(Dataset):
                     desc="Creating H5 files",
                 )
             )
-
-        logger.info(f"Processed all {total_sample_indices} H5 files")
-        sample_indices = np.arange(total_sample_indices)
-        # Not sure if we need this or we can just have an int here
-        return sample_indices
+        return total_sample_indices
 
     @property
     def h5py_dir(self) -> Path:
@@ -488,21 +496,26 @@ class HeliosDataset(Dataset):
         before any other process tries to use the dataset
         """
         logger.info("Preparing dataset...")
-        # if samples is None:
-        #     samples = self._get_samples()  # type: ignore
-        # if len(samples) == 0:
-        #     raise ValueError("No samples provided")
-        # samples = self._filter_samples(samples)  # type: ignore
-        # # probably is faster to do this just once in some way by saving to a with the dataset file and reading it in
-        # self.latlon_distribution = self.get_geographic_distribution(samples)
-        # trying to get start up to be faster
-        num_samples = 98856 # len(samples) #98856 samples
-        self.set_h5py_dir(num_samples)
-        self.sample_indices = np.arange(num_samples)
-        if self.attempt_to_create_h5_files:
+        if self.is_dataset_prepared:
+            logger.info("Dataset is already prepared")
+            return
+
+        if self.h5py_dir is None:
+            logger.warning("h5py_dir is not set, Generating H5 files from raw tile directory")
+            if samples is None:
+                samples = self._get_samples()  # type: ignore
+            if len(samples) == 0:
+                raise ValueError("No samples provided")
+            samples = self._filter_samples(samples)  # type: ignore
+            self.latlon_distribution = self.get_geographic_distribution(samples)
+            self.set_h5py_dir(num_samples)
             logger.info("Attempting to create H5 files may take some time...")
-            self.sample_indices = self.create_h5_dataset(samples)
-        # Likely will want to save the distirbtion information here as well and then delete it after it used
+            num_samples = self.create_h5_dataset(samples)
+        else:
+            logger.info("H5 files already exist, skipping creation")
+            logger.info(f"H5 files exist in {self.h5py_dir}")
+            num_samples = int(self.h5py_dir.name)
+        self.sample_indices = np.arange(num_samples)
 
     @property
     def is_dataset_prepared(self) -> bool:
