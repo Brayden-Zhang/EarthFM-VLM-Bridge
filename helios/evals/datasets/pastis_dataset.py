@@ -1,6 +1,7 @@
 """PASTIS-R (S2+S1) dataset class."""
 
 import json
+import logging
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
@@ -14,17 +15,21 @@ from upath import UPath
 
 from helios.data.constants import Modality
 from helios.data.dataset import HeliosSample
-from helios.train.masking import MaskedHeliosSample
-
-from .constants import (
+from helios.evals.datasets.constants import (
     EVAL_S1_BAND_NAMES,
     EVAL_S2_BAND_NAMES,
     EVAL_TO_HELIOS_S1_BANDS,
     EVAL_TO_HELIOS_S2_BANDS,
 )
-from .normalize import normalize_bands
+from helios.evals.datasets.normalize import normalize_bands
+from helios.train.masking import MaskedHeliosSample
+
+logger = logging.getLogger(__name__)
 
 torch.multiprocessing.set_sharing_strategy("file_system")
+
+DATA_DIR = UPath("/weka/dfive-default/helios/evaluation/PASTIS-R")
+PASTIS_DIR = UPath("/weka/dfive-default/presto_eval_sets/pastis_r")
 
 
 S2_BAND_STATS = {
@@ -57,14 +62,14 @@ class PASTISRProcessor:
     It also imputes the missing bands in the S2 images.
     """
 
-    def __init__(self, pastis_path: str, output_dir: str):
+    def __init__(self, data_dir: str, output_dir: str):
         """Initialize PASTIS-R processor.
 
         Args:
-            pastis_path: Path to PASTIS-R dataset
+            data_dir: Path to PASTIS-R dataset
             output_dir: Path to output directory
         """
-        self.pastis_path = UPath(pastis_path)
+        self.data_dir = UPath(data_dir)
         self.output_dir = UPath(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -126,6 +131,7 @@ class PASTISRProcessor:
         for month in self.all_months:
             if months_dict[month]:
                 stacked_imgs = torch.stack(months_dict[month])
+                # NOTE: averaging S2 data may not be the best option, given cloudy scenes
                 month_avg = stacked_imgs.mean(dim=0)
                 if len(img_list) < 12:
                     img_list.append(month_avg)
@@ -139,9 +145,9 @@ class PASTISRProcessor:
         dates = properties["dates-S2"]
         patch_id = properties["ID_PATCH"]
 
-        s2_path = self.pastis_path / f"DATA_S2/S2_{patch_id}.npy"
-        s1_path = self.pastis_path / f"DATA_S1A/S1A_{patch_id}.npy"
-        target_path = self.pastis_path / f"ANNOTATIONS/TARGET_{patch_id}.npy"
+        s2_path = self.data_dir / f"DATA_S2/S2_{patch_id}.npy"
+        s1_path = self.data_dir / f"DATA_S1A/S1A_{patch_id}.npy"
+        target_path = self.data_dir / f"ANNOTATIONS/TARGET_{patch_id}.npy"
 
         try:
             s2_images = np.load(s2_path)
@@ -187,7 +193,7 @@ class PASTISRProcessor:
 
     def process(self) -> None:
         """Process the PASTIS-R dataset."""
-        with open(self.pastis_path / "metadata.geojson") as f:
+        with open(self.data_dir / "metadata.geojson") as f:
             meta_data = json.load(f)
 
         all_data: dict[str, dict[str, list[torch.Tensor]]] = {
@@ -263,12 +269,12 @@ class PASTISRProcessor:
 
 
 def process_pastis(
-    pastis_path: str = "/weka/dfive-default/helios/evaluation/PASTIS-R",
-    output_dir: str = "/weka/dfive-default/presto_eval_sets/pastis_r",
+    data_dir: str = DATA_DIR,
+    output_dir: str = PASTIS_DIR,
 ) -> None:
     """Process PASTIS-R dataset."""
     processor = PASTISRProcessor(
-        pastis_path=pastis_path,
+        data_dir=data_dir,
         output_dir=output_dir,
     )
     processor.process()
@@ -279,9 +285,10 @@ class PASTISRDataset(Dataset):
 
     def __init__(
         self,
-        path_to_splits: Path,
-        split: str,
-        partition: str,
+        path_to_splits: Path = PASTIS_DIR,
+        split: str = "train",
+        partition: str = "default",
+        is_multimodal: bool = True,
         norm_stats_from_pretrained: bool = True,
         norm_method: str = "norm_no_clip",
     ):
@@ -291,19 +298,22 @@ class PASTISRDataset(Dataset):
             path_to_splits: Path where .pt objects returned by process_pastis_r have been saved
             split: Split to use
             partition: Partition to use
+            is_multimodal: If True, use S1 + S2, if False, use S2 only
             norm_stats_from_pretrained: Whether to use normalization stats from pretrained model
             norm_method: Normalization method to use, only when norm_stats_from_pretrained is False
         """
         assert split in ["train", "val", "valid", "test"]
         if split == "valid":
             split = "val"
+        self.is_multimodal = is_multimodal
 
         self.s2_means, self.s2_stds = self._get_norm_stats(
             S2_BAND_STATS, EVAL_S2_BAND_NAMES
         )
-        self.s1_means, self.s1_stds = self._get_norm_stats(
-            S1_BAND_STATS, EVAL_S1_BAND_NAMES
-        )
+        if is_multimodal:
+            self.s1_means, self.s1_stds = self._get_norm_stats(
+                S1_BAND_STATS, EVAL_S1_BAND_NAMES
+            )
         self.split = split
         self.norm_method = norm_method
 
@@ -316,18 +326,10 @@ class PASTISRDataset(Dataset):
 
         torch_obj = torch.load(path_to_splits / f"pastis_r_{split}.pt")
         self.s2_images = torch_obj["s2_images"]
-        self.s1_images = torch_obj["s1_images"]
+        if self.is_multimodal:
+            self.s1_images = torch_obj["s1_images"]
         self.labels = torch_obj["targets"]
         self.months = torch_obj["months"]
-
-        if (partition != "default") and (split == "train"):
-            with open(path_to_splits / f"{partition}_partition.json") as json_file:
-                subset_indices = json.load(json_file)
-
-            self.s2_images = self.s2_images[subset_indices]
-            self.s1_images = self.s1_images[subset_indices]
-            self.labels = self.labels[subset_indices]
-            self.months = self.months[subset_indices]
 
     @staticmethod
     def _get_norm_stats(
@@ -352,9 +354,12 @@ class PASTISRDataset(Dataset):
         s2_image = einops.rearrange(s2_image, "t c h w -> h w t c")  # (64, 64, 12, 13)
         s2_image = s2_image[:, :, :, EVAL_TO_HELIOS_S2_BANDS]
 
-        s1_image = self.s1_images[idx]  # (12, 2, 64, 64)
-        s1_image = einops.rearrange(s1_image, "t c h w -> h w t c")  # (64, 64, 12, 2)
-        s1_image = s1_image[:, :, :, EVAL_TO_HELIOS_S1_BANDS]
+        if self.is_multimodal:
+            s1_image = self.s1_images[idx]  # (12, 2, 64, 64)
+            s1_image = einops.rearrange(
+                s1_image, "t c h w -> h w t c"
+            )  # (64, 64, 12, 2)
+            s1_image = s1_image[:, :, :, EVAL_TO_HELIOS_S1_BANDS]
 
         labels = self.labels[idx]  # (64, 64)
         months = self.months[idx]  # (12)
@@ -363,15 +368,19 @@ class PASTISRDataset(Dataset):
             s2_image = normalize_bands(
                 s2_image.numpy(), self.s2_means, self.s2_stds, self.norm_method
             )
-            s1_image = normalize_bands(
-                s1_image.numpy(), self.s1_means, self.s1_stds, self.norm_method
-            )
+            if self.is_multimodal:
+                s1_image = normalize_bands(
+                    s1_image.numpy(), self.s1_means, self.s1_stds, self.norm_method
+                )
 
         if self.norm_stats_from_pretrained:
             s2_image = self.normalizer_computed.normalize(
                 Modality.SENTINEL2_L2A, s2_image
             )
-            s1_image = self.normalizer_computed.normalize(Modality.SENTINEL1, s1_image)
+            if self.is_multimodal:
+                s1_image = self.normalizer_computed.normalize(
+                    Modality.SENTINEL1, s1_image
+                )
 
         timestamps = []
         # A little hack to get the correct year for the timestamps
@@ -383,12 +392,19 @@ class PASTISRDataset(Dataset):
             timestamps.append(torch.tensor([1, month, year], dtype=torch.long))
         timestamps = torch.stack(timestamps)
 
-        masked_sample = MaskedHeliosSample.from_heliossample(
-            HeliosSample(
-                sentinel2_l2a=torch.tensor(s2_image).float(),
-                sentinel1=torch.tensor(s1_image).float(),
-                timestamps=timestamps,
+        if self.is_multimodal:
+            masked_sample = MaskedHeliosSample.from_heliossample(
+                HeliosSample(
+                    sentinel2_l2a=torch.tensor(s2_image).float(),
+                    sentinel1=torch.tensor(s1_image).float(),
+                    timestamps=timestamps,
+                )
             )
-        )
-
+        else:
+            masked_sample = MaskedHeliosSample.from_heliossample(
+                HeliosSample(
+                    sentinel2_l2a=torch.tensor(s2_image).float(),
+                    timestamps=timestamps,
+                )
+            )
         return masked_sample, labels
