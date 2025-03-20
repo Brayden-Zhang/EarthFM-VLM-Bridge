@@ -203,13 +203,10 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
         entity=WANDB_USERNAME,
         enabled=True,  # set to False to avoid wandb errors
     )
-<<<<<<< HEAD:scripts/base_debug_scripts/galileo.py
     # Safe to collect everys tep for now
     garbage_collector_callback = GarbageCollectorCallback(gc_interval=1)
     logger.warning("WANDB Distribution Uploads are disabled for Debugging")
     EVAL_INTERVAL_EPOCHS = 1
-=======
->>>>>>> make eval frequency per task:scripts/galileo.py
     EVAL_TASKS = [
         DownstreamTaskConfig(
             dataset="m-eurosat",
@@ -236,6 +233,26 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
             probe_lr=0.1,
+        ),
+        DownstreamTaskConfig(
+            dataset="pastis",
+            batch_size=8,
+            num_workers=2,
+            pooling_type=PoolingType.MEAN,
+            norm_stats_from_pretrained=True,
+            is_multimodal=False,
+            probe_lr=0.1,
+            eval_duration=Duration.epochs(1),
+        ),
+        DownstreamTaskConfig(
+            dataset="pastis-r",
+            batch_size=8,
+            num_workers=2,
+            pooling_type=PoolingType.MEAN,
+            norm_stats_from_pretrained=True,
+            is_multimodal=True,
+            probe_lr=0.1,
+            eval_duration=Duration.epochs(1),
         ),
     ]
     # Let us not use garbage collector fallback

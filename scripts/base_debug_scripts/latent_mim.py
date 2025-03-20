@@ -197,6 +197,16 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             probe_lr=0.1,
             eval_duration=Duration.epochs(1),
         ),
+        DownstreamTaskConfig(
+            dataset="pastis-r",
+            batch_size=128,
+            num_workers=8,
+            pooling_type=PoolingType.MEAN,
+            norm_stats_from_pretrained=True,
+            is_multimodal=True,
+            probe_lr=0.1,
+            eval_duration=Duration.epochs(1),
+        ),
     ]
     trainer_config = (
         TrainerConfig(
