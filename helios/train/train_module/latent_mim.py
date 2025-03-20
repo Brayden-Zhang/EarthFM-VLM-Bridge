@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 from logging import getLogger
 from typing import Any
 
-import numpy as np
 import torch
 import torch.distributed.checkpoint.state_dict as dist_cp_sd
 from olmo_core.distributed.parallel import DataParallelConfig
