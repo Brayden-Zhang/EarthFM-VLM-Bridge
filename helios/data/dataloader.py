@@ -305,7 +305,7 @@ class HeliosDataLoader(DataLoaderBase):
         months = np.random.randint(0, 12, (12, 1))
         years = np.random.randint(2018, 2020, (12, 1))
         timestamps = np.concatenate([days, months, years], axis=1)  # shape: (12, 3)
-        logger.info(f"timestamps: {timestamps.shape}")
+
         output_dict["timestamps"] = timestamps
 
         patch_size = 1
