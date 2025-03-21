@@ -77,58 +77,60 @@ class DownstreamEvaluator:
 
     def val(self) -> float:
         """Validate the model on the downstream task."""
-        try:
-            train_loader = self._get_data_loader("train")
-            val_loader = self._get_data_loader("valid")
+        # try:
+        train_loader = self._get_data_loader("train")
+        print("train loader loaded")
+        print(len(train_loader.dataset))
+        val_loader = self._get_data_loader("valid")
 
-            train_embeddings, train_labels = self._get_embeddings(train_loader)
-            test_embeddings, test_labels = self._get_embeddings(val_loader)
+        train_embeddings, train_labels = self._get_embeddings(train_loader)
+        test_embeddings, test_labels = self._get_embeddings(val_loader)
 
-            logger.info(
-                f"train embeddings shape for {self.dataset}: {train_embeddings.shape}"
+        logger.info(
+            f"train embeddings shape for {self.dataset}: {train_embeddings.shape}"
+        )
+        logger.info(
+            f"test embeddings shape for {self.dataset}: {test_embeddings.shape}"
+        )
+        logger.info(f"train labels shape for {self.dataset}: {train_labels.shape}")
+        logger.info(f"test labels shape for {self.dataset}: {test_labels.shape}")
+
+        if self.config.task_type == TaskType.CLASSIFICATION:
+            val_result = run_knn(
+                config=self.config,
+                train_embeddings=train_embeddings,
+                train_labels=train_labels,
+                test_embeddings=test_embeddings,
+                test_labels=test_labels,
+                device=self.device,
             )
-            logger.info(
-                f"test embeddings shape for {self.dataset}: {test_embeddings.shape}"
+        elif self.config.task_type == TaskType.SEGMENTATION:
+            if self.probe_lr is None:
+                raise ValueError("probe_lr cannot be none for segmentation tasks.")
+            if self.config.height_width is None:
+                raise ValueError(
+                    "config.height_width cannot be none for segmentation tasks."
+                )
+            if self.config.height_width % self.patch_size != 0:
+                raise ValueError("Image height / width indivisable by patch size.")
+            val_result = train_and_eval_probe(
+                config=self.config,
+                train_embeddings=train_embeddings,
+                train_labels=train_labels,
+                test_embeddings=test_embeddings,
+                test_labels=test_labels,
+                device=self.device,
+                batch_size=self.batch_size,
+                lr=self.probe_lr,
+                grid_size=int(self.config.height_width / self.patch_size),
             )
-            logger.info(f"train labels shape for {self.dataset}: {train_labels.shape}")
-            logger.info(f"test labels shape for {self.dataset}: {test_labels.shape}")
-
-            if self.config.task_type == TaskType.CLASSIFICATION:
-                val_result = run_knn(
-                    config=self.config,
-                    train_embeddings=train_embeddings,
-                    train_labels=train_labels,
-                    test_embeddings=test_embeddings,
-                    test_labels=test_labels,
-                    device=self.device,
-                )
-            elif self.config.task_type == TaskType.SEGMENTATION:
-                if self.probe_lr is None:
-                    raise ValueError("probe_lr cannot be none for segmentation tasks.")
-                if self.config.height_width is None:
-                    raise ValueError(
-                        "config.height_width cannot be none for segmentation tasks."
-                    )
-                if self.config.height_width % self.patch_size != 0:
-                    raise ValueError("Image height / width indivisable by patch size.")
-                val_result = train_and_eval_probe(
-                    config=self.config,
-                    train_embeddings=train_embeddings,
-                    train_labels=train_labels,
-                    test_embeddings=test_embeddings,
-                    test_labels=test_labels,
-                    device=self.device,
-                    batch_size=self.batch_size,
-                    lr=self.probe_lr,
-                    grid_size=int(self.config.height_width / self.patch_size),
-                )
-            else:
-                raise ValueError(f"Unrecognized task type: {self.config.task_type}")
-            logger.info(f"Downstream evaluator {self.dataset} score: {val_result}")
-            return val_result
-        except Exception as e:
-            logger.error(f"Error during evaluation: {e}")
-            return -1
+        else:
+            raise ValueError(f"Unrecognized task type: {self.config.task_type}")
+        logger.info(f"Downstream evaluator {self.dataset} score: {val_result}")
+        return val_result
+        # except Exception as e:
+        #     logger.error(f"Error during evaluation: {e}")
+        #     return -1
 
 
 @dataclass

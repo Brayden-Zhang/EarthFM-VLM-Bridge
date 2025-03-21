@@ -45,6 +45,7 @@ def test_random_masking_and_unmask() -> None:
         patch_size=patch_size,
     )
     # Check that all values in the first patch are the same (consistent masking)
+    assert masked_sample.sentinel2_l2a_mask is not None
     first_patch: torch.Tensor = masked_sample.sentinel2_l2a_mask[0, :4, :4, 0, 0]
     first_value: int = first_patch[0, 0]
     assert (first_patch == first_value).all()

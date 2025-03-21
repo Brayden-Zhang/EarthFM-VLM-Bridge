@@ -10,7 +10,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from math import floor
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import Any, NamedTuple, cast
 
 import h5py
 import numpy as np
@@ -51,12 +51,11 @@ logger = logging.getLogger(__name__)
 class HeliosSample(NamedTuple):
     """A sample of the data from the Helios dataset.
 
-    We always require sentinel2 data.
     This is a namedtuple that contains the data of a single sample or a batch of samples from the Helios dataset.
     For each modality, we have an ArrayTensor named by the modality, along with the latlon and timestamps.
     """
 
-    sentinel2_l2a: ArrayTensor  # [B, H, W, T, len(S2_bands)]
+    sentinel2_l2a: ArrayTensor | None = None  # [B, H, W, T, len(S2_bands)]
     latlon: ArrayTensor | None = None  # [B, 2]
     timestamps: ArrayTensor | None = None  # [B, T, D=3], where D=[day, month, year]
     sentinel1: ArrayTensor | None = None  # [B, H, W, T, len(S1_bands)]
@@ -88,15 +87,13 @@ class HeliosSample(NamedTuple):
                 # timestamps is a special case which is not in Modality
                 raise ValueError("Timestamps are not maskable")
         else:
-            if self.sentinel2_l2a is None:
-                raise ValueError("Sentinel2 L2A is not present in the sample")
             attribute_shape = []
             if Modality.get(attribute).get_tile_resolution() > 0:
                 # Add batch size (if has), height, width
-                attribute_shape += self.sentinel2_l2a.shape[:-2]
+                attribute_shape += [self.height, self.width]
             if Modality.get(attribute).is_multitemporal:
                 # Add number of timesteps
-                attribute_shape += [self.sentinel2_l2a.shape[-2]]
+                attribute_shape += [self.time]
             if not mask:
                 # Add number of bands
                 attribute_shape += [Modality.get(attribute).num_bands]
@@ -159,27 +156,53 @@ class HeliosSample(NamedTuple):
     @property
     def batch_size(self) -> int:
         """Get the batch size of the data."""
-        if len(self.sentinel2_l2a.shape) == 5:
-            return self.sentinel2_l2a.shape[0]
+        vals = [
+            cast(ArrayTensor, x).shape[0]
+            for x in self.as_dict(ignore_nones=True).values()
+        ]
+        if len(set(vals)) == 1:
+            return vals[0]
         else:
             return 1
 
     @property
     def height(self) -> int:
         """Get the height of the data."""
-        return self.sentinel2_l2a.shape[1]
+        height_width_time_modalities = ["sentinel2_l2a", "sentinel1", "worldcover"]
+        for modality in height_width_time_modalities:
+            x = getattr(self, modality)
+            if x is not None:
+                if len(x.shape) == 5:
+                    return x.shape[1]
+                else:
+                    # no batch dimension
+                    if len(x.shape) != 4:
+                        raise ValueError(f"Unexpected shape {x.shape} for {modality}")
+                    return x.shape[0]
+        raise ValueError("No modality with height or width present")
 
     @property
     def width(self) -> int:
-        """Get the width of the data."""
-        return self.sentinel2_l2a.shape[2]
+        """Get the height of the data."""
+        height_width_time_modalities = ["sentinel2_l2a", "sentinel1", "worldcover"]
+        for modality in height_width_time_modalities:
+            x = getattr(self, modality)
+            if x is not None:
+                if len(x.shape) == 5:
+                    return x.shape[2]
+                else:
+                    # no batch dimension
+                    if len(x.shape) != 4:
+                        raise ValueError(f"Unexpected shape {x.shape} for {modality}")
+                    return x.shape[1]
+        raise ValueError("No modality with height or width present")
 
     @property
     def time(self) -> int:
         """Get the number of time steps in the data."""
         if self.timestamps is None:
             raise ValueError("Timestamps are not present in the sample")
-        return self.timestamps.shape[1]
+        return self.timestamps.shape[-2]
 
     def _get_max_t_within_token_budget(
         self, h_w_p: int, max_tokens_per_instance: int

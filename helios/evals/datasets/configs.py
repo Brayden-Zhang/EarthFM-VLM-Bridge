@@ -47,6 +47,13 @@ DATASET_TO_CONFIG = {
         is_multilabel=False,
         height_width=80,
     ),
+    "sen1floods11": EvalDatasetConfig(
+        task_type=TaskType.SEGMENTATION,
+        imputes=[],
+        num_classes=2,
+        is_multilabel=False,
+        height_width=64,
+    ),
 }
 
 ALL_DATASETS = list(DATASET_TO_CONFIG.keys())

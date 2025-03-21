@@ -46,8 +46,8 @@ class MaskedHeliosSample(NamedTuple):
     timestamps: (
         ArrayTensor  # [B, T, D=3], where D=[day, month, year] (months are zero indexed)
     )
-    sentinel2_l2a: ArrayTensor
-    sentinel2_l2a_mask: ArrayTensor
+    sentinel2_l2a: ArrayTensor | None = None
+    sentinel2_l2a_mask: ArrayTensor | None = None
     sentinel1: ArrayTensor | None = None
     sentinel1_mask: ArrayTensor | None = None
     worldcover: ArrayTensor | None = None
@@ -103,16 +103,22 @@ class MaskedHeliosSample(NamedTuple):
     @property
     def height(self) -> int:
         """Get the height of the data."""
-        if self.sentinel2_l2a is None:
-            raise ValueError("Sentinel2 L2A is not present in this sample")
-        return self.sentinel2_l2a.shape[1]
+        height_width_time_modalities = ["sentinel2_l2a", "sentinel1", "worldcover"]
+        for modality in height_width_time_modalities:
+            x = getattr(self, modality)
+            if x is not None:
+                return x.shape[1]
+        raise ValueError("No modality with height or width present")
 
     @property
     def width(self) -> int:
         """Get the width of the data."""
-        if self.sentinel2_l2a is None:
-            raise ValueError("Sentinel2 L2A is not present in this sample")
-        return self.sentinel2_l2a.shape[2]
+        height_width_time_modalities = ["sentinel2_l2a", "sentinel1", "worldcover"]
+        for modality in height_width_time_modalities:
+            x = getattr(self, modality)
+            if x is not None:
+                return x.shape[2]
+        raise ValueError("No modality with height or width present")
 
     @property
     def time(self) -> int:

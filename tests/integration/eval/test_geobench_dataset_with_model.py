@@ -20,13 +20,14 @@ def geobench_dir() -> Path:
 def test_geobench_dataset(geobench_dir: Path) -> None:
     """Test forward pass from GeoBench data."""
     supported_modalities = [Modality.SENTINEL2_L2A]
+    ds = GeobenchDataset(
+        dataset="m-eurosat",
+        geobench_dir=geobench_dir,
+        split="train",
+        partition="0.01x_train",
+    )
     d = DataLoader(
-        GeobenchDataset(
-            dataset="m-eurosat",
-            geobench_dir=geobench_dir,
-            split="train",
-            partition="0.01x_train",
-        ),
+        dataset=ds,
         collate_fn=eval_collate_fn,
         shuffle=False,
         batch_size=1,
