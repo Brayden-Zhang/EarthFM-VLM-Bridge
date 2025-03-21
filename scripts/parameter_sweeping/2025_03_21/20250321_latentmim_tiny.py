@@ -3,17 +3,7 @@
 import itertools
 import subprocess  # nosec
 
-# Fixed training parameters
-NUM_WORKERS = 8
 
-# Fixed model parameters
-ENCODER_EMBEDDING_SIZE = 192
-DECODER_EMBEDDING_SIZE = 192
-ENCODER_DEPTH = 12
-DECODER_DEPTH = 12
-ENCODER_NUM_HEADS = 3
-DECODER_NUM_HEADS = 3
-MLP_RATIO = 4.0
 
 # Masking configurations
 MASKING_TYPES = [
@@ -83,8 +73,9 @@ WEIGHT_DECAYS = [2e-2]
 WARMUP_EPOCHS = [10]
 
 # Base command template
+# swithc back for non debugging
 BASE_COMMAND = (
-    "python3 scripts/latent_mim.py launch {run_name} ai2/jupiter-cirrascale-2 "
+    "python3 scripts/parameter_sweeping/2025_03_21/latent_mim_base_script.py train {run_name} ai2/jupiter-cirrascale-2 "
     "--model.encoder_config.embedding_size={encoder_embedding_size} "
     "--model.encoder_config.depth={encoder_depth} "
     "--model.encoder_config.num_heads={encoder_num_heads} "
