@@ -174,6 +174,41 @@ class L2Loss(Loss):
         target = all_targets[all_masks == MaskValue.DECODER.value]
         return F.mse_loss(pred, target)
 
+@LOSS_REGISTRY.register("imagel2")
+class ImageL2Loss(Loss):
+    """Loss function for L2 (mean squared error) over images."""
+
+    name = "ImageL2"
+
+    def compute(
+        self, predictions: TokensAndMasks, targets: TokensAndMasks, **kwargs: Any
+    ) -> float:
+        """Compute L2 loss between predictions and targets.
+
+        Args:
+            predictions: Model predictions.
+            targets: Ground truth targets.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            The computed loss value.
+        """
+        loss = torch.tensor(0.)
+        for modality in predictions.modalities:
+            pred = getattr(predictions, modality)
+            if pred is not None:
+                mask = getattr(predictions, predictions.get_masked_modality_name(modality))
+                label = getattr(targets, modality)
+                #print (pred.shape)
+                #print (mask.shape)
+                #print ((mask==MaskValue.DECODER.value).shape)
+                loss += F.mse_loss(pred, label)
+        #all_preds, all_masks = predictions.flatten_tokens_and_masks()
+        #all_targets = targets.flatten_tokens_and_masks()[0]
+        #pred = all_preds[all_masks == MaskValue.DECODER.value]
+        #target = all_targets[all_masks == MaskValue.DECODER.value]
+        return loss
+
 
 @LOSS_REGISTRY.register("cross_entropy")
 class CrossEntropyLoss(Loss):

@@ -429,27 +429,30 @@ class Reconstructor(nn.Module):
         # x: Input tensor with shape [b, h, w, (t), b_s, d]
         modality_tokens, modality_masks = [], []
         for idx, channel_set_indices in enumerate(modality_spec.bandsets_as_indices()):
-            print(f"{idx} {channel_set_indices} {modality}")
-            print(f'data {modality_data.shape}')
-            print(f'mask {modality_mask.shape}')
+            #print(f"{idx} {channel_set_indices} {modality}")
+            #print(f'data {modality_data.shape}')
+            #print(f'mask {modality_mask.shape}')
             data = modality_data[..., idx, :]
-            print(f'bs data {data.shape}')
+            #print(f'bs data {data.shape}')
             masks = modality_mask[..., idx]
-            data = self.per_modality_reconstructions[modality][
-                self._get_reconstruction_module_name(modality, idx)
-            ](data, patch_size=patch_size)
+            r_model = self.per_modality_reconstructions[modality][self._get_reconstruction_module_name(modality, idx)]
+            if modality_spec.get_tile_resolution() == 0:
+                data = r_model(data)
+            else:
+                data = r_model(data, patch_size=patch_size)
             modality_tokens.append(data)
-            print(f'reconstructed {data.shape}')
-            print(f'bs mask {masks.shape}')
+            #print(f'reconstructed {data.shape}')
+            #print(f'bs mask {masks.shape}')
             masks = repeat(
                 masks,
                 "b h w ... -> b (h p_h) (w p_w) ...",
                 p_h=patch_size,
                 p_w=patch_size,
             )
-            print(f'reconstructed mask {masks.shape}')
+            #print(f'reconstructed mask {masks.shape}')
             modality_masks.append(masks)
-        return torch.cat(modality_tokens, dim=-1), torch.cat(modality_masks, dim=-1)
+        modality_mask = repeat(modality_mask, 'b h w ... -> b (h p_h) (w p_w) ...', p_h=patch_size, p_w=patch_size)
+        return torch.cat(modality_tokens, dim=-1), modality_mask
 
     def forward(
         self,

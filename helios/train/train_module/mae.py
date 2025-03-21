@@ -203,8 +203,10 @@ class MAETrainModule(HeliosTrainModule):
 
         # Run Encoder and decoder on the augmented input
         reconstructed = self.model(masked_batch, patch_size)
-        target_output = TokensAndMasks(**batch.as_dict())
-        loss = self.loss_fn(reconstructed, target_output)
+        labels = batch.as_dict()
+        labels.pop('timestamps', None)
+        labels = TokensAndMasks(**labels)
+        loss = self.loss_fn(reconstructed, labels)
         loss.backward()
 
         self.trainer.record_metric(

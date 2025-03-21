@@ -15,6 +15,7 @@ from olmo_core.train.common import Duration, LoadStrategy
 from olmo_core.train.config import TrainerConfig
 from upath import UPath
 
+from helios.data.constants import Modality, ModalitySpec
 from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig
 from helios.internal.common import build_common_components
@@ -39,6 +40,9 @@ from helios.train.train_module.mae import MAETrainModuleConfig
 logger = logging.getLogger(__name__)
 # TODO: Need to use the dynamic computation from trainer for this
 STEPS_PER_EPOCH = 100
+SUPPORTED_MODALITIES = [
+    Modality.SENTINEL2_L2A.name,
+]
 
 
 def build_model_config(common: CommonComponents) -> MAEConfig:
@@ -58,7 +62,7 @@ def build_model_config(common: CommonComponents) -> MAEConfig:
     MLP_RATIO = 4.0
     TRANSFORM_TYPE = "flip_and_rotate"
     encoder_config = EncoderConfig(
-        supported_modality_names=common.supported_modality_names,
+        supported_modality_names=SUPPORTED_MODALITIES,
         embedding_size=ENCODER_EMBEDDING_SIZE,
         max_patch_size=MAX_PATCH_SIZE,
         num_heads=ENCODER_NUM_HEADS,
@@ -75,11 +79,11 @@ def build_model_config(common: CommonComponents) -> MAEConfig:
         mlp_ratio=MLP_RATIO,
         num_heads=DECODER_NUM_HEADS,
         max_sequence_length=12,
-        supported_modality_names=common.supported_modality_names,
+        supported_modality_names=SUPPORTED_MODALITIES,
         learnable_channel_embeddings=True,
     )
     reconstructor_config = ReconstructorConfig(
-        supported_modality_names=common.supported_modality_names,
+        supported_modality_names=SUPPORTED_MODALITIES,
         embedding_size=ENCODER_EMBEDDING_SIZE,
         max_patch_size=MAX_PATCH_SIZE,
     )
@@ -114,10 +118,10 @@ def build_train_module_config(
     )
     loss_config = LossConfig(
         loss_config={
-            "type": "l2",  # TODO: Should be registered via enum names
+            "type": "imagel2",  # TODO: Should be registered via enum names
         }
     )
-    token_exit_cfg = {modality: 0 for modality in common.supported_modality_names}
+    token_exit_cfg = {modality: 0 for modality in SUPPORTED_MODALITIES}
 
     WARMUP_EPOCHS = 2
     dp_config = DataParallelConfig(name=DataParallelType.ddp)
@@ -166,7 +170,7 @@ def build_dataset_config(common: CommonComponents) -> HeliosDatasetConfig:
     TILE_PATH = UPath("/weka/dfive-default/helios/dataset/20250223/")
     return HeliosDatasetConfig(
         tile_path=TILE_PATH,
-        supported_modality_names=common.supported_modality_names,
+        supported_modality_names=SUPPORTED_MODALITIES,
         dtype=DType.float32,
     )
 

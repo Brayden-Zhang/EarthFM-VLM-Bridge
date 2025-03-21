@@ -7,9 +7,10 @@ import torch
 
 from helios.data.constants import Modality, ModalitySpec
 from helios.data.transform import TransformConfig
-from helios.nn.flexihelios import Encoder, Predictor, Reconstructor
+from helios.nn.flexihelios import Encoder, Predictor, Reconstructor, TokensAndMasks
 from helios.nn.mae import MAE
 from helios.train.masking import MaskedHeliosSample, MaskValue
+from helios.train.loss import ImageL2Loss
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +54,7 @@ def test_mae_with_loss(
     # Create dummy sentinel2_l2a data: shape (B, H, W, T, C)
     sentinel2_l2a = torch.randn(B, H, W, T, C)
     # Here we assume 0 (ONLINE_ENCODER) means the token is visible.
-    sentinel2_l2a_mask = torch.zeros(B, H, W, T, C, dtype=torch.long)
+    sentinel2_l2a_mask = torch.zeros(B, H, W, T, sentinel2_l2a_num_band_sets, dtype=torch.long)
 
     worldcover = torch.randn(B, H, W, 1, 1)
     worldcover_mask = (
@@ -77,7 +78,7 @@ def test_mae_with_loss(
     }
     x = MaskedHeliosSample(**masked_sample_dict)
 
-    patch_size = 4
+    patch_size = 2
     # input_res = 1
     # Shared constants for encoder and predictor
     MAX_PATCH_SIZE = 8
@@ -126,47 +127,38 @@ def test_mae_with_loss(
 
     assert output.worldcover is not None
     assert output.worldcover_mask is not None
-    # assert output.worldcover.shape == x.worldcover.shape
-    # assert output.worldcover_mask.shape == x.worldcover_mask.shape
+    assert output.worldcover.shape == x.worldcover.shape
+    assert output.worldcover_mask.shape == x.worldcover_mask.shape
 
 
-#    # this reflects the forward_model function in latentmim
-#    loss_fn = PatchDiscriminationLoss()
-#    with torch.no_grad():
-#        logger.info("target encoder running here")
-#        target_output = latentmim.target_encoder.forward(
-#            x.unmask(),
-#            patch_size=patch_size,
-#            token_exit_cfg={
-#                modality: 0 for modality in latentmim.encoder.supported_modality_names
-#            },
-#        )
-#    loss_fn.compute(output, target_output).backward()
-#
-#    for name, param in latentmim.encoder.named_parameters():
-#        # worldcover and latlons are masked from the encoder
-#        if not any(
-#            ignore_param in name
-#            for ignore_param in [
-#                "pos_embed",
-#                "month_embed",
-#                "composite_encodings.per_modality_channel_embeddings.latlon",
-#                "composite_encodings.per_modality_channel_embeddings.worldcover",
-#                "patch_embeddings.per_modality_embeddings.latlon",
-#                "patch_embeddings.per_modality_embeddings.worldcover",
-#            ]
-#        ):
-#            assert param.grad is not None, name
-#    for name, param in latentmim.decoder.named_parameters():
-#        # sentinel2_l2a is "masked" from the decoder
-#        if not any(
-#            ignore_param in name
-#            for ignore_param in [
-#                "pos_embed",
-#                "month_embed",
-#                "composite_encodings.per_modality_channel_embeddings.latlon",
-#            ]
-#        ):
-#            assert param.grad is not None, name
-#    for name, param in latentmim.target_encoder.named_parameters():
-#        assert param.grad is None, name
+    # this reflects the forward_model function in mae
+    loss_fn = ImageL2Loss()
+    reconstructed = output
+    labels = x.as_dict()
+    labels.pop('timestamps')
+    target_output = TokensAndMasks(**labels)
+    loss = loss_fn.compute(reconstructed, target_output)
+    loss.backward()
+
+    for name, param in mae.encoder.named_parameters():
+        # worldcover and latlons are masked from the encoder
+        if not any(
+            ignore_param in name
+            for ignore_param in [
+                "pos_embed",
+                "month_embed",
+                "composite_encodings.per_modality_channel_embeddings.worldcover",
+                "patch_embeddings.per_modality_embeddings.worldcover",
+            ]
+        ):
+            assert param.grad is not None, name
+    for name, param in mae.decoder.named_parameters():
+        # sentinel2_l2a is "masked" from the decoder
+        if not any(
+            ignore_param in name
+            for ignore_param in [
+                "pos_embed",
+                "month_embed",
+            ]
+        ):
+            assert param.grad is not None, name
