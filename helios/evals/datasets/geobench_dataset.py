@@ -1,10 +1,8 @@
 """GeoBench datasets, returning data in the Helios format."""
 
 import os
-from collections.abc import Sequence
 from pathlib import Path
 from types import MethodType
-from typing import NamedTuple
 
 import geobench
 import matplotlib.pyplot as plt
@@ -12,68 +10,21 @@ import numpy as np
 import torch.multiprocessing
 from einops import repeat
 from geobench.dataset import Stats
-from torch.utils.data import Dataset, default_collate
+from torch.utils.data import Dataset
+from upath import UPath
 
 from helios.data.constants import Modality
 from helios.data.dataset import HeliosSample
 from helios.train.masking import MaskedHeliosSample
 
+from .configs import DATASET_TO_CONFIG
+from .constants import EVAL_S2_BAND_NAMES, EVAL_TO_HELIOS_S2_BANDS
+from .normalize import impute_normalization_stats, normalize_bands
+
 torch.multiprocessing.set_sharing_strategy("file_system")
 
-# TODO: make sure we can map the S2 band names with what we have in this dataset
-GEOBENCH_S2_BAND_NAMES = [
-    "01 - Coastal aerosol",
-    "02 - Blue",
-    "03 - Green",
-    "04 - Red",
-    "05 - Vegetation Red Edge",
-    "06 - Vegetation Red Edge",
-    "07 - Vegetation Red Edge",
-    "08 - NIR",
-    "08A - Vegetation Red Edge",
-    "09 - Water vapour",
-    "10 - SWIR - Cirrus",
-    "11 - SWIR",
-    "12 - SWIR",
-]
 
-
-def _geobench_band_index_from_helios_name(helios_name: str) -> int:
-    for idx, band_name in enumerate(GEOBENCH_S2_BAND_NAMES):
-        if helios_name.endswith(band_name.split(" ")[0][-2:]):
-            return idx
-    raise ValueError(f"Unmatched band name {helios_name}")
-
-
-# For now, with Sentinel2 L2A, we will drop the B10 band in GeoBench dataset
-GEOBENCH_TO_HELIOS_S2_BANDS = [
-    _geobench_band_index_from_helios_name(b) for b in Modality.SENTINEL2_L2A.band_order
-]
-
-
-class GeoBenchConfig(NamedTuple):
-    """GeoBench configs."""
-
-    benchmark_name: str
-    imputes: list[tuple[str, str]]
-    num_classes: int
-    is_multilabel: bool
-
-
-DATASET_TO_CONFIG = {
-    "m-eurosat": GeoBenchConfig(
-        benchmark_name="classification_v1.0",
-        imputes=[],
-        num_classes=10,
-        is_multilabel=False,
-    ),
-    "m-brick-kiln": GeoBenchConfig(
-        benchmark_name="classification_v1.0",
-        imputes=[],
-        num_classes=2,
-        is_multilabel=False,
-    ),
-}
+GEOBENCH_DIR = UPath("/weka/dfive-default/presto-geobench/dataset/geobench")
 
 
 class GeobenchDataset(Dataset):
@@ -123,15 +74,18 @@ class GeobenchDataset(Dataset):
             self.normalizer_computed = Normalizer(Strategy.COMPUTED)
 
         for task in geobench.task_iterator(
-            benchmark_name=config.benchmark_name,
-            benchmark_dir=geobench_dir / config.benchmark_name,
+            # e.g. "classification_v1.0"
+            benchmark_name=f"{config.task_type.value}_v1.0",
+            benchmark_dir=geobench_dir / f"{config.task_type.value}_v1.0",
         ):
             if task.dataset_name == dataset:
                 break
 
         # hack: https://github.com/ServiceNow/geo-bench/issues/22
         task.get_dataset_dir = MethodType(
-            lambda self: geobench_dir / config.benchmark_name / self.dataset_name,
+            lambda self: geobench_dir
+            / f"{config.task_type.value}_v1.0"
+            / self.dataset_name,
             task,
         )
 
@@ -144,9 +98,7 @@ class GeobenchDataset(Dataset):
         self.band_indices = [
             original_band_names.index(band_name) for band_name in self.band_names
         ]
-        imputed_band_info = self._impute_normalization_stats(
-            task.band_stats, config.imputes
-        )
+        imputed_band_info = impute_normalization_stats(task.band_stats, config.imputes)
         self.mean, self.std = self._get_norm_stats(imputed_band_info)
         self.active_indices = range(int(len(self.dataset)))
         self.norm_method = norm_method
@@ -158,37 +110,11 @@ class GeobenchDataset(Dataset):
     ) -> tuple[np.ndarray, np.ndarray]:
         means = []
         stds = []
-        for band_name in GEOBENCH_S2_BAND_NAMES:
+        for band_name in EVAL_S2_BAND_NAMES:
             assert band_name in imputed_band_info, f"{band_name} not found in band_info"
             means.append(imputed_band_info[band_name].mean)  # type: ignore
             stds.append(imputed_band_info[band_name].std)  # type: ignore
         return np.array(means), np.array(stds)
-
-    @staticmethod
-    def _impute_normalization_stats(
-        band_info: dict, imputes: list[tuple[str, str]]
-    ) -> dict:
-        # band_info is a dictionary with band names as keys and statistics (mean / std) as values
-        if not imputes:
-            return band_info
-
-        names_list = list(band_info.keys())
-        new_band_info: dict = {}
-        for band_name in GEOBENCH_S2_BAND_NAMES:
-            new_band_info[band_name] = {}
-            if band_name in names_list:
-                # we have the band, so use it
-                new_band_info[band_name] = band_info[band_name]
-            else:
-                # we don't have the band, so impute it
-                for impute in imputes:
-                    src, tgt = impute
-                    if tgt == band_name:
-                        # we have a match!
-                        new_band_info[band_name] = band_info[src]
-                        break
-
-        return new_band_info
 
     @staticmethod
     def _impute_bands(
@@ -203,7 +129,7 @@ class GeobenchDataset(Dataset):
 
         # create a new image list by looping through and imputing where necessary
         new_image_list = []
-        for band_name in GEOBENCH_S2_BAND_NAMES:
+        for band_name in EVAL_S2_BAND_NAMES:
             if band_name in names_list:
                 # we have the band, so append it
                 band_idx = names_list.index(band_name)
@@ -218,38 +144,6 @@ class GeobenchDataset(Dataset):
                         new_image_list.append(image_list[band_idx])
                         break
         return new_image_list
-
-    @staticmethod
-    def _normalize_bands(
-        image: np.ndarray, means: np.array, stds: np.array, method: str = "norm_no_clip"
-    ) -> np.ndarray:
-        original_dtype = image.dtype
-
-        if method == "standardize":
-            image = (image - means) / stds
-        else:
-            min_value = means - stds
-            max_value = means + stds
-            image = (image - min_value) / (max_value - min_value)
-
-            if method == "norm_yes_clip":
-                image = np.clip(image, 0, 1)
-            elif method == "norm_yes_clip_int":
-                # same as clipping between 0 and 1 but rounds to the nearest 1/255
-                image = image * 255  # scale
-                image = np.clip(image, 0, 255).astype(
-                    np.uint8
-                )  # convert to 8-bit integers
-                image = (
-                    image.astype(original_dtype) / 255
-                )  # back to original_dtype between 0 and 1
-            elif method == "norm_no_clip":
-                pass
-            else:
-                raise ValueError(
-                    f"norm type must be norm_yes_clip, norm_yes_clip_int, norm_no_clip, or standardize, not {method}"
-                )
-        return image
 
     def __getitem__(self, idx: int) -> tuple[MaskedHeliosSample, torch.Tensor]:
         """Return a single GeoBench data instance."""
@@ -271,9 +165,7 @@ class GeobenchDataset(Dataset):
 
         # Normalize using the downstream task's normalization stats
         if not self.norm_stats_from_pretrained:
-            x = torch.tensor(
-                self._normalize_bands(x, self.mean, self.std, self.norm_method)
-            )
+            x = torch.tensor(normalize_bands(x, self.mean, self.std, self.norm_method))
         # check if label is an object or a number
         if not (isinstance(label, int) or isinstance(label, list)):
             label = label.data
@@ -285,7 +177,7 @@ class GeobenchDataset(Dataset):
             :,
             :,
             :,
-            GEOBENCH_TO_HELIOS_S2_BANDS,
+            EVAL_TO_HELIOS_S2_BANDS,
         ]
         # Normalize using the pretrained dataset's normalization stats
         if self.norm_stats_from_pretrained:
@@ -302,19 +194,6 @@ class GeobenchDataset(Dataset):
     def __len__(self) -> int:
         """Length of dataset."""
         return len(self.dataset)
-
-    @staticmethod
-    def collate_fn(
-        batch: Sequence[tuple[MaskedHeliosSample, torch.Tensor]],
-    ) -> tuple[MaskedHeliosSample, torch.Tensor]:
-        """Collate function for DataLoaders."""
-        samples, targets = zip(*batch)
-        # we assume that the same values are consistently None
-        collated_sample = default_collate(
-            [s.as_dict(return_none=False) for s in samples]
-        )
-        collated_target = default_collate([t for t in targets])
-        return MaskedHeliosSample(**collated_sample), collated_target
 
     def visualize_sample_bands(self, x: np.ndarray, output_dir: str) -> None:
         """Visualize each band from a given array, saving each plot as a PNG file in the specified output_dir.

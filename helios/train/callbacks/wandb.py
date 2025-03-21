@@ -21,6 +21,7 @@ class HeliosWandBCallback(WandBCallback):
     """Helios specific wandb callback."""
 
     upload_dataset_distribution_pre_train: bool = True
+    upload_modality_data_band_distribution_pre_train: bool = False
     restart_on_same_run: bool = True
 
     def pre_train(self) -> None:
@@ -59,7 +60,8 @@ class HeliosWandBCallback(WandBCallback):
                 assert isinstance(self.trainer.data_loader, HeliosDataLoader)
                 dataset = self.trainer.data_loader.dataset
                 logger.info("Gathering locations of entire dataset")
-                latlons = dataset.get_geographic_distribution()
+                latlons = dataset.latlon_distribution
+                assert latlons is not None
                 # this should just be a general utility function
                 logger.info(f"Uploading dataset distribution to wandb: {latlons.shape}")
                 fig = plot_latlon_distribution(
@@ -74,15 +76,18 @@ class HeliosWandBCallback(WandBCallback):
                     }
                 )
                 plt.close(fig)
-                logger.info("Gathering normalized data distribution")
-                sample_data = dataset.get_sample_data_for_histogram()
-                for modality, modality_data in sample_data.items():
-                    fig = plot_modality_data_distribution(modality, modality_data)
-                    self.wandb.log(
-                        {
-                            f"dataset/pretraining_{modality}_distribution": self.wandb.Image(
-                                fig
-                            )
-                        }
-                    )
-                    plt.close(fig)
+                # Delete the latlon distribution from the dataset so it doesn't get pickled into data worker processes
+                del dataset.latlon_distribution
+                if self.upload_modality_data_band_distribution_pre_train:
+                    logger.info("Gathering normalized data distribution")
+                    sample_data = dataset.get_sample_data_for_histogram()
+                    for modality, modality_data in sample_data.items():
+                        fig = plot_modality_data_distribution(modality, modality_data)
+                        self.wandb.log(
+                            {
+                                f"dataset/pretraining_{modality}_distribution": self.wandb.Image(
+                                    fig
+                                )
+                            }
+                        )
+                        plt.close(fig)

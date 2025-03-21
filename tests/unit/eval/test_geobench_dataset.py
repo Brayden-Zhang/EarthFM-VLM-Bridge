@@ -7,6 +7,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from helios.evals.datasets import GeobenchDataset
+from helios.evals.datasets.utils import eval_collate_fn
 
 
 @pytest.fixture
@@ -37,7 +38,7 @@ def test_geobench_dataset_and_dataloader(geobench_dir: Path) -> None:
             split="train",
             partition="0.01x_train",
         ),
-        collate_fn=GeobenchDataset.collate_fn,
+        collate_fn=eval_collate_fn,
         batch_size=1,
         shuffle=False,
     )

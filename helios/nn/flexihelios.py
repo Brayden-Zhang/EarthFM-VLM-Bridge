@@ -145,26 +145,56 @@ class TokensAndMasks(NamedTuple):
         return x, masks
 
     def pool_unmasked_tokens(
-        self, pooling_type: PoolingType = PoolingType.MAX
+        self, pooling_type: PoolingType = PoolingType.MAX, spatial_pooling: bool = False
     ) -> Tensor:
         """Pool the unmasked tokens.
 
         Args:
             pooling_type: Pooling type for the tokens
+            spatial_pooling: Whether to keep the spatial dimensions when pooling. If true,
+                this expects the masks within a spatial modality to be consistent (e.g. all
+                s2 tokens would have the same mask.)
         """
-        x, mask = self.flatten_tokens_and_masks()
-        # 1s for online encoder, 0s elsewhere
-        mask = (mask == MaskValue.ONLINE_ENCODER.value).long()
-        x_for_pooling = x * mask.unsqueeze(-1)
-        if pooling_type == PoolingType.MAX:
-            x_for_pooling = x_for_pooling.masked_fill(
-                ~mask.bool().unsqueeze(-1), -float("inf")
-            )
-            return x_for_pooling.max(dim=1).values
-        elif pooling_type == PoolingType.MEAN:
-            return x_for_pooling.sum(dim=1) / torch.sum(mask, -1, keepdim=True)
+        if not spatial_pooling:
+            x, mask = self.flatten_tokens_and_masks()
+            # 1s for online encoder, 0s elsewhere
+            mask = (mask == MaskValue.ONLINE_ENCODER.value).long()
+            x_for_pooling = x * mask.unsqueeze(-1)
+            if pooling_type == PoolingType.MAX:
+                x_for_pooling = x_for_pooling.masked_fill(
+                    ~mask.bool().unsqueeze(-1), -float("inf")
+                )
+                return x_for_pooling.max(dim=1).values
+            elif pooling_type == PoolingType.MEAN:
+                return x_for_pooling.sum(dim=1) / torch.sum(mask, -1, keepdim=True)
+            else:
+                raise ValueError(f"Invalid pooling type: {pooling_type}")
         else:
-            raise ValueError(f"Invalid pooling type: {pooling_type}")
+            spatial_average = []
+            for attr_name in self.modalities:
+                if Modality.get(attr_name).is_spatial:
+                    mask_attr_name = self.get_masked_modality_name(attr_name)
+                    masked_attr = getattr(self, mask_attr_name)
+                    if masked_attr is None:
+                        continue
+                    if (masked_attr == MaskValue.ONLINE_ENCODER.value).all():
+                        attr = getattr(self, attr_name)
+                        # pool across time and bandset dimensions
+                        if pooling_type == PoolingType.MEAN:
+                            spatial_average.append(torch.mean(attr, dim=(-2, -3)))
+                        else:
+                            spatial_average.append(
+                                torch.max(torch.max(attr, dim=-2).values, dim=-2).values
+                            )
+            if len(spatial_average) == 0:
+                raise ValueError(
+                    "Missing unmasked spatial modalities for spatial pooling."
+                )
+            spatial_average_t = torch.stack(spatial_average, dim=-1)
+            if pooling_type == PoolingType.MEAN:
+                return spatial_average_t.mean(dim=-1)
+            else:
+                return spatial_average_t.max(dim=-1).values
 
 
 class FlexiHeliosPatchEmbeddings(nn.Module):

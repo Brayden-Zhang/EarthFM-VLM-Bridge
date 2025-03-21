@@ -693,19 +693,19 @@ class TestTokensAndMasks:
 
     def test_pool_unmasked_tokens(self) -> None:
         """Test TokensAndMasks.pool_unmasked_tokens."""
-        b, h, w, t, d = 2, 4, 4, 3, 128
+        b, h, w, t, b_s, d = 2, 4, 4, 3, 1, 128
         # Setup for mean pooling
-        sentinel_2_mean = torch.ones((b, h, w, t, d))
+        sentinel_2_mean = torch.ones((b, h, w, t, b_s, d))
         sentinel_2_mean[0, 0, 0, 0, :] = 0  # set one "token" to 0s
-        sentinel_2_mask_mean = torch.zeros((b, h, w, t)).long()
+        sentinel_2_mask_mean = torch.zeros((b, h, w, t, b_s)).long()
         sentinel_2_mask_mean[0, 0, 0, 0] = 1  # set the same token's mask to 1
         t_and_m_mean = TokensAndMasks(
             sentinel2_l2a=sentinel_2_mean, sentinel2_l2a_mask=sentinel_2_mask_mean
         )
         # Setup for max pooling
-        sentinel_2_max = torch.ones((b, h, w, t, d)) * 2  # set all tokens to 2
+        sentinel_2_max = torch.ones((b, h, w, t, b_s, d)) * 2  # set all tokens to 2
         sentinel_2_max[0, 0, 0, 0, :] = 3  # set one "token" to 3s for max pooling
-        sentinel_2_mask_max = torch.zeros((b, h, w, t)).long()
+        sentinel_2_mask_max = torch.zeros((b, h, w, t, b_s)).long()
         sentinel_2_mask_max[0, 0, 0, 0] = 1  # set the same token's mask to 1
         t_and_m_max = TokensAndMasks(
             sentinel2_l2a=sentinel_2_max, sentinel2_l2a_mask=sentinel_2_mask_max
@@ -720,6 +720,50 @@ class TestTokensAndMasks:
         pooled_mean = t_and_m_mean.pool_unmasked_tokens(PoolingType.MEAN)
         assert pooled_mean.shape == (b, d)
         assert (pooled_mean == 1).all()  # check the 0 tokens have been ignored
+
+    def test_spatial_pool_unmasked_tokens(self) -> None:
+        """Test TokensAndMasks.pool_unmasked_tokens."""
+        b, h, w, t, b_s, d = 2, 4, 4, 3, 3, 128
+        # Setup for mean pooling
+        sentinel_2_mean = torch.ones((b, h, w, t, b_s, d))
+        sentinel_2_mask_mean = torch.zeros((b, h, w, t, b_s)).long()
+        # s1 should be ignored since its masked
+        sentinel_1_mean = torch.ones((b, h, w, t, b_s, d)) * 2
+        sentinel_1_mask_mean = torch.ones((b, h, w, t, b_s)).long()
+        t_and_m_mean = TokensAndMasks(
+            sentinel2_l2a=sentinel_2_mean,
+            sentinel2_l2a_mask=sentinel_2_mask_mean,
+            sentinel1=sentinel_1_mean,
+            sentinel1_mask=sentinel_1_mask_mean,
+        )
+
+        # Test mean pooling
+        pooled_mean = t_and_m_mean.pool_unmasked_tokens(
+            PoolingType.MEAN, spatial_pooling=True
+        )
+        assert pooled_mean.shape == (b, h, w, d)
+        assert (pooled_mean == 1).all()  # check the sen1 tokens have been ignored
+
+        # Setup for max pooling
+        sentinel_2_max = torch.ones((b, h, w, t, b_s, d))
+        sentinel_2_max[:, :, :, 0] = 2  # set one timestep to 2s
+        sentinel_2_mask_max = torch.zeros((b, h, w, t, b_s)).long()
+        # s1 should be ignored since its masked
+        sentinel_1_mean = torch.ones((b, h, w, t, b_s, d)) * 2
+        sentinel_1_mask_mean = torch.ones((b, h, w, t, b_s)).long()
+        t_and_m_max = TokensAndMasks(
+            sentinel2_l2a=sentinel_2_max,
+            sentinel2_l2a_mask=sentinel_2_mask_max,
+            sentinel1=sentinel_1_mean,
+            sentinel1_mask=sentinel_1_mask_mean,
+        )
+
+        # Test max pooling
+        pooled_max = t_and_m_max.pool_unmasked_tokens(
+            PoolingType.MAX, spatial_pooling=True
+        )
+        assert pooled_max.shape == (b, h, w, d)
+        assert (pooled_max == 2).all()  # check the 3 tokens have been ignored
 
 
 # TODO: write a unit test for the FlexiPatchEmbeddings

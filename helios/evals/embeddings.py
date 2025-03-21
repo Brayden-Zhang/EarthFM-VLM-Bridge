@@ -5,7 +5,8 @@ import logging
 import torch
 from torch.utils.data import DataLoader
 
-from helios.nn.flexihelios import Encoder, PoolingType
+from helios.evals.datasets.configs import TaskType
+from helios.nn.flexihelios import Encoder, PoolingType, TokensAndMasks
 from helios.train.masking import MaskedHeliosSample
 
 logger = logging.getLogger(__name__)
@@ -13,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 def get_embeddings(
     data_loader: DataLoader,
+    task_type: TaskType,
     model: Encoder,
     patch_size: int,
     pooling_type: PoolingType = PoolingType.MAX,
@@ -39,10 +41,14 @@ def get_embeddings(
             with torch.amp.autocast(device_type=device.type, dtype=torch.bfloat16):
                 # TODO: Model expects masked helios sample we need to pass empty masks
                 # Likely we want to have a flag that checks for eval mode and passes empty masks
-                batch_embeddings = model(
+                batch_embeddings: TokensAndMasks = model(
                     masked_helios_sample, patch_size=patch_size
                 )  # (bsz, dim)
-            embeddings.append(batch_embeddings.pool_unmasked_tokens(pooling_type).cpu())
+            spatial_pool = True if task_type == TaskType.SEGMENTATION else False
+            averaged_embeddings = batch_embeddings.pool_unmasked_tokens(
+                pooling_type, spatial_pooling=spatial_pool
+            )
+            embeddings.append(averaged_embeddings.cpu())
             labels.append(label)
 
     embeddings = torch.cat(embeddings, dim=0)  # (N, dim)

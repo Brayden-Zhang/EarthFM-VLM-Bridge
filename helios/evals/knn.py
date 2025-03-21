@@ -6,30 +6,28 @@ import torch
 import torch.nn as nn
 from sklearn.metrics import accuracy_score, f1_score
 
+from helios.evals.datasets.configs import EvalDatasetConfig
+
 logger = logging.getLogger(__name__)
 
 
 def run_knn(
-    eval_type: str,
+    config: EvalDatasetConfig,
     train_embeddings: torch.Tensor,
     train_labels: torch.Tensor,
     test_embeddings: torch.Tensor,
     test_labels: torch.Tensor,
-    num_classes: int,
-    is_multilabel: bool,
     device: torch.device,
+    k: int = 20,
     skip_idx: bool = False,
 ) -> float:
     """Run KNN on the Helios model."""
-    if not eval_type.startswith("KNN-"):
-        raise ValueError(f"Unexpected eval type {eval_type}")
-    k = int(eval_type.split("-")[-1])
-    if not is_multilabel:
+    if not config.is_multilabel:
         predictions = _run_knn_for_k(
             train_embeddings=train_embeddings,
             train_labels=train_labels,
             test_embeddings=test_embeddings,
-            num_classes=num_classes,
+            num_classes=config.num_classes,
             k=k,
             device=device,
             skip_idx=skip_idx,
@@ -39,10 +37,10 @@ def run_knn(
         # multilabel dataset, e.g., BigEarthNet
         # we will run KNN or K-Means once per class to compute predictions
         # labels are shape (num_samples, num_classes)
-        assert num_classes == train_labels.shape[-1]
-        assert num_classes == test_labels.shape[-1]
+        assert config.num_classes == train_labels.shape[-1]
+        assert config.num_classes == test_labels.shape[-1]
         predictions = []
-        for class_idx in range(num_classes):
+        for class_idx in range(config.num_classes):
             train_single_labels = train_labels[:, class_idx]  # (num_samples)
             single_predictions = _run_knn_for_k(
                 train_embeddings=train_embeddings,
