@@ -19,7 +19,6 @@ from olmo_core.distributed.parallel import (
 )
 from olmo_core.distributed.utils import get_world_size
 from olmo_core.exceptions import OLMoConfigurationError
-from olmo_core.float8 import Float8Config, Float8Handler
 from olmo_core.optim import OptimConfig, SkipStepOptimizer
 from olmo_core.optim.scheduler import Scheduler
 from olmo_core.train.common import Duration
@@ -44,7 +43,6 @@ class HeliosTrainModuleConfig(Config):
         rank_microbatch_size: The micro batch size per rank in instances.
         optim: The optimizer configuration.
         compile_model: Whether to compile the model using torch.compile.
-        float8_config: Configuration for Float8 training if enabled.
         dp_config: Data parallel configuration for distributed training.
         ac_config: Activation checkpointing configuration.
         compile_loss: Whether to compile the loss function.
@@ -62,7 +60,6 @@ class HeliosTrainModuleConfig(Config):
 
     # Model settings
     compile_model: bool = False
-    float8_config: Float8Config | None = None  # UNTESTED for helios
     dp_config: DataParallelConfig | None = None
     ac_config: TransformerActivationCheckpointingConfig | None = (
         None  # UNTESTED for helios
@@ -123,7 +120,6 @@ class HeliosTrainModule(TrainModule):
         optim: The corresponding optimizer config.
         rank_microbatch_size: The rank micro batch size in instances.
         compile_model: Whether to compile to the model.
-        float8_config: Float8 configuration for the model.
         dp_config: Data parallel configuration for the model.
         ac_config: Activation checkpointing configuration for the model.
         compile_loss: Whether to compile the loss function.
@@ -142,7 +138,6 @@ class HeliosTrainModule(TrainModule):
         rank_microbatch_size: int,
         warmup_duration: Duration | None = None,
         compile_model: bool = False,
-        float8_config: Float8Config | None = None,
         dp_config: DataParallelConfig | None = None,
         ac_config: TransformerActivationCheckpointingConfig | None = None,
         compile_loss: bool = False,
@@ -161,7 +156,6 @@ class HeliosTrainModule(TrainModule):
             rank_microbatch_size: The rank batch size in instances.
             warmup_duration: The warmup duration.
             compile_model: Whether to compile to the model.
-            float8_config: Float8 configuration for the model.
             dp_config: Data parallel configuration for the model.
             ac_config: Activation checkpointing configuration for the model.
             compile_loss: Whether to compile the loss function.
@@ -187,19 +181,6 @@ class HeliosTrainModule(TrainModule):
             f"Data parallel world size = {get_world_size(self.dp_process_group):,d}"
         )
         self.warmup_duration = warmup_duration
-        self.float8_handler: Float8Handler | None = None
-        # float8_enabled = False
-        if float8_config is not None:
-            # float8_enabled = float8_config.enabled
-            float8_config.compile = compile_model
-            self.float8_handler = float8_config.build()
-
-        # Maybe convert linear layers to FP8 linear.
-        if self.float8_handler is not None and self.float8_handler.enabled:
-            self.float8_handler.convert_to_float8_training(
-                self.model, modules_to_ignore={"lm_head.w_out"}
-            )
-            logger.info("Swapped linear layers to Float8 linear layers")
 
         # Maybe apply activation checkpointing.
         if ac_config is not None:
@@ -370,10 +351,6 @@ class HeliosTrainModule(TrainModule):
             if isinstance(self.optimizer, SkipStepOptimizer):
                 self.optimizer.latest_grad_norm = grad_norm
 
-        # Sync Float8 AMAXs (argmax of abs(max)) and scales.
-        if self.float8_handler is not None:
-            self.float8_handler.sync_float8_amax_and_scale_history(self.model)
-
         # Maybe adjust learning rate.
         if self.scheduler is not None:
             for group_idx, group in enumerate(self.optimizer.param_groups):
@@ -420,11 +397,6 @@ class HeliosTrainModule(TrainModule):
             self.trainer.record_metric(
                 "step skipped", self.optimizer.step_skipped, namespace="optim"
             )
-
-        # Calculate Float8 dynamic AMAX/scale for all parameters.
-        # For FSDP2 this issues a single all-reduce for all parameters at once.
-        if self.float8_handler is not None:
-            self.float8_handler.precompute_float8_dynamic_scale_for_fsdp(self.model)
 
     @contextlib.contextmanager
     def _train_microbatch_context(
