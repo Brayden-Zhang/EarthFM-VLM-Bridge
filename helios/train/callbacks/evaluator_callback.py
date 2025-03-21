@@ -32,7 +32,6 @@ class DownstreamEvaluator:
         batch_size: int = 128,
         num_workers: int = 8,
         patch_size: int = 4,
-        is_multimodal: bool = False,
         eval_duration: Duration = field(default_factory=lambda: Duration.epochs(1)),
         pooling_type: PoolingType = PoolingType.MEAN,
         norm_stats_from_pretrained: bool = True,
@@ -51,7 +50,6 @@ class DownstreamEvaluator:
         self.probe_lr = probe_lr
         self.patch_size = patch_size
         self.eval_duration = eval_duration
-        self.is_multimodal = is_multimodal
 
     def _get_data_loader(self, split: str) -> DataLoader:
         """Get the data loader for the given split."""
@@ -61,7 +59,6 @@ class DownstreamEvaluator:
                 split=split,
                 partition="default",
                 norm_stats_from_pretrained=self.norm_stats_from_pretrained,
-                is_multimodal=self.is_multimodal,
             ),
             collate_fn=eval_collate_fn,
             batch_size=self.batch_size,
@@ -177,7 +174,6 @@ class DownstreamTaskConfig:
     # ViT-base = 0.01
     probe_lr: float | None = None
     patch_size: int = 4
-    is_multimodal: bool = False
     eval_duration: Duration = field(default_factory=lambda: Duration.epochs(1))
 
 
@@ -211,7 +207,6 @@ class DownstreamEvaluatorCallbackConfig(CallbackConfig):
                     device=trainer.device,
                     probe_lr=task.probe_lr,
                     patch_size=task.patch_size,
-                    is_multimodal=task.is_multimodal,
                     eval_duration=task.eval_duration,
                 )
             )

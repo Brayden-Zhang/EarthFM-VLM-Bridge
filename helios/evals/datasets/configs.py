@@ -18,9 +18,6 @@ class EvalDatasetConfig(NamedTuple):
     imputes: list[tuple[str, str]]
     num_classes: int
     is_multilabel: bool
-    # this is only for PASTIS-R
-    # if true, use S1 + S2, if false, use S2 only
-    is_multimodal: bool = False
     # this is only necessary for segmentation tasks,
     # and defines the input / output height width.
     height_width: int | None = None
@@ -56,7 +53,6 @@ DATASET_TO_CONFIG = {
         imputes=[],
         num_classes=19,
         is_multilabel=False,
-        is_multimodal=False,
         height_width=64,
     ),
     "pastis-r": EvalDatasetConfig(
@@ -64,7 +60,6 @@ DATASET_TO_CONFIG = {
         imputes=[],
         num_classes=19,
         is_multilabel=False,
-        is_multimodal=True,
         height_width=64,
     ),
 }

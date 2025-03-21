@@ -178,7 +178,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
     )
     # Safe to collect everys tep for now
     garbage_collector_callback = GarbageCollectorCallback(gc_interval=1)
-    EVAL_INTERVAL_EPOCHS = 5
+    logger.warning("WANDB Distribution Uploads are disabled for Debugging")
     EVAL_TASKS = [
         DownstreamTaskConfig(
             dataset="m-eurosat",
@@ -186,7 +186,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             num_workers=8,
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
-            eval_duration=Duration.epochs(1),
+            eval_duration=Duration.epochs(5),
         ),
         DownstreamTaskConfig(
             dataset="mados",
@@ -195,17 +195,25 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=False,
             probe_lr=0.1,
-            eval_duration=Duration.epochs(1),
+            eval_duration=Duration.epochs(20),
+        ),
+        DownstreamTaskConfig(
+            dataset="pastis",
+            batch_size=8,
+            num_workers=2,
+            pooling_type=PoolingType.MEAN,
+            norm_stats_from_pretrained=True,
+            probe_lr=0.1,
+            eval_duration=Duration.epochs(20),
         ),
         DownstreamTaskConfig(
             dataset="pastis-r",
-            batch_size=1,
-            num_workers=1,
+            batch_size=8,
+            num_workers=2,
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
-            is_multimodal=True,
             probe_lr=0.1,
-            eval_duration=Duration.epochs(1),
+            eval_duration=Duration.epochs(20),
         ),
     ]
     trainer_config = (
