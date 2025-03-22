@@ -79,7 +79,7 @@ for masking_type, loss_type, token_exit_args in itertools.product(
     TOKEN_EXIT_ARGS,
 ):
     # Construct run name indicating hyperparameters
-    run_name = f"latentmim_tiny_masking_2{masking_type}_loss_{loss_type}_token_exit_{token_exit_args[1]}"
+    run_name = f"2latentmim_tiny_masking_{masking_type}_loss_{loss_type}_token_exit_{token_exit_args[1]}"
 
     if loss_type == "all_discrimination":
         # Need to reduce rank microbatch size for all discrimination to avoid OOM
