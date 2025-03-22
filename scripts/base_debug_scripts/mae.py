@@ -171,7 +171,7 @@ def build_dataset_config(common: CommonComponents) -> HeliosDatasetConfig:
     return HeliosDatasetConfig(
         h5py_dir=h5py_dir,
         tile_path=None,
-        supported_modality_names=common.supported_modalities,
+        supported_modality_names=common.SUPPORTED_MODALITIES,
         dtype=DType.float32,
     )
 
