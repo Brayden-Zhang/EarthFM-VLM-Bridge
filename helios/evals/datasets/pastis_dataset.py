@@ -424,19 +424,19 @@ class PASTISRDataset(Dataset):
         if self.is_multimodal:
             masked_sample = MaskedHeliosSample.from_heliossample(
                 HeliosSample(
-                    sentinel2_l2a=s2_image.float(),
-                    sentinel1=s1_image.float(),
+                    sentinel2_l2a=torch.tensor(s2_image).float(),
+                    sentinel1=torch.tensor(s1_image).float(),
                     timestamps=timestamps,
                 )
             )
         else:
             masked_sample = MaskedHeliosSample.from_heliossample(
                 HeliosSample(
-                    sentinel2_l2a=s2_image.float(),
+                    sentinel2_l2a=torch.tensor(s2_image).float(),
                     timestamps=timestamps,
                 )
             )
-        return masked_sample, labels
+        return masked_sample, labels.long()
 
 
 # if __name__ == "__main__":
