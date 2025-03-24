@@ -8,9 +8,11 @@ from typing import Any
 import torch
 import torch.nn.functional as F
 from class_registry import ClassRegistry
+from einops import rearrange, repeat
 from olmo_core.config import Config
 from torch import Tensor
 
+from helios.data.constants import Modality
 from helios.nn.flexihelios import TokensAndMasks
 from helios.train.masking import MaskValue
 
@@ -326,6 +328,29 @@ class ImageL2Loss(Loss):
 
     name = "ImageL2"
 
+    # data: [B, H, W, T, C]
+    def _flatten_helios_data(self, data: TokensAndMasks) -> tuple[Tensor, Tensor]:
+        masks = []
+        datas = []
+        for modality in data.modalities:
+            pred = getattr(data, modality)
+            modality_spec = Modality.get(modality)
+            if pred is not None:
+                mask = getattr(data, data.get_masked_modality_name(modality))
+                for idx, channel_set_idxs in enumerate(
+                    modality_spec.bandsets_as_indices()
+                ):
+                    bs_mask = mask[..., idx]
+                    bs_mask = repeat(
+                        bs_mask, "b h w t -> b h w t c", c=len(channel_set_idxs)
+                    )
+                    bs_mask = rearrange(bs_mask, "b h w t c -> b (h w t c)")
+                    masks.append(bs_mask)
+                    bs_data = pred[..., channel_set_idxs]
+                    bs_data = rearrange(bs_data, "b h w t c -> b (h w t c)")
+                    datas.append(bs_data)
+        return torch.cat(datas, dim=1), torch.cat(masks, dim=1)
+
     def compute(
         self, predictions: TokensAndMasks, targets: TokensAndMasks, **kwargs: Any
     ) -> Tensor:
@@ -339,24 +364,11 @@ class ImageL2Loss(Loss):
         Returns:
             The computed loss value.
         """
-        loss = torch.tensor(0.0, device=predictions.device)
-        for modality in predictions.modalities:
-            pred = getattr(predictions, modality)
-            if pred is not None:
-                # TODO use the mask
-                # mask = getattr(
-                #    predictions, predictions.get_masked_modality_name(modality)
-                # )
-                label = getattr(targets, modality)
-                # print (pred.shape)
-                # print (mask.shape)
-                # print ((mask==MaskValue.DECODER.value).shape)
-                loss += F.mse_loss(pred, label)
-        # all_preds, all_masks = predictions.flatten_tokens_and_masks()
-        # all_targets = targets.flatten_tokens_and_masks()[0]
-        # pred = all_preds[all_masks == MaskValue.DECODER.value]
-        # target = all_targets[all_masks == MaskValue.DECODER.value]
-        return loss
+        data, masks = self._flatten_helios_data(predictions)
+        labels, label_masks = self._flatten_helios_data(targets)
+        data = data * (masks == MaskValue.DECODER.value)
+        labels = labels * (masks == MaskValue.DECODER.value)
+        return F.mse_loss(data, labels)
 
 
 @LOSS_REGISTRY.register("cross_entropy")
