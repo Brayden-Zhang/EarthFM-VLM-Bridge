@@ -226,6 +226,8 @@ class PatchDiscriminationLoss(Loss):
         """
         all_preds, all_masks = predictions.flatten_tokens_and_masks()
         all_targets = targets.flatten_tokens_and_masks()[0]
+        # The number of tokens per sample in a microbatch should be the same
+        count = (all_masks == MaskValue.DECODER.value).sum(dim=-1)
 
         pred = all_preds[all_masks == MaskValue.DECODER.value].unsqueeze(dim=0)
         target = all_targets[all_masks == MaskValue.DECODER.value].unsqueeze(dim=0)
