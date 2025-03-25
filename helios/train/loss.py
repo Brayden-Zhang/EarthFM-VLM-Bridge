@@ -281,7 +281,7 @@ class AdjustedPatchDiscriminationLoss(Loss):
     def __init__(
         self,
         tau: float = 0.1,
-        mu: float = 0.8,
+        mu: float = 0.7,
         sigma: float = 1.0,
         pred2unit: bool = False,
         mask_other_samples: bool = True,
