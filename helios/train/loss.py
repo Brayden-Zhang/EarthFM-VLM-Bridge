@@ -373,9 +373,10 @@ class ImageL2Loss(Loss):
                 valid_dict[masked_name] = getattr(targets, masked_name)
         valid_targets = TokensAndMasks(**valid_dict)
         labels, label_masks = self._flatten_helios_data(valid_targets)
-        data = data * (masks == MaskValue.DECODER.value)
-        labels = labels * (masks == MaskValue.DECODER.value)
-        return F.mse_loss(data, labels)
+        decode = label_masks == MaskValue.DECODER.value
+        data = data * decode
+        labels = labels * decode
+        return F.mse_loss(data, labels, reduction="sum") / torch.count_nonzero(decode)
 
 
 @LOSS_REGISTRY.register("cross_entropy")

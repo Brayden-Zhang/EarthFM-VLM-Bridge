@@ -136,6 +136,9 @@ def test_mae_with_loss(
     assert output.worldcover.shape == x.worldcover.shape
     assert output.worldcover_mask.shape == x.worldcover_mask.shape
 
+    assert (output.worldcover_mask == x.worldcover_mask).all()
+    assert (output.sentinel2_l2a_mask == x.sentinel2_l2a_mask).all()
+
     # this reflects the forward_model function in mae
     loss_fn = ImageL2Loss()
     reconstructed = output
