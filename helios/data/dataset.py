@@ -60,6 +60,7 @@ class HeliosSample(NamedTuple):
     timestamps: ArrayTensor | None = None  # [B, T, D=3], where D=[day, month, year]
     sentinel1: ArrayTensor | None = None  # [B, H, W, T, len(S1_bands)]
     worldcover: ArrayTensor | None = None  # [B, H, W, 1, len(WC_bands)]
+    openstreetmap_raster: ArrayTensor | None = None  # [B, H, W, 1, len(OSM_bands)]
 
     # TODO: Add unit tests for this
     def shape(self, attribute: str, mask: bool = False) -> Sequence[int]:
@@ -371,15 +372,12 @@ class HeliosDataset(Dataset):
         if h5py_dir is not None:
             self.h5py_dir = h5py_dir
             self.tile_path = h5py_dir.parent.parent
-            logger.info(f"H5py dir: {self.h5py_dir.parent.name.split('_')}")
-            predefined_supported_modalities_names = (
-                self.parse_modalities_names_from_dir_name(self.h5py_dir.parent.name)
-            )
-            modality_names = [modality.name for modality in supported_modalities]
-            if set(predefined_supported_modalities_names) != set(modality_names):
-                raise ValueError(
-                    f"The predefined supported modalities do not match the supported modalities: {predefined_supported_modalities_names} != {modality_names}"
-                )
+            # Ensure that the supported modalities are present in the h5py directory
+            for modality in supported_modalities:
+                if modality.name not in self.h5py_dir.parent.name:
+                    raise ValueError(
+                        f"The modality {modality.name} is not present in the h5py directory"
+                    )
         else:
             self.tile_path = tile_path
             self.h5py_dir: Path | None = None  # type: ignore
@@ -397,14 +395,6 @@ class HeliosDataset(Dataset):
         self._work_dir_set = False
         self.sample_indices: np.ndarray | None = None
         self.latlon_distribution: np.ndarray | None = None
-
-    def parse_modalities_names_from_dir_name(self, dir_name: str) -> list[str]:
-        """Parse the modalities from the directory name."""
-        return [
-            name
-            for name in Modality.names()
-            if name in dir_name and name != "sentinel2"
-        ]
 
     @property
     def fingerprint_version(self) -> str:

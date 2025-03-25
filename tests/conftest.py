@@ -78,6 +78,7 @@ def prepare_samples_and_supported_modalities() -> (
         sentinel2_l2a_40m_path = data_path / "s2_l2a_40m.tif"
         sentinel1_10m_path = data_path / "s1_10m.tif"
         worldcover_path = data_path / "worldcover.tif"
+        openstreetmap_path = data_path / "openstreetmap.tif"
         create_geotiff(sentinel2_l2a_10m_path, 256, 256, 10, crs, 4 * 12)
         create_geotiff(sentinel2_l2a_20m_path, 128, 128, 20, crs, 6 * 12)
         create_geotiff(sentinel2_l2a_40m_path, 64, 64, 40, crs, 2 * 12)
@@ -85,6 +86,8 @@ def prepare_samples_and_supported_modalities() -> (
         create_geotiff(sentinel1_10m_path, 256, 256, 10, crs, 2 * 12)
         # Create one WorldCover tile
         create_geotiff(worldcover_path, 256, 256, 10, crs, 1 * 1)
+        # Create one OpenStreetMap tile
+        create_geotiff(openstreetmap_path, 1024, 1024, 2.5, crs, 1 * 30)
 
         images = []
         # Create a list of ModalityImage objects for the year 2020
@@ -133,6 +136,50 @@ def prepare_samples_and_supported_modalities() -> (
                         center_time=datetime(2020, 6, 30),
                         band_sets={BandSet(["B1"], 16): data_path / "worldcover.tif"},
                     ),
+                    Modality.OPENSTREETMAP_RASTER: ModalityTile(
+                        grid_tile=GridTile(
+                            crs=crs, resolution_factor=16, col=165, row=-1968
+                        ),
+                        images=images,
+                        center_time=datetime(2020, 6, 30),
+                        band_sets={
+                            BandSet(
+                                [
+                                    "aerialway_pylon",
+                                    "aerodrome",
+                                    "airstrip",
+                                    "amenity_fuel",
+                                    "building",
+                                    "chimney",
+                                    "communications_tower",
+                                    "crane",
+                                    "flagpole",
+                                    "fountain",
+                                    "generator_wind",
+                                    "helipad",
+                                    "highway",
+                                    "leisure",
+                                    "lighthouse",
+                                    "obelisk",
+                                    "observatory",
+                                    "parking",
+                                    "petroleum_well",
+                                    "power_plant",
+                                    "power_substation",
+                                    "power_tower",
+                                    "river",
+                                    "runway",
+                                    "satellite_dish",
+                                    "silo",
+                                    "storage_tank",
+                                    "taxiway",
+                                    "water_tower",
+                                    "works",
+                                ],
+                                4,
+                            ): data_path / "openstreetmap.tif",
+                        },
+                    ),
                 },
             )
         ]
@@ -145,5 +192,6 @@ def prepare_samples_and_supported_modalities() -> (
             Modality.SENTINEL1,
             Modality.WORLDCOVER,
             Modality.LATLON,  # We want to include latlon even though it is not a read in modality
+            Modality.OPENSTREETMAP_RASTER,
         ],
     )

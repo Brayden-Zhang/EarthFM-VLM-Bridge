@@ -226,7 +226,6 @@ class LatentMIMTrainModule(HeliosTrainModule):
                 masked_batch = self.masking_strategy.apply_mask(
                     microbatch, patch_size=patch_size
                 )
-
                 # Run Encoder and decoder on the augmented input
                 decoded, target_output = self.model_forward(
                     masked_batch, patch_size, self.token_exit_cfg
