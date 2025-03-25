@@ -119,7 +119,7 @@ def build_train_module_config(
             "type": "imagel2",  # TODO: Should be registered via enum names
         }
     )
-    token_exit_cfg = {modality: 0 for modality in common.supported_modality_names}
+    token_exit_cfg = {modality: 4 for modality in common.supported_modality_names}
 
     WARMUP_EPOCHS = 2
     dp_config = DataParallelConfig(name=DataParallelType.ddp)
