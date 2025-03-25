@@ -54,6 +54,8 @@ class MaskedHeliosSample(NamedTuple):
     worldcover_mask: ArrayTensor | None = None
     latlon: ArrayTensor | None = None  # [B, 2]
     latlon_mask: ArrayTensor | None = None
+    openstreetmap_raster: ArrayTensor | None = None
+    openstreetmap_raster_mask: ArrayTensor | None = None
 
     def as_dict(self, return_none: bool = True) -> dict[str, Any]:
         """Convert the namedtuple to a dictionary.

@@ -61,8 +61,14 @@ class TokensAndMasks(NamedTuple):
     Args:
         sentinel2: sentinel 2 data of shape (B, P_H, P_W, T, Band_Sets, D)
         sentinel2_mask: sentinel 2 mask indicating which tokens are masked/unmasked (B, P_H, P_W, T, Band_Sets)
+        sentinel1: sentinel 1 data of shape (B, P_H, P_W, T, Band_Sets, D)
+        sentinel1_mask: sentinel 1 mask indicating which tokens are masked/unmasked (B, P_H, P_W, T, Band_Sets)
+        worldcover: worldcover data of shape (B, P_H, P_W, T, Band_Sets, D)
+        worldcover_mask: worldcover mask indicating which tokens are masked/unmasked (B, P_H, P_W, T, Band_Sets)
         latlon: lat lon data containing geographical coordinates
         latlon_mask: lat lon mask indicating which coordinates are masked/unmasked
+        openstreetmap_raster: openstreetmap raster data of shape (B, P_H, P_W, T, Band_Sets, D)
+        openstreetmap_raster_mask: openstreetmap raster mask indicating which tokens are masked/unmasked (B, P_H, P_W, T, Band_Sets)
     """
 
     sentinel2_l2a: Tensor | None = None
@@ -73,6 +79,8 @@ class TokensAndMasks(NamedTuple):
     worldcover_mask: Tensor | None = None
     latlon: Tensor | None = None
     latlon_mask: Tensor | None = None
+    openstreetmap_raster: Tensor | None = None
+    openstreetmap_raster_mask: Tensor | None = None
 
     @property
     def device(self) -> torch.device:
@@ -303,6 +311,7 @@ class FlexiHeliosPatchEmbeddings(nn.Module):
                     dtype=modality_data.dtype,
                     device=modality_data.device,
                 )
+                logger.info(f"{modality} is assigned empty embedding!")
             modality_tokens.append(patchified_data)
             modality_masks.append(token_mask)
         return torch.stack(modality_tokens, dim=-2), torch.stack(modality_masks, dim=-1)
