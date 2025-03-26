@@ -116,11 +116,7 @@ class PatchDiscriminationLossNew(Loss):
 
     name = "PatchDisc"
 
-    def __init__(
-        self,
-        tau: float = 0.1,
-        pred2unit: bool = False,
-    ):
+    def __init__(self, tau: float = 0.1, pred2unit: bool = False):
         """Initialize patch discrimination loss.
 
         Args:
@@ -327,6 +323,14 @@ class ImageL2Loss(Loss):
 
     name = "ImageL2"
 
+    def __init__(self, only_decode: bool = True):
+        """Initialize all patch discrimination loss.
+
+        Args:
+            only_decode: only calculate loss on DECODER masked tokens, otherwise all
+        """
+        self.only_decode = only_decode
+
     # data: [B, H, W, T, C]
     def _flatten_helios_data(self, data: TokensAndMasks) -> tuple[Tensor, Tensor]:
         masks = []
@@ -372,7 +376,10 @@ class ImageL2Loss(Loss):
                 valid_dict[masked_name] = getattr(targets, masked_name)
         valid_targets = TokensAndMasks(**valid_dict)
         labels, label_masks = self._flatten_helios_data(valid_targets)
-        decode = label_masks == MaskValue.DECODER.value
+        if self.only_decode:
+            decode = label_masks == MaskValue.DECODER.value
+        else:
+            decode = label_masks != MaskValue.MISSING.value
         data = data * decode
         labels = labels * decode
         return F.mse_loss(data, labels, reduction="sum") / torch.count_nonzero(decode)
