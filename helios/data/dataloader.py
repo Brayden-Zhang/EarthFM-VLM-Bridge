@@ -47,7 +47,7 @@ class HeliosDataLoader(DataLoaderBase):
         min_patch_size: int,
         max_patch_size: int,
         sampled_hw_p_list: list[int],
-        token_budget: int = BASE_TOKEN_BUDGET,
+        token_budget: int | None = None,
         dp_world_size: int = 1,
         dp_rank: int = 0,
         fs_local_rank: int = 0,
@@ -287,30 +287,41 @@ class HeliosDataLoader(DataLoaderBase):
     def get_mock_batch(self) -> HeliosSample:
         """Get a mock batch, for dry-run of forward and backward pass."""
         logger.info("Getting mock batch NOT FROM DATASET")
-        # TODO: This should be a feature of the modality spec
+        rng = get_rng(42)
         output_dict = {}
         if Modality.SENTINEL2_L2A in self.dataset.supported_modalities:
-            mock_sentinel2_l2a = np.random.rand(256, 256, 12, 12).astype(np.float32)
+            mock_sentinel2_l2a = rng.random((256, 256, 12, 12), dtype=np.float32)
             output_dict["sentinel2_l2a"] = mock_sentinel2_l2a
         if Modality.SENTINEL1 in self.dataset.supported_modalities:
-            mock_sentinel1 = np.random.rand(256, 256, 12, 2).astype(np.float32)
+            mock_sentinel1 = rng.random((256, 256, 12, 2), dtype=np.float32)
             output_dict["sentinel1"] = mock_sentinel1
         if Modality.WORLDCOVER in self.dataset.supported_modalities:
-            mock_worldcover = np.random.rand(256, 256, 1, 1).astype(np.float32)
+            mock_worldcover = rng.random((256, 256, 1, 1), dtype=np.float32)
             output_dict["worldcover"] = mock_worldcover
         if Modality.LATLON in self.dataset.supported_modalities:
-            mock_latlon = np.random.rand(2).astype(np.float32)
+            mock_latlon = rng.random((2,), dtype=np.float32)
             output_dict["latlon"] = mock_latlon
-        days = np.random.randint(0, 25, (12, 1))
-        months = np.random.randint(0, 12, (12, 1))
-        years = np.random.randint(2018, 2020, (12, 1))
+        if Modality.OPENSTREETMAP_RASTER in self.dataset.supported_modalities:
+            mock_openstreetmap_raster = rng.random((256, 256, 1, 30), dtype=np.float32)
+            output_dict["openstreetmap_raster"] = mock_openstreetmap_raster
+
+        days = rng.integers(0, 25, (12, 1))
+        months = rng.integers(0, 12, (12, 1))
+        years = rng.integers(2018, 2020, (12, 1))
         timestamps = np.concatenate([days, months, years], axis=1)  # shape: (12, 3)
 
         output_dict["timestamps"] = timestamps
 
         patch_size = 1
         collated_sample = self.collator(
-            [(patch_size, HeliosSample(**output_dict).subset(patch_size, 1500, 6))]
+            [
+                (
+                    patch_size,
+                    HeliosSample(**output_dict).subset(
+                        patch_size, max_tokens_per_instance=1500, sampled_hw_p=6
+                    ),
+                )
+            ]
         )
         return collated_sample
 
@@ -387,6 +398,9 @@ def _get_batch_item_params_iterator(
             filtered_hw_p_to_sample_array = hw_p_to_sample_array[
                 hw_p_to_sample_array <= max_height_width_tokens
             ]
+            filtered_hw_p_to_sample_array = filtered_hw_p_to_sample_array[
+                filtered_hw_p_to_sample_array > 0
+            ]
             sampled_hw_p = np.random.choice(filtered_hw_p_to_sample_array)
         yield idx, int(patch_size), int(sampled_hw_p)
         instances_processed += 1
@@ -446,7 +460,7 @@ class HeliosDataLoaderConfig(Config):
     max_patch_size: int
     sampled_hw_p_list: list[int]
     seed: int
-    token_budget: int = BASE_TOKEN_BUDGET
+    token_budget: int | None = None  # No subsetting if None
     shuffle: bool = True
     num_workers: int = 0
     prefetch_factor: int | None = None

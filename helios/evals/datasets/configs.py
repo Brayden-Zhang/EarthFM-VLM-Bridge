@@ -30,12 +30,6 @@ DATASET_TO_CONFIG = {
         num_classes=10,
         is_multilabel=False,
     ),
-    "m-brick-kiln": EvalDatasetConfig(
-        task_type=TaskType.CLASSIFICATION,
-        imputes=[],
-        num_classes=2,
-        is_multilabel=False,
-    ),
     "mados": EvalDatasetConfig(
         task_type=TaskType.SEGMENTATION,
         imputes=[
@@ -47,6 +41,26 @@ DATASET_TO_CONFIG = {
         is_multilabel=False,
         height_width=80,
     ),
+    "sen1floods11": EvalDatasetConfig(
+        task_type=TaskType.SEGMENTATION,
+        imputes=[],
+        num_classes=2,
+        is_multilabel=False,
+        height_width=64,
+    ),
+    "pastis": EvalDatasetConfig(
+        task_type=TaskType.SEGMENTATION,
+        imputes=[],
+        num_classes=19,
+        is_multilabel=False,
+        height_width=64,
+    ),
+    "pastis-r": EvalDatasetConfig(
+        task_type=TaskType.SEGMENTATION,
+        imputes=[],
+        num_classes=19,
+        is_multilabel=False,
+        height_width=64,
+    ),
 }
-
 ALL_DATASETS = list(DATASET_TO_CONFIG.keys())

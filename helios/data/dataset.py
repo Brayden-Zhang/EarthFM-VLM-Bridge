@@ -10,7 +10,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from math import floor
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import Any, NamedTuple, cast
 
 import h5py
 import numpy as np
@@ -43,16 +43,16 @@ logger = logging.getLogger(__name__)
 class HeliosSample(NamedTuple):
     """A sample of the data from the Helios dataset.
 
-    We always require sentinel2 data.
     This is a namedtuple that contains the data of a single sample or a batch of samples from the Helios dataset.
     For each modality, we have an ArrayTensor named by the modality, along with the latlon and timestamps.
     """
 
-    sentinel2_l2a: ArrayTensor  # [B, H, W, T, len(S2_bands)]
+    sentinel2_l2a: ArrayTensor | None = None  # [B, H, W, T, len(S2_bands)]
     latlon: ArrayTensor | None = None  # [B, 2]
     timestamps: ArrayTensor | None = None  # [B, T, D=3], where D=[day, month, year]
     sentinel1: ArrayTensor | None = None  # [B, H, W, T, len(S1_bands)]
     worldcover: ArrayTensor | None = None  # [B, H, W, 1, len(WC_bands)]
+    openstreetmap_raster: ArrayTensor | None = None  # [B, H, W, 1, len(OSM_bands)]
 
     # TODO: Add unit tests for this
     def shape(self, attribute: str, mask: bool = False) -> Sequence[int]:
@@ -80,15 +80,13 @@ class HeliosSample(NamedTuple):
                 # timestamps is a special case which is not in Modality
                 raise ValueError("Timestamps are not maskable")
         else:
-            if self.sentinel2_l2a is None:
-                raise ValueError("Sentinel2 L2A is not present in the sample")
             attribute_shape = []
             if Modality.get(attribute).get_tile_resolution() > 0:
                 # Add batch size (if has), height, width
-                attribute_shape += self.sentinel2_l2a.shape[:-2]
+                attribute_shape += [self.height, self.width]
             if Modality.get(attribute).is_multitemporal:
                 # Add number of timesteps
-                attribute_shape += [self.sentinel2_l2a.shape[-2]]
+                attribute_shape += [self.time]
             if not mask:
                 # Add number of bands
                 attribute_shape += [Modality.get(attribute).num_bands]
@@ -151,42 +149,53 @@ class HeliosSample(NamedTuple):
     @property
     def batch_size(self) -> int:
         """Get the batch size of the data."""
-        if len(self.sentinel2_l2a.shape) == 5:
-            return self.sentinel2_l2a.shape[0]
+        vals = [
+            cast(ArrayTensor, x).shape[0]
+            for x in self.as_dict(ignore_nones=True).values()
+        ]
+        if len(set(vals)) == 1:
+            return vals[0]
         else:
             return 1
 
     @property
     def height(self) -> int:
         """Get the height of the data."""
-        if len(self.sentinel2_l2a.shape) == 5:
-            return self.sentinel2_l2a.shape[1]
-        elif len(self.sentinel2_l2a.shape) == 4:
-            return self.sentinel2_l2a.shape[0]
-        else:
-            raise ValueError(f"Invalid shape: {self.sentinel2_l2a.shape}")
+        height_width_time_modalities = ["sentinel2_l2a", "sentinel1", "worldcover"]
+        for modality in height_width_time_modalities:
+            x = getattr(self, modality)
+            if x is not None:
+                if len(x.shape) == 5:
+                    return x.shape[1]
+                else:
+                    # no batch dimension
+                    if len(x.shape) != 4:
+                        raise ValueError(f"Unexpected shape {x.shape} for {modality}")
+                    return x.shape[0]
+        raise ValueError("No modality with height or width present")
 
     @property
     def width(self) -> int:
-        """Get the width of the data."""
-        if len(self.sentinel2_l2a.shape) == 5:
-            return self.sentinel2_l2a.shape[2]
-        elif len(self.sentinel2_l2a.shape) == 4:
-            return self.sentinel2_l2a.shape[1]
-        else:
-            raise ValueError(f"Invalid shape: {self.sentinel2_l2a.shape}")
+        """Get the height of the data."""
+        height_width_time_modalities = ["sentinel2_l2a", "sentinel1", "worldcover"]
+        for modality in height_width_time_modalities:
+            x = getattr(self, modality)
+            if x is not None:
+                if len(x.shape) == 5:
+                    return x.shape[2]
+                else:
+                    # no batch dimension
+                    if len(x.shape) != 4:
+                        raise ValueError(f"Unexpected shape {x.shape} for {modality}")
+                    return x.shape[1]
+        raise ValueError("No modality with height or width present")
 
     @property
     def time(self) -> int:
         """Get the number of time steps in the data."""
         if self.timestamps is None:
             raise ValueError("Timestamps are not present in the sample")
-        if self.timestamps.ndim == 3:
-            return self.timestamps.shape[1]
-        elif self.timestamps.ndim == 2:
-            return self.timestamps.shape[0]
-        else:
-            raise ValueError(f"Invalid timestamps shape: {self.timestamps.shape}")
+        return self.timestamps.shape[-2]
 
     def _get_max_t_within_token_budget(
         self, h_w_p: int, max_tokens_per_instance: int
@@ -231,12 +240,12 @@ class HeliosSample(NamedTuple):
     ) -> "HeliosSample":
         """Subset a HelioSample that is unbatched ie no batch dimension.
 
-        patch_size: the patch size being applied to this sample
-        max_tokens_per_instance: the token budget when subsetting. This is used
-            to determine the maximum number of timesteps possible for a given
-            height and width.
-        hw_to_sample: possible values for the number of tokens in the height and width
-            dimensions.
+        Args:
+            patch_size: The patch size being applied to this sample.
+            max_tokens_per_instance: The token budget when subsetting. This is used
+                to determine the maximum number of timesteps possible for a given
+                height and width.
+            sampled_hw_p: The number of tokens in the height and width dimensions.
 
         The returned sample will have shape:
             height = hw_t * patch_size
@@ -259,7 +268,6 @@ class HeliosSample(NamedTuple):
             if attribute == "timestamps":
                 new_data_dict[attribute] = modality[start_t : start_t + max_t]
                 continue
-            # remember to add the batching back in
             modality_spec = Modality.get(attribute)
             if modality_spec.is_spacetime_varying:
                 # for now, lets assume fixed resolution
@@ -356,15 +364,12 @@ class HeliosDataset(Dataset):
         if h5py_dir is not None:
             self.h5py_dir = h5py_dir
             self.tile_path = h5py_dir.parent.parent
-            logger.info(f"H5py dir: {self.h5py_dir.parent.name.split('_')}")
-            predefined_supported_modalities_names = (
-                self.parse_modalities_names_from_dir_name(self.h5py_dir.parent.name)
-            )
-            modality_names = [modality.name for modality in supported_modalities]
-            if set(predefined_supported_modalities_names) != set(modality_names):
-                raise ValueError(
-                    f"The predefined supported modalities do not match the supported modalities: {predefined_supported_modalities_names} != {modality_names}"
-                )
+            # Ensure that the supported modalities are present in the h5py directory
+            for modality in supported_modalities:
+                if modality.name not in self.h5py_dir.parent.name:
+                    raise ValueError(
+                        f"The modality {modality.name} is not present in the h5py directory"
+                    )
         else:
             self.tile_path = tile_path
             self.h5py_dir: Path | None = None  # type: ignore
@@ -382,14 +387,6 @@ class HeliosDataset(Dataset):
         self._work_dir_set = False
         self.sample_indices: np.ndarray | None = None
         self.latlon_distribution: np.ndarray | None = None
-
-    def parse_modalities_names_from_dir_name(self, dir_name: str) -> list[str]:
-        """Parse the modalities from the directory name."""
-        return [
-            name
-            for name in Modality.names()
-            if name in dir_name and name != "sentinel2"
-        ]
 
     @property
     def fingerprint_version(self) -> str:
@@ -528,7 +525,7 @@ class HeliosDataset(Dataset):
     @property
     def is_dataset_prepared(self) -> bool:
         """Check if the dataset is prepared."""
-        return self.sample_indices is not None
+        return self.sample_indices is not None and self.h5py_dir.exists()
 
     @property
     def latlon_distribution_path(self) -> UPath:

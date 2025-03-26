@@ -8,7 +8,7 @@ import torch
 import torch.distributed.checkpoint.state_dict as dist_cp_sd
 from olmo_core.distributed.parallel import DataParallelConfig
 from olmo_core.distributed.utils import get_full_tensor, get_local_tensor
-from olmo_core.float8 import Float8Config
+
 from olmo_core.optim import OptimConfig
 from olmo_core.optim.scheduler import Scheduler
 from olmo_core.train.common import Duration, ReduceType
@@ -93,7 +93,6 @@ class GalileoTrainModule(HeliosTrainModule):
         loss_config_b: The loss configuration for the model.
         rank_microbatch_size: The rank microbatch size in instances.
         compile_model: Whether to compile to the model.
-        float8_config: Float8 configuration for the model.
         dp_config: Data parallel configuration for the model.
         ac_config: Activation checkpointing configuration for the model.
         compile_loss: Whether to compile the loss function.
@@ -120,7 +119,6 @@ class GalileoTrainModule(HeliosTrainModule):
         token_exit_cfg_a: dict[str, int],
         token_exit_cfg_b: dict[str, int],
         compile_model: bool = False,
-        float8_config: Float8Config | None = None,
         dp_config: DataParallelConfig | None = None,
         ac_config: TransformerActivationCheckpointingConfig | None = None,
         compile_loss: bool = False,
@@ -144,7 +142,6 @@ class GalileoTrainModule(HeliosTrainModule):
             loss_config_b: The loss configuration for the model.
             rank_microbatch_size: The rank microbatch size in instances.
             compile_model: Whether to compile to the model.
-            float8_config: Float8 configuration for the model.
             dp_config: Data parallel configuration for the model.
             ac_config: Activation checkpointing configuration for the model.
             compile_loss: Whether to compile the loss function.
@@ -164,7 +161,6 @@ class GalileoTrainModule(HeliosTrainModule):
             optim_config=optim_config,
             rank_microbatch_size=rank_microbatch_size,
             compile_model=compile_model,
-            float8_config=float8_config,
             dp_config=dp_config,
             ac_config=ac_config,
             compile_loss=compile_loss,
@@ -206,7 +202,11 @@ class GalileoTrainModule(HeliosTrainModule):
             / self.trainer.max_steps
         )
         with torch.no_grad():
-            logger.info(f"Using ema decay {cur_ema_value}")
+            self.trainer.record_metric(
+                "train/ema_decay",
+                cur_ema_value,
+                ReduceType.mean,
+            )
             for param, target_param in zip(
                 self.model.encoder.parameters(), self.model.target_encoder.parameters()
             ):
