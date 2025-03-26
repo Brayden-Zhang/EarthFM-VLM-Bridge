@@ -506,8 +506,6 @@ class ModalityMaskingStrategy(MaskingStrategy):
         Returns:
             MaskedHeliosSample containing the masked data and mask
         """
-        if patch_size is not None:
-            patch_size = None
         output_dict: dict[str, ArrayTensor | None] = {"timestamps": batch.timestamps}
 
         present_modalities = list(batch.as_dict(ignore_nones=True).keys())
