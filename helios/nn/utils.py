@@ -1,10 +1,7 @@
 """Utilities for the nn module."""
 
-import functools
-
 import torch
 from torch.distributed import DeviceMesh
-from torch.distributed.fsdp import FSDPModule, fully_shard
 
 
 class DistributedMixins:

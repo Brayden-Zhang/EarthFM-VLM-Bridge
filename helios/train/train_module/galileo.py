@@ -11,19 +11,21 @@ from olmo_core.distributed.utils import get_full_tensor, get_local_tensor
 from olmo_core.optim import OptimConfig
 from olmo_core.optim.scheduler import Scheduler
 from olmo_core.train.common import Duration, ReduceType
-from olmo_core.train.train_module.transformer import \
-    TransformerActivationCheckpointingConfig
-from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+from olmo_core.train.train_module.transformer import (
+    TransformerActivationCheckpointingConfig,
+)
+from torch.distributed.fsdp import register_fsdp_forward_method
 
 from helios.data.constants import Modality
 from helios.data.dataset import HeliosSample
 from helios.nn.latent_mim import LatentMIM
 from helios.train.loss import LossConfig
 from helios.train.masking import MaskedHeliosSample, MaskingConfig
-from helios.train.train_module.train_module import (HeliosTrainModule,
-                                                    HeliosTrainModuleConfig)
+from helios.train.train_module.train_module import (
+    HeliosTrainModule,
+    HeliosTrainModuleConfig,
+)
 from helios.train.utils import split_batch
-from torch.distributed.fsdp import register_fsdp_forward_method
 
 logger = getLogger(__name__)
 
@@ -213,9 +215,9 @@ class GalileoTrainModule(HeliosTrainModule):
                 self.model.encoder.parameters(), self.model.target_encoder.parameters()
             ):
                 # TODO: Make this an in place operation
-                target_param.data = (
-                    cur_ema_value * get_full_tensor(target_param.data) + (1 - cur_ema_value) * get_full_tensor(param.data)
-                )
+                target_param.data = cur_ema_value * get_full_tensor(
+                    target_param.data
+                ) + (1 - cur_ema_value) * get_full_tensor(param.data)
 
     def train_batch(
         self, batch: tuple[int, HeliosSample], dry_run: bool = False
@@ -237,7 +239,7 @@ class GalileoTrainModule(HeliosTrainModule):
         self.model.train()
 
         # This is a clear loss buffer
-        if not hasattr(self, 'total_batch_loss'):
+        if not hasattr(self, "total_batch_loss"):
             self.total_batch_loss = torch.zeros(1, device=self.device)
         else:
             self.total_batch_loss.fill_(0.0)
@@ -254,7 +256,6 @@ class GalileoTrainModule(HeliosTrainModule):
                 )
                 microbatch = self.model.transform.apply(microbatch)
                 microbatch = microbatch.to_device(self.device)
-
 
                 if microbatch_idx % 2 == 0:
                     masked_batch = self.masking_strategy_a.apply_mask(

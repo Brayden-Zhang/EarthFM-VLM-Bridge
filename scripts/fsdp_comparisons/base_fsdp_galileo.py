@@ -7,14 +7,18 @@ It is a modified version of the base_debug_scripts/galileo.py script.
 import logging
 
 from olmo_core.config import DType
-from olmo_core.distributed.parallel.data_parallel import (DataParallelConfig,
-                                                          DataParallelType)
+from olmo_core.distributed.parallel.data_parallel import (
+    DataParallelConfig,
+    DataParallelType,
+)
 from olmo_core.optim import AdamWConfig
 from olmo_core.optim.scheduler import CosWithWarmup
-from olmo_core.train.callbacks import (ConfigSaverCallback,
-                                       GarbageCollectorCallback,
-                                       GPUMemoryMonitorCallback,
-                                       ProfilerCallback)
+from olmo_core.train.callbacks import (
+    ConfigSaverCallback,
+    GarbageCollectorCallback,
+    GPUMemoryMonitorCallback,
+    ProfilerCallback,
+)
 from olmo_core.train.checkpoint import CheckpointerConfig
 from olmo_core.train.common import Duration, LoadStrategy
 from olmo_core.train.config import TrainerConfig
@@ -25,13 +29,14 @@ from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig
 from helios.data.normalize import Strategy
 from helios.internal.common import build_common_components
-from helios.internal.experiment import (CommonComponents,
-                                        HeliosVisualizeConfig, main)
+from helios.internal.experiment import CommonComponents, HeliosVisualizeConfig, main
 from helios.nn.flexihelios import EncoderConfig, PoolingType, PredictorConfig
 from helios.nn.galileo import GalileoConfig
-from helios.train.callbacks import (DownstreamEvaluatorCallbackConfig,
-                                    HeliosSpeedMonitorCallback,
-                                    HeliosWandBCallback)
+from helios.train.callbacks import (
+    DownstreamEvaluatorCallbackConfig,
+    HeliosSpeedMonitorCallback,
+    HeliosWandBCallback,
+)
 from helios.train.callbacks.evaluator_callback import DownstreamTaskConfig
 from helios.train.loss import LossConfig
 from helios.train.masking import MaskingConfig
@@ -61,7 +66,6 @@ DECODER_NUM_HEADS = 12
 MLP_RATIO = 4.0
 
 # Vit-L
-
 
 
 def build_model_config(common: CommonComponents) -> GalileoConfig:

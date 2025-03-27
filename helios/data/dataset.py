@@ -27,14 +27,23 @@ from torch.utils.data import Dataset
 from tqdm import tqdm
 from upath import UPath
 
-from helios.data.constants import (BASE_RESOLUTION, IMAGE_TILE_SIZE,
-                                   PROJECTION_CRS, TIMESTAMPS, Modality,
-                                   ModalitySpec, TimeSpan)
+from helios.data.constants import (
+    BASE_RESOLUTION,
+    IMAGE_TILE_SIZE,
+    PROJECTION_CRS,
+    TIMESTAMPS,
+    Modality,
+    ModalitySpec,
+    TimeSpan,
+)
 from helios.data.normalize import Normalizer, Strategy
 from helios.data.utils import convert_to_db, update_streaming_stats
 from helios.dataset.parse import ModalityTile, parse_helios_dataset
-from helios.dataset.sample import (SampleInformation, image_tiles_to_samples,
-                                   load_image_for_sample)
+from helios.dataset.sample import (
+    SampleInformation,
+    image_tiles_to_samples,
+    load_image_for_sample,
+)
 from helios.dataset.utils import get_modality_specs_from_names
 from helios.types import ArrayTensor
 
@@ -136,15 +145,20 @@ class HeliosSample(NamedTuple):
         Returns:
             A new HeliosSample with all tensors moved to the specified device.
         """
-
         return HeliosSample(
-            **{key: val.to(device) for key, val in self.as_dict(ignore_nones=True).items()}
+            **{
+                key: val.to(device)
+                for key, val in self.as_dict(ignore_nones=True).items()
+            }
         )
 
     def distribute_tensors(self, device_mesh: DeviceMesh) -> "HeliosSample":
         """Distribute the tensors to the specified device mesh."""
         return HeliosSample(
-            **{key: distribute_tensor(val, device_mesh) for key, val in self.as_dict(ignore_nones=True).items()}
+            **{
+                key: distribute_tensor(val, device_mesh)
+                for key, val in self.as_dict(ignore_nones=True).items()
+            }
         )
 
     @property

@@ -145,5 +145,9 @@ class HeliosSpeedMonitorCallback(SpeedMonitorCallback):
         self.trainer.record_metric("throughput/device/data loading (%)", data_pct)
         self.trainer.record_metric("throughput/device/BPS", bps)
         self.trainer.record_metric("throughput/device/BPS (estimated avg)", bps_avg)
-        self.trainer.record_metric("throughput/device/model duration (s)", self.model_duration)
-        self.trainer.record_metric("throughput/device/model duration (%)", self.model_duration / step_time)
+        self.trainer.record_metric(
+            "throughput/device/model duration (s)", self.model_duration
+        )
+        self.trainer.record_metric(
+            "throughput/device/model duration (%)", self.model_duration / step_time
+        )

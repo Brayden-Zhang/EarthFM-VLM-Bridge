@@ -13,9 +13,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
-from olmo_core.distributed.utils import distribute_like, get_full_tensor
+from olmo_core.distributed.utils import distribute_like
 from torch import Tensor, vmap
-from torch.distributed.tensor import DTensor
 
 logger = logging.getLogger(__name__)
 
@@ -161,6 +160,7 @@ class FlexiPatchEmbed(nn.Module):
             h, w = new_patch_size
             resampled_kernel = pinv @ patch_embed.reshape(-1)
             return rearrange(resampled_kernel, "(h w) -> h w", h=h, w=w)
+
         v_resample_patch_embed = vmap(vmap(resample_patch_embed, 0, 0), 1, 1)
 
         return v_resample_patch_embed(patch_embed)
@@ -207,7 +207,15 @@ class FlexiPatchEmbed(nn.Module):
         # At this point x has embedding dim sized channel dimension
         if has_time_dimension:
             _, d, h, w = x.shape
-            x = rearrange(x, "(b t) d h w -> b h w t d", b=batch_size, t=num_timesteps, d=d, h=h, w=w)
+            x = rearrange(
+                x,
+                "(b t) d h w -> b h w t d",
+                b=batch_size,
+                t=num_timesteps,
+                d=d,
+                h=h,
+                w=w,
+            )
         else:
             x = rearrange(x, "b d h w -> b h w d")
 
