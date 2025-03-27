@@ -1,6 +1,7 @@
 """Loss functions for training."""
 
 import logging
+import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
@@ -265,6 +266,117 @@ class PatchDiscriminationLoss(Loss):
         loss_multiplier = self._expand_and_reciprocate(count)
         # can't use bs here since this is after the unsqueezing, so bs == 1
         loss = (loss * loss_multiplier).sum() / all_preds.shape[0]
+        return loss
+
+
+@LOSS_REGISTRY.register("adjusted_patch_discrimination")
+class AdjustedPatchDiscriminationLoss(Loss):
+    """Loss function for adjusted patch discrimination task.
+
+    Reference: https://proceedings.neurips.cc/paper_files/paper/2023/file/48aaa5ea741ae8430bd58e25917d267d-Paper-Conference.pdf
+    """
+
+    name = "AdjustedPatchDisc"
+
+    def __init__(
+        self,
+        tau: float = 0.1,
+        mu: float = 0.7,
+        sigma: float = 1.0,
+        pred2unit: bool = False,
+    ):
+        """Initialize adjusted patch discrimination loss.
+
+        Args:
+            tau: the softmax temperature
+            mu: the mean of the Gaussian distribution
+            sigma: the standard deviation of the Gaussian distribution
+            pred2unit: whether to standardize the predictions using batch statistics
+        """
+        self.tau = tau
+        self.mu = mu
+        self.sigma = sigma
+        self.pred2unit = pred2unit
+
+    def compute(
+        self, predictions: TokensAndMasks, targets: TokensAndMasks, **kwargs: Any
+    ) -> Tensor:
+        """Compute patch discrimination loss between predictions and targets.
+
+        Args:
+            predictions: Model predictions.
+            targets: Ground truth targets.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            The computed loss value.
+        """
+        all_preds, all_masks = predictions.flatten_tokens_and_masks()
+        all_targets = targets.flatten_tokens_and_masks()[0]
+
+        pred = all_preds[all_masks == MaskValue.DECODER.value].unsqueeze(dim=0)
+        target = all_targets[all_masks == MaskValue.DECODER.value].unsqueeze(dim=0)
+        bs, nt, _ = pred.shape
+
+        if self.pred2unit:
+            pred_mu = pred.mean(1, keepdims=True)
+            pred_std = pred.std(1, keepdims=True)
+            pred = (pred - pred_mu) / (pred_std + 1e-4)
+
+        pred = F.normalize(pred, p=2, dim=-1)
+        target = F.normalize(target, p=2, dim=-1)
+
+        count = (all_masks == MaskValue.DECODER.value).sum(dim=-1)
+
+        losses = []
+        start = 0
+        for c in count:
+            end = start + c
+            pred_sample = pred[:, start:end, :]  # (1, c, d)
+            target_sample = target[:, start:end, :]  # (1, c, d)
+
+            sim_matrix = torch.einsum(
+                "npd,nqd->npq", pred_sample, target_sample
+            )  # (1, c, c)
+
+            pos_scores = torch.diagonal(sim_matrix, dim1=-2, dim2=-1)  # (1, c)
+            pos_scores = pos_scores / self.tau
+
+            # Mask out diagonal (positives) to get negatives
+            mask = ~torch.eye(c, dtype=torch.bool, device=pred.device)
+            neg_scores = sim_matrix.masked_select(mask).view(1, c, c - 1)  # (1, c, c-1)
+            neg_scores = neg_scores / self.tau
+
+            # Apply Gaussian-based weights to negatives
+            # Weight is computed based on the neg_scores from a sample
+            weight = (
+                1.0
+                / (self.sigma * math.sqrt(2 * math.pi))
+                * torch.exp(
+                    -((neg_scores * self.tau - self.mu) ** 2)
+                    / (2 * math.pow(self.sigma, 2))
+                )
+            )  # (1, c, c-1)
+            # Normalize the weights per query
+            weight = weight / weight.mean(dim=-1, keepdim=True)
+            neg_scores = neg_scores * weight.detach()
+
+            # Reconstruct the sim_matrix
+            sim_matrix = torch.zeros(1, c, c, device=pred.device)
+            sim_matrix.diagonal(dim1=-2, dim2=-1).copy_(pos_scores)
+            sim_matrix.masked_scatter_(mask, neg_scores)
+
+            labels = torch.arange(c, dtype=torch.long, device=pred.device)[None]
+            loss = F.cross_entropy(
+                sim_matrix.flatten(0, 1),
+                labels.flatten(0, 1),
+                reduction="none",
+            ) * (self.tau * 2)
+            loss = loss.mean()
+            losses.append(loss)
+            start = end
+
+        loss = torch.stack(losses).mean()
         return loss
 
 

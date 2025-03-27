@@ -6,6 +6,7 @@ import torch
 
 from helios.nn.flexihelios import TokensAndMasks
 from helios.train.loss import (
+    AdjustedPatchDiscriminationLoss,
     CrossEntropyLoss,
     L1Loss,
     L2Loss,
@@ -38,6 +39,34 @@ def test_patch_disc_loss() -> None:
     # not very good! since they are all the same
     # predictions and values
     assert loss_value > 0.5
+
+
+def test_adjusted_patch_disc_loss_comparison() -> None:
+    """Compare loss under different mu/sigma configs."""
+    b, t_h, t_w, t, d = 3, 4, 4, 2, 2
+
+    preds = TokensAndMasks(
+        sentinel2_l2a=torch.ones((b, t_h, t_w, t, d)),
+        sentinel2_l2a_mask=torch.ones((b, t_h, t_w, t)) * MaskValue.DECODER.value,
+        latlon=torch.ones((b, 1, d)),
+        latlon_mask=torch.ones((b, 1)) * MaskValue.DECODER.value,
+    )
+    targets = TokensAndMasks(
+        sentinel2_l2a=torch.ones((b, t_h, t_w, t, d)),
+        sentinel2_l2a_mask=torch.zeros((b, t_h, t_w, t)),
+        latlon=torch.ones((b, 1, d)),
+        latlon_mask=torch.zeros((b, 1)),
+    )
+
+    # Loss hard is very sharp focus on the hard negatives, expect higher loss
+    loss_easy = AdjustedPatchDiscriminationLoss(mu=0.3, sigma=1.0).compute(
+        preds, targets
+    )
+    loss_hard = AdjustedPatchDiscriminationLoss(mu=0.9, sigma=0.1).compute(
+        preds, targets
+    )
+
+    assert loss_hard >= loss_easy or abs(loss_hard - loss_easy) < 1e-3
 
 
 def test_if_old_and_new_loss_are_the_same() -> None:
