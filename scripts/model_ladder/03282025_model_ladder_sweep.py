@@ -79,7 +79,7 @@ BASE_COMMAND = (
 # Iterate over all combinations of hyperparameters
 for size_str, args in MODEL_SIZE_ARGS.items():
     # Construct run name indicating hyperparameters
-    run_name = f"latent_mim_random_masking_patch_disc_new_exit_zero_{size_str}"
+    run_name = f"2latent_mim_random_masking_patch_disc_new_exit_zero_{size_str}"
 
     # Construct full command
     command = BASE_COMMAND.format(
