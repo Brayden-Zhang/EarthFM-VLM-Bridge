@@ -74,12 +74,13 @@ BASE_COMMAND = (
     "--model.decoder_config.num_heads={decoder_num_heads} "
     "--model.encoder_config.mlp_ratio={mlp_ratio} "
     "--model.decoder_config.mlp_ratio={mlp_ratio} "
+    "--launch.num_gpus=4"
 )
 
 # Iterate over all combinations of hyperparameters
 for size_str, args in MODEL_SIZE_ARGS.items():
     # Construct run name indicating hyperparameters
-    run_name = f"2latent_mim_random_masking_patch_disc_new_exit_zero_{size_str}"
+    run_name = f"4latent_mim_random_masking_patch_disc_new_exit_zero_{size_str}"
 
     # Construct full command
     command = BASE_COMMAND.format(

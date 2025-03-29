@@ -87,7 +87,7 @@ def build_train_module_config(
 ) -> LatentMIMTrainModuleConfig:
     """Build the train module config for an experiment."""
     LR = 2e-3
-    RANK_MICROBATCH_SIZE = 64
+    RANK_MICROBATCH_SIZE = 32
     ENCODE_RATIO = 0.1
     DECODE_RATIO = 0.74
     WD = 2e-3
@@ -131,7 +131,7 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
     # things should be set during building
     # TODO: Include collate function here
 
-    NUM_WORKERS = 8  # should be 8
+    NUM_WORKERS = 2  # should be 8
     GLOBAL_BATCH_SIZE = 128
     PREFETCH_FACTOR = 4
     TOKEN_BUDGET = 1500
