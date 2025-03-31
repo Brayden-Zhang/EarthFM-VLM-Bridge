@@ -34,7 +34,7 @@ BASE_COMMAND = (
     "--model.decoder_config.num_heads={decoder_num_heads} "
     "--model.encoder_config.mlp_ratio={mlp_ratio} "
     "--model.decoder_config.mlp_ratio={mlp_ratio} "
-    "--train_module.ema_decay=\\[{ema_decay}, {ema_decay}\\] "
+    "--train_module.ema_decay=\"[{ema_decay}, {ema_decay}]\" "
     "--train_module.optim_config.lr={lr} "
     "--launch.num_gpus=4"
 )
