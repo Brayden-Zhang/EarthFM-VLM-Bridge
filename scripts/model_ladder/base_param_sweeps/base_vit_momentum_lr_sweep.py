@@ -16,7 +16,7 @@ MODEL_SIZE_ARGS = {
         "decoder_num_heads": 12,
         "mlp_ratio": 4.0,
     },
-        "large": {
+    "large": {
         "decoder_depth": 24,
         "encoder_embedding_size": 1024,
         "decoder_embedding_size": 1024,
@@ -27,7 +27,7 @@ MODEL_SIZE_ARGS = {
     },
 }
 
-EMA_DECAYS = [0.841, 0.946, 0.974, 0.987, 0.992, 0.997, 0.9993]
+EMA_DECAYS = [0.946, 0.974, 0.987, 0.992, 0.997, 0.9993]
 EMA_DECAYS = EMA_DECAYS[::-1]
 
 LEARNING_RATES = [3e-4, 1e-3, 2e-3]
@@ -44,7 +44,7 @@ BASE_COMMAND = (
     "--model.decoder_config.num_heads={decoder_num_heads} "
     "--model.encoder_config.mlp_ratio={mlp_ratio} "
     "--model.decoder_config.mlp_ratio={mlp_ratio} "
-    "--train_module.ema_decay=\"[{ema_decay}, {ema_decay}]\" "
+    '--train_module.ema_decay="[{ema_decay}, {ema_decay}]" '
     "--train_module.optim_config.lr={lr} "
     "--data_loader.rank_microbatch_size={rank_microbatch_size} "
     "--launch.num_gpus={num_gpus}"
