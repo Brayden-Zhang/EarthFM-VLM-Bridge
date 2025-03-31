@@ -1073,7 +1073,6 @@ class Encoder(FlexiHeliosBase):
         patch_size: int,
         input_res: int,
         token_exit_cfg: dict[str, int] | None = None,
-        exit_after_n_layers: int | None = None,
     ) -> dict[str, Tensor]:
         """Apply the attention to the tokens and masks."""
         tokens_only_dict, original_masks_dict, modalities_to_dims_dict = (
@@ -1084,6 +1083,21 @@ class Encoder(FlexiHeliosBase):
         )
         # exited tokens are just the linear projection
         exited_tokens, _ = self.collapse_and_combine_hwtc(x)
+        # Get the keys of the modalities that should exit at depth 0
+        if token_exit_cfg:
+            exit_zero_modality_tokens_dict = {
+                k: v for k, v in tokens_only_dict.items() if token_exit_cfg[k] == 0
+            }
+            # Get the keys of the modalities that should exit at depth 0
+            # Remove modalities that exit at depth 0 from tokens_only_dict
+            exit_zero_modality_tokens_dict = {
+                k: v
+                for k, v in tokens_only_dict.items()
+                if token_exit_cfg and token_exit_cfg.get(k) == 0
+            }
+            # Remove these keys from tokens_only_dict
+            for k in exit_zero_modality_tokens_dict:
+                tokens_only_dict.pop(k)
 
         tokens_dict = self.composite_encodings.forward(
             tokens_only_dict,
@@ -1091,6 +1105,8 @@ class Encoder(FlexiHeliosBase):
             patch_size,
             input_res,
         )
+        if token_exit_cfg:
+            tokens_dict.update(exit_zero_modality_tokens_dict)
         tokens_dict.update(original_masks_dict)
         x, mask = self.collapse_and_combine_hwtc(tokens_dict)
 
@@ -1103,11 +1119,6 @@ class Encoder(FlexiHeliosBase):
             exited_tokens, _, _ = self.remove_masked_tokens(exited_tokens, mask)
         # Apply attn with varying encoder depths
         for i_blk, blk in enumerate(self.blocks):
-            if self.should_exit(i_blk, exit_after_n_layers):
-                # if exit_after is N, then we exit after the Nth layer
-                # if exit_after is 0, then all layers are skipped
-                break
-
             if exit_ids_seq is not None:
                 # this should only ever be called by the target encoder,
                 # in a torch.no_grad context
@@ -1153,7 +1164,6 @@ class Encoder(FlexiHeliosBase):
         x: MaskedHeliosSample,
         patch_size: int,
         input_res: int = BASE_GSD,
-        exit_after_n_layers: int | None = None,
         token_exit_cfg: dict | None = None,
     ) -> TokensAndMasks:
         """Process masked input samples into token representations.
@@ -1162,7 +1172,6 @@ class Encoder(FlexiHeliosBase):
             x: Masked input sample containing the data to be encoded
             patch_size: Size of patches to divide the input into
             input_res: Resolution of the input data
-            exit_after_n_layers: Layer to exit after
             token_exit_cfg: Configuration for token exit
 
         Returns:
@@ -1170,13 +1179,14 @@ class Encoder(FlexiHeliosBase):
         """
         # TODO: Add step to validate the exit config is valid
         patchified_tokens_and_masks = self.patch_embeddings.forward(x, patch_size)
-        if (exit_after_n_layers is None) or (exit_after_n_layers > 0):
+        if token_exit_cfg is None or any(
+            [exit_depth > 0 for exit_depth in token_exit_cfg.values()]
+        ):
             patchified_tokens_and_masks = self.apply_attn(
                 x=patchified_tokens_and_masks,
                 timestamps=x.timestamps,
                 patch_size=patch_size,
                 input_res=input_res,
-                exit_after_n_layers=exit_after_n_layers,
                 token_exit_cfg=token_exit_cfg,
             )
         return TokensAndMasks(**patchified_tokens_and_masks)
