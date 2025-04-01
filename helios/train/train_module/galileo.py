@@ -212,6 +212,11 @@ class GalileoTrainModule(HeliosTrainModule):
         # Set the model to train mode
         self.model.train()
 
+        # This is a clear loss buffer
+        if not hasattr(self, "total_batch_loss"):
+            self.total_batch_loss = torch.zeros(1, device=self.device)
+        else:
+            self.total_batch_loss.fill_(0.0)
         # Set the maximum number of tokens
         total_batch_loss = torch.tensor(0.0, device=self.device)
         # Split into micro-batches.
@@ -223,6 +228,7 @@ class GalileoTrainModule(HeliosTrainModule):
                 logger.info(
                     f"Training microbatch {microbatch_idx} of {num_microbatches} with batch size {microbatch.batch_size}"
                 )
+
                 microbatch = self.transform.apply(microbatch).to_device(self.device)
 
                 if microbatch_idx % 2 == 0:

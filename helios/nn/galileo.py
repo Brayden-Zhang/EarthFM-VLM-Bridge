@@ -1,14 +1,20 @@
 """Simple set up of latent predictor with two predictors, following Galileo."""
 
+import logging
 from copy import deepcopy
 from dataclasses import dataclass
 
+import torch
 import torch.nn as nn
 from olmo_core.config import Config
+from torch.distributed import DeviceMesh
+from torch.distributed.fsdp import fully_shard, register_fsdp_forward_method
 
 from helios.nn.flexihelios import EncoderConfig, PredictorConfig, TokensAndMasks
 from helios.nn.utils import DistributedMixins
 from helios.train.masking import MaskedHeliosSample
+
+logger = logging.getLogger(__name__)
 
 
 class Galileo(nn.Module, DistributedMixins):
@@ -46,6 +52,26 @@ class Galileo(nn.Module, DistributedMixins):
         latent = self.encoder(x, patch_size=patch_size)
         decoded = self.decoder_b(latent, timestamps=x.timestamps, patch_size=patch_size)
         return decoded
+
+    def apply_fsdp(
+        self,
+        dp_mesh: DeviceMesh | None = None,
+        param_dtype: torch.dtype | None = None,
+        reduce_dtype: torch.dtype = torch.float32,
+        prefetch_factor: int = 0,
+    ) -> None:
+        """Apply FSDP to the model."""
+        fsdp_config = dict(mesh=dp_mesh)
+
+        self.encoder.apply_fsdp(**fsdp_config)
+        self.decoder_a.apply_fsdp(**fsdp_config)
+        self.decoder_b.apply_fsdp(**fsdp_config)
+        self.target_encoder.apply_fsdp(**fsdp_config)
+        # TODO: More finegrained wrapping of the encoder transformer layers next time
+        fully_shard(self, **fsdp_config)
+        register_fsdp_forward_method(self.target_encoder, "forward")
+        register_fsdp_forward_method(self, "forward_a")
+        register_fsdp_forward_method(self, "forward_b")
 
 
 @dataclass

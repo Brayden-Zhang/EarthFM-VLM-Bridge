@@ -3,8 +3,11 @@
 from copy import deepcopy
 from dataclasses import dataclass
 
+import torch
 import torch.nn as nn
 from olmo_core.config import Config
+from torch.distributed import DeviceMesh
+from torch.distributed.fsdp import fully_shard, register_fsdp_forward_method
 
 from helios.nn.flexihelios import EncoderConfig, PredictorConfig, TokensAndMasks
 from helios.nn.utils import DistributedMixins
@@ -38,6 +41,23 @@ class LatentMIM(nn.Module, DistributedMixins):
         latent = self.encoder(x, patch_size=patch_size)
         decoded = self.decoder(latent, timestamps=x.timestamps, patch_size=patch_size)
         return decoded
+
+    def apply_fsdp(
+        self,
+        dp_mesh: DeviceMesh | None = None,
+        param_dtype: torch.dtype | None = None,
+        reduce_dtype: torch.dtype = torch.float32,
+        prefetch_factor: int = 0,
+    ) -> None:
+        """Apply FSDP to the model."""
+        fsdp_config = dict(mesh=dp_mesh)
+
+        self.encoder.apply_fsdp(**fsdp_config)
+        self.decoder.apply_fsdp(**fsdp_config)
+        self.target_encoder.apply_fsdp(**fsdp_config)
+        # TODO: More finegrained wrapping of the encoder transformer layers next time
+        fully_shard(self, **fsdp_config)
+        register_fsdp_forward_method(self.target_encoder, "forward")
 
 
 @dataclass

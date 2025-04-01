@@ -17,7 +17,10 @@ from olmo_core.distributed.parallel import (
     get_dp_mesh,
     get_dp_process_group,
 )
-from olmo_core.distributed.utils import get_world_size
+from olmo_core.distributed.utils import (
+    get_full_tensor,
+    get_world_size,
+)
 from olmo_core.exceptions import OLMoConfigurationError
 from olmo_core.optim import OptimConfig, SkipStepOptimizer
 from olmo_core.optim.scheduler import Scheduler
@@ -191,7 +194,6 @@ class HeliosTrainModule(TrainModule):
             f"Data parallel world size = {get_world_size(self.dp_process_group):,d}"
         )
         self.warmup_duration = warmup_duration
-
         # Maybe apply activation checkpointing.
         if ac_config is not None:
             self.model.apply_activation_checkpointing(
@@ -212,17 +214,10 @@ class HeliosTrainModule(TrainModule):
         self._dp_config = dp_config
         if dp_config is not None:
             dp_mesh = get_dp_mesh(self.world_mesh)
-            if dp_config.name in (DataParallelType.fsdp, DataParallelType.hsdp):
+            if dp_config.name in (DataParallelType.fsdp):
+                # TODO: MIXED PRecision is not yet supported
                 self.model.apply_fsdp(
                     dp_mesh=dp_mesh,
-                    param_dtype=(
-                        dp_config.param_dtype.as_pt()
-                        if dp_config.param_dtype is not None
-                        else None
-                    ),
-                    reduce_dtype=dp_config.reduce_dtype.as_pt(),
-                    wrapping_strategy=dp_config.wrapping_strategy,
-                    pp_enabled=False,
                 )
                 logger.info("Applied FSDP to the model")
             elif dp_config.name == DataParallelType.ddp:
@@ -240,7 +235,6 @@ class HeliosTrainModule(TrainModule):
         self.optimizer: Optimizer = optim_config.build(
             self.model,
         )
-
         self.rank_microbatch_size = rank_microbatch_size
         self.autocast_precision = autocast_precision
         self.max_grad_norm = max_grad_norm
@@ -413,6 +407,12 @@ class HeliosTrainModule(TrainModule):
         self, micro_batch_idx: int, num_micro_batches: int
     ) -> Generator[None, None, None]:
         with contextlib.ExitStack() as stack:
+            # TODO: Implement FSDP Microbatching
+            # if isinstance(self.model, FSDPModule):
+            #     assert self.dp_config is not None
+            #     # On the last backward FSDP waits on pending gradient reduction and clears internal data
+            #     # data structures for backward prefetching.
+            #     self.model.set_is_last_backward(is_last_mb)
             if isinstance(self.model, DDP) and micro_batch_idx != num_micro_batches - 1:
                 # For DDP, only sync gradients on the final micro batch.
                 stack.enter_context(self.model.no_sync())
@@ -474,9 +474,10 @@ class HeliosTrainModule(TrainModule):
             for param, target_param in zip(
                 self.model.encoder.parameters(), self.model.target_encoder.parameters()
             ):
-                target_param.data = (
-                    cur_ema_value * target_param.data + (1 - cur_ema_value) * param.data
-                )
+                # TODO: Make this an in place operation
+                target_param.data = cur_ema_value * get_full_tensor(
+                    target_param.data
+                ) + (1 - cur_ema_value) * get_full_tensor(param.data)
 
     def eval_batch(
         self, batch: dict[str, Any], labels: torch.Tensor | None = None
