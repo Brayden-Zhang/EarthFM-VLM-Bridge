@@ -996,13 +996,6 @@ class Encoder(FlexiHeliosBase):
         return x, indices, updated_mask.to(dtype=org_mask_dtype)
 
     @staticmethod
-    def should_exit(i_blk: int, exit_after_n_layers: int | None) -> bool:
-        """Determine if the current block should exit the attention layers."""
-        if exit_after_n_layers is None:
-            return False
-        return i_blk >= exit_after_n_layers
-
-    @staticmethod
     def add_removed_tokens(
         x: Tensor, indices: Tensor, mask: Tensor
     ) -> tuple[Tensor, Tensor]:
