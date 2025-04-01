@@ -46,35 +46,16 @@ MAX_PATCH_SIZE = 8  # NOTE: actual patch_size <= max_patch_size
 MIN_PATCH_SIZE = 1
 
 
-# Billion parameters model Vit-H
-
-ENCODER_EMBEDDING_SIZE = 1024
-DECODER_EMBEDDING_SIZE = 768
-ENCODER_DEPTH = 24
-DECODER_DEPTH = 12
-ENCODER_NUM_HEADS = 16
-DECODER_NUM_HEADS = 12
-MLP_RATIO = 4.0
-
-
 def build_model_config(common: CommonComponents) -> GalileoConfig:
     """Build the model config for an experiment."""
-    # ENCODER_EMBEDDING_SIZE = 128
-    # DECODER_EMBEDDING_SIZE = 128
-    # ENCODER_DEPTH = 4
-    # DECODER_DEPTH = 4
-    # ENCODER_NUM_HEADS = 8
-    # DECODER_NUM_HEADS = 8
-    # MLP_RATIO = 4.0
-    ENCODER_EMBEDDING_SIZE = 1024
-    DECODER_EMBEDDING_SIZE = 768
-    ENCODER_DEPTH = 24
-    DECODER_DEPTH = 12
-    ENCODER_NUM_HEADS = 16
-    DECODER_NUM_HEADS = 12
+    ENCODER_EMBEDDING_SIZE = 128
+    DECODER_EMBEDDING_SIZE = 128
+    ENCODER_DEPTH = 4
+    DECODER_DEPTH = 4
+    ENCODER_NUM_HEADS = 8
+    DECODER_NUM_HEADS = 8
     MLP_RATIO = 4.0
 
-    TRANSFORM_TYPE = "flip_and_rotate"
     encoder_config = EncoderConfig(
         supported_modality_names=common.supported_modality_names,
         embedding_size=ENCODER_EMBEDDING_SIZE,
@@ -99,7 +80,6 @@ def build_model_config(common: CommonComponents) -> GalileoConfig:
     model_config = GalileoConfig(
         encoder_config=encoder_config,
         decoder_config=decoder_config,
-        transform_type=TRANSFORM_TYPE,
     )
     return model_config
 
@@ -109,7 +89,7 @@ def build_train_module_config(
 ) -> GalileoTrainModuleConfig:
     """Build the train module config for an experiment."""
     LR = 0.002
-    RANK_MICROBATCH_SIZE = 16
+    RANK_MICROBATCH_SIZE = 128
     ENCODE_RATIO = 0.1
     DECODE_RATIO = 0.75
     WD = 0.02
@@ -130,12 +110,12 @@ def build_train_module_config(
     )
     loss_config_a = LossConfig(
         loss_config={
-            "type": "patch_discrimination",
+            "type": "patch_discrimination_new",
         }
     )
     loss_config_b = LossConfig(
         loss_config={
-            "type": "patch_discrimination",
+            "type": "patch_discrimination_new",
         }
     )
     token_exit_cfg_a = {
@@ -145,9 +125,8 @@ def build_train_module_config(
         Modality.WORLDCOVER.name: 0,
     }
     token_exit_cfg_b = {modality: 0 for modality in common.supported_modality_names}
-
     WARMUP_EPOCHS = 10
-    dp_config = DataParallelConfig(name=DataParallelType.fsdp)
+    dp_config = DataParallelConfig(name=DataParallelType.ddp)
 
     # TODO: would need a scheduler config and registry to be able to change this with overrides
     scheduler = CosWithWarmup()
@@ -173,8 +152,8 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
     """Build the dataloader config for an experiment."""
     # things should be set during building
     # TODO: Include collate function here
-    NUM_WORKERS = 2
-    GLOBAL_BATCH_SIZE = 32
+    NUM_WORKERS = 8
+    GLOBAL_BATCH_SIZE = 128
     PREFETCH_FACTOR = 4
     SAMPLE_HW_P_LIST = list(range(5, 13))
     TOKEN_BUDGET = 1500
