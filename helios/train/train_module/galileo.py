@@ -17,6 +17,7 @@ from olmo_core.train.train_module.transformer import (
 
 from helios.data.constants import Modality
 from helios.data.dataset import HeliosSample
+from helios.data.transform import TransformConfig
 from helios.nn.flexihelios import TokensAndMasks
 from helios.nn.latent_mim import LatentMIM
 from helios.train.loss import LossConfig
@@ -113,6 +114,7 @@ class GalileoTrainModule(HeliosTrainModule):
         self,
         model: LatentMIM,
         optim_config: OptimConfig,
+        transform_config: TransformConfig,
         masking_config_a: MaskingConfig,
         masking_config_b: MaskingConfig,
         loss_config_a: LossConfig,
@@ -139,6 +141,7 @@ class GalileoTrainModule(HeliosTrainModule):
         Args:
             model: The transformer model to train.
             optim_config: The corresponding optimizer config.
+            transform_config: The transform configuration for the model.
             masking_config_a: The masking configuration for the model.
             masking_config_b: The masking configuration for the model.
             loss_config_a: The loss configuration for the model.
@@ -163,6 +166,7 @@ class GalileoTrainModule(HeliosTrainModule):
         super().__init__(
             model=model,
             optim_config=optim_config,
+            transform_config=transform_config,
             rank_microbatch_size=rank_microbatch_size,
             compile_model=compile_model,
             dp_config=dp_config,
@@ -198,40 +202,6 @@ class GalileoTrainModule(HeliosTrainModule):
         """Compute the loss between the predicted and target tensors."""
         return self.base_loss_b.compute(pred, targets)
 
-    def eval_loss_fn(self, logits: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
-        """Compute the loss between the predicted and target tensors."""
-        raise NotImplementedError("eval loss fn not implemented")
-
-    def add_regularizer_to_loss(
-        self, loss: torch.Tensor, latent: TokensAndMasks
-    ) -> torch.Tensor:
-        """If a regularizer is present, add it to the loss."""
-        if self.regularizer is None:
-            return loss
-        return loss + self.regularizer.compute(latent, None)
-
-    def update_target_encoder(self) -> None:
-        """Update the target encoder."""
-        # Update target encoder with EMA this should be a callback
-        cur_ema_value = (
-            self.start_ema
-            + self.trainer.global_step
-            * (self.end_ema - self.start_ema)
-            / self.trainer.max_steps
-        )
-        with torch.no_grad():
-            self.trainer.record_metric(
-                "train/ema_decay",
-                cur_ema_value,
-                ReduceType.mean,
-            )
-            for param, target_param in zip(
-                self.model.encoder.parameters(), self.model.target_encoder.parameters()
-            ):
-                target_param.data = (
-                    cur_ema_value * target_param.data + (1 - cur_ema_value) * param.data
-                )
-
     def train_batch(
         self, batch: tuple[int, HeliosSample], dry_run: bool = False
     ) -> None:
@@ -251,6 +221,11 @@ class GalileoTrainModule(HeliosTrainModule):
         # Set the model to train mode
         self.model.train()
 
+        # This is a clear loss buffer
+        if not hasattr(self, "total_batch_loss"):
+            self.total_batch_loss = torch.zeros(1, device=self.device)
+        else:
+            self.total_batch_loss.fill_(0.0)
         # Set the maximum number of tokens
         total_batch_loss = torch.tensor(0.0, device=self.device)
         # Split into micro-batches.
@@ -262,9 +237,8 @@ class GalileoTrainModule(HeliosTrainModule):
                 logger.info(
                     f"Training microbatch {microbatch_idx} of {num_microbatches} with batch size {microbatch.batch_size}"
                 )
-                microbatch = self.model.transform.apply(microbatch).to_device(
-                    self.device
-                )
+
+                microbatch = self.transform.apply(microbatch).to_device(self.device)
 
                 if microbatch_idx % 2 == 0:
                     masked_batch = self.masking_strategy_a.apply_mask(
@@ -312,12 +286,6 @@ class GalileoTrainModule(HeliosTrainModule):
             ReduceType.mean,
         )
         del masked_batch, batch, microbatch, batch_data
-
-    def eval_batch(
-        self, batch: dict[str, Any], labels: torch.Tensor | None = None
-    ) -> tuple[torch.Tensor | None, torch.Tensor | None]:
-        """Evaluate a batch."""
-        raise NotImplementedError("eval batch not implemented")
 
     def model_forward_a(
         self, batch: MaskedHeliosSample, patch_size: int, token_exit_cfg: dict[str, int]

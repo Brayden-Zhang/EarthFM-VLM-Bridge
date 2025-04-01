@@ -2,7 +2,7 @@
 
 import contextlib
 from collections.abc import Generator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from logging import getLogger
 from typing import Any, cast
 
@@ -17,11 +17,14 @@ from olmo_core.distributed.parallel import (
     get_dp_mesh,
     get_dp_process_group,
 )
-from olmo_core.distributed.utils import get_world_size
+from olmo_core.distributed.utils import (
+    get_full_tensor,
+    get_world_size,
+)
 from olmo_core.exceptions import OLMoConfigurationError
 from olmo_core.optim import OptimConfig, SkipStepOptimizer
 from olmo_core.optim.scheduler import Scheduler
-from olmo_core.train.common import Duration
+from olmo_core.train.common import Duration, ReduceType
 from olmo_core.train.train_module import EvalBatchSizeUnit, EvalBatchSpec, TrainModule
 from olmo_core.train.train_module.transformer import (
     TransformerActivationCheckpointingConfig,
@@ -32,6 +35,8 @@ from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import Optimizer
 
+from helios.data.transform import TransformConfig
+from helios.nn.flexihelios import TokensAndMasks
 from helios.train.loss import LossConfig
 
 logger = getLogger(__name__)
@@ -44,6 +49,7 @@ class HeliosTrainModuleConfig(Config):
     Args:
         rank_microbatch_size: The micro batch size per rank in instances.
         optim: The optimizer configuration.
+        transform_config: The transform configuration for the model.
         compile_model: Whether to compile the model using torch.compile.
         dp_config: Data parallel configuration for distributed training.
         ac_config: Activation checkpointing configuration.
@@ -60,6 +66,9 @@ class HeliosTrainModuleConfig(Config):
     optim_config: OptimConfig
     rank_microbatch_size: int
 
+    transform_config: TransformConfig = field(
+        default_factory=lambda: TransformConfig(transform_type="flip_and_rotate")
+    )
     # Model settings
     compile_model: bool = False
     dp_config: DataParallelConfig | None = None
@@ -121,7 +130,8 @@ class HeliosTrainModule(TrainModule):
 
     Args:
         model: The transformer model to train.
-        optim: The corresponding optimizer config.
+        optim_config: The corresponding optimizer config.
+        transform_config: The transform configuration for the model.
         rank_microbatch_size: The rank micro batch size in instances.
         compile_model: Whether to compile to the model.
         dp_config: Data parallel configuration for the model.
@@ -139,6 +149,7 @@ class HeliosTrainModule(TrainModule):
         self,
         model: Any,
         optim_config: OptimConfig,
+        transform_config: TransformConfig,
         rank_microbatch_size: int,
         warmup_duration: Duration | None = None,
         compile_model: bool = False,
@@ -157,6 +168,7 @@ class HeliosTrainModule(TrainModule):
         Args:
             model: The transformer model to train.
             optim_config: The corresponding optimizer config.
+            transform_config: The transform configuration for the model.
             rank_microbatch_size: The rank batch size in instances.
             warmup_duration: The warmup duration.
             compile_model: Whether to compile to the model.
@@ -174,6 +186,7 @@ class HeliosTrainModule(TrainModule):
 
         self.model = model
 
+        self.transform = transform_config.build()
         logger.info(
             "Number of encoder parameters: %d",
             sum(p.numel() for p in self.model.encoder.parameters()),
@@ -185,7 +198,6 @@ class HeliosTrainModule(TrainModule):
             f"Data parallel world size = {get_world_size(self.dp_process_group):,d}"
         )
         self.warmup_duration = warmup_duration
-
         # Maybe apply activation checkpointing.
         if ac_config is not None:
             self.model.apply_activation_checkpointing(
@@ -206,17 +218,10 @@ class HeliosTrainModule(TrainModule):
         self._dp_config = dp_config
         if dp_config is not None:
             dp_mesh = get_dp_mesh(self.world_mesh)
-            if dp_config.name in (DataParallelType.fsdp, DataParallelType.hsdp):
+            if dp_config.name in (DataParallelType.fsdp):
+                # TODO: MIXED PRecision is not yet supported
                 self.model.apply_fsdp(
                     dp_mesh=dp_mesh,
-                    param_dtype=(
-                        dp_config.param_dtype.as_pt()
-                        if dp_config.param_dtype is not None
-                        else None
-                    ),
-                    reduce_dtype=dp_config.reduce_dtype.as_pt(),
-                    wrapping_strategy=dp_config.wrapping_strategy,
-                    pp_enabled=False,
                 )
                 logger.info("Applied FSDP to the model")
             elif dp_config.name == DataParallelType.ddp:
@@ -234,7 +239,6 @@ class HeliosTrainModule(TrainModule):
         self.optimizer: Optimizer = optim_config.build(
             self.model,
         )
-
         self.rank_microbatch_size = rank_microbatch_size
         self.autocast_precision = autocast_precision
         self.max_grad_norm = max_grad_norm
@@ -407,6 +411,12 @@ class HeliosTrainModule(TrainModule):
         self, micro_batch_idx: int, num_micro_batches: int
     ) -> Generator[None, None, None]:
         with contextlib.ExitStack() as stack:
+            # TODO: Implement FSDP Microbatching
+            # if isinstance(self.model, FSDPModule):
+            #     assert self.dp_config is not None
+            #     # On the last backward FSDP waits on pending gradient reduction and clears internal data
+            #     # data structures for backward prefetching.
+            #     self.model.set_is_last_backward(is_last_mb)
             if isinstance(self.model, DDP) and micro_batch_idx != num_micro_batches - 1:
                 # For DDP, only sync gradients on the final micro batch.
                 stack.enter_context(self.model.no_sync())
@@ -449,3 +459,41 @@ class HeliosTrainModule(TrainModule):
         return torch.nn.utils.clip_grad_norm_(
             self.model.parameters(), max_grad_norm, norm_type=norm_type, foreach=foreach
         )
+
+    def update_target_encoder(self) -> None:
+        """Update the target encoder."""
+        # Update target encoder with EMA this should be a callback
+        cur_ema_value = (
+            self.start_ema
+            + self.trainer.global_step
+            * (self.end_ema - self.start_ema)
+            / self.trainer.max_steps
+        )
+        with torch.no_grad():
+            self.trainer.record_metric(
+                "train/ema_decay",
+                cur_ema_value,
+                ReduceType.mean,
+            )
+            for param, target_param in zip(
+                self.model.encoder.parameters(), self.model.target_encoder.parameters()
+            ):
+                # TODO: Make this an in place operation
+                target_param.data = cur_ema_value * get_full_tensor(
+                    target_param.data
+                ) + (1 - cur_ema_value) * get_full_tensor(param.data)
+
+    def eval_batch(
+        self, batch: dict[str, Any], labels: torch.Tensor | None = None
+    ) -> tuple[torch.Tensor | None, torch.Tensor | None]:
+        """Evaluate a batch."""
+        raise NotImplementedError("eval batch not implemented")
+
+    def add_regularizer_to_loss(
+        self, loss: torch.Tensor, latent: TokensAndMasks
+    ) -> torch.Tensor:
+        """If a regularizer is present, add it to the loss."""
+        regularizer = getattr(self, "regularizer", None)
+        if regularizer is None:
+            return loss
+        return loss + regularizer.compute(latent, None)
