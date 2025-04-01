@@ -34,7 +34,7 @@ class PredictionHead(nn.Module):
 
         self.encoder = deepcopy(encoder)
         if task_type == TaskType.CLASSIFICATION:
-            self.head = nn.Linear(192, num_classes)
+            self.head = nn.Linear(encoder.embedding_size, num_classes)
         else:
             raise ValueError(f"Invalid task type: {task_type}")
 
