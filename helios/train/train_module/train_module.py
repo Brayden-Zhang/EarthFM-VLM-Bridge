@@ -86,17 +86,7 @@ class HeliosTrainModuleConfig(Config):
     state_dict_save_opts: dict[str, Any] | None = None
     state_dict_load_opts: dict[str, Any] | None = None
 
-    def build(
-        self,
-        model: Any,
-        device: torch.device | None = None,
-    ) -> "HeliosTrainModule":
-        """Build the corresponding :class:`HeliosTrainModule`.
-
-        Args:
-            model: The model to train.
-            device: The device to train on.
-        """
+    def prepare_kwargs(self) -> dict[str, Any]:
         kwargs = self.as_dict(exclude_none=True, recurse=False)
         if (autocast_precision := kwargs.pop("autocast_precision", None)) is not None:
             kwargs["autocast_precision"] = cast(DType, autocast_precision).as_pt()
@@ -112,6 +102,20 @@ class HeliosTrainModuleConfig(Config):
             kwargs["state_dict_load_opts"] = dist_cp_sd.StateDictOptions(
                 **state_dict_load_opts
             )
+        return kwargs
+
+    def build(
+        self,
+        model: Any,
+        device: torch.device | None = None,
+    ) -> "HeliosTrainModule":
+        """Build the corresponding :class:`HeliosTrainModule`.
+
+        Args:
+            model: The model to train.
+            device: The device to train on.
+        """
+        kwargs = self.prepare_kwargs()
         return HeliosTrainModule(
             model=model,
             device=device,

@@ -26,7 +26,7 @@ from torch.distributed.tensor import distribute_tensor
 from torch.utils.data import Dataset
 from tqdm import tqdm
 from upath import UPath
-
+import time
 from helios.data.constants import (
     BASE_RESOLUTION,
     IMAGE_TILE_SIZE,
@@ -873,6 +873,46 @@ class HeliosDataset(Dataset):
             )
         # We are currently reading the entire h5 file into memory this can be made faster by chunking the dataset appropriately and only reading in the optimal chunks
         # THis io is the current bottleneck of the getitem operation
+        # Measure time to read the h5 file
+        start_read_time = time.time()
+        with h5py.File(h5_file_path, "r") as f:
+            sample_dict = {k: v[()] for k, v in f.items()}
+        read_time = time.time() - start_read_time
+        logger.info(f"Time to read h5 file: {read_time:.4f}s")
+
+        # Create sample object
+        sample = HeliosSample(**sample_dict)
+
+        # Process sample based on token budget
+        if args.token_budget is not None:
+            result = sample.subset(
+                patch_size=args.patch_size,
+                max_tokens_per_instance=args.token_budget,
+                sampled_hw_p=args.sampled_hw_p,
+            )
+        else:
+            result = sample
+        sample_dict = result.as_dict(ignore_nones=True)
+
+        # Sample modalities should be written into the metadata of the h5 dataset
+        sample_modalities = list(
+            [Modality.get(key) for key in sample_dict.keys() if key != "timestamps"]
+        )
+
+        # Measure time to normalize
+        start_normalize_time = time.time()
+        if self.normalize:
+            for modality in sample_modalities:
+                sample_dict[modality.name] = self.normalize_image(
+                    modality, sample_dict[modality.name]
+                )
+                sample_dict[modality.name] = sample_dict[modality.name].astype(
+                    self.dtype
+                )
+        normalize_time = time.time() - start_normalize_time
+        logger.info(f"Time to normalize: {normalize_time:.4f}s")
+
+        return args.patch_size, HeliosSample(**sample_dict)
         with h5py.File(h5_file_path, "r") as f:
             sample_dict = {k: v[()] for k, v in f.items()}
         sample = HeliosSample(**sample_dict)

@@ -2,6 +2,7 @@
 
 import logging
 
+import torch
 from olmo_core.config import DType
 from olmo_core.distributed.parallel.data_parallel import (
     DataParallelConfig,
@@ -54,7 +55,6 @@ def build_model_config(common: CommonComponents) -> LatentMIMConfig:
     ENCODER_NUM_HEADS = 12
     DECODER_NUM_HEADS = 12
     MLP_RATIO = 4.0
-    TRANSFORM_TYPE = "flip_and_rotate"
     encoder_config = EncoderConfig(
         supported_modality_names=common.supported_modality_names,
         embedding_size=ENCODER_EMBEDDING_SIZE,
@@ -79,7 +79,6 @@ def build_model_config(common: CommonComponents) -> LatentMIMConfig:
     model_config = LatentMIMConfig(
         encoder_config=encoder_config,
         decoder_config=decoder_config,
-        transform_type=TRANSFORM_TYPE,
     )
     return model_config
 
@@ -89,7 +88,7 @@ def build_train_module_config(
 ) -> LatentMIMTrainModuleConfig:
     """Build the train module config for an experiment."""
     LR = 0.002
-    RANK_MICROBATCH_SIZE = 128
+    RANK_MICROBATCH_SIZE = 64
     ENCODE_RATIO = 0.1
     DECODE_RATIO = 0.75
     WD = 0.02
@@ -121,6 +120,7 @@ def build_train_module_config(
         loss_config=loss_config,
         rank_microbatch_size=RANK_MICROBATCH_SIZE,
         token_exit_cfg=token_exit_cfg,
+        autocast_precision="bfloat16",
         max_grad_norm=1.0,
         dp_config=dp_config,
         scheduler=scheduler,
@@ -133,9 +133,9 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
     # things should be set during building
     # TODO: Include collate function here
 
-    NUM_WORKERS = 8
+    NUM_WORKERS = 0
     GLOBAL_BATCH_SIZE = 128
-    PREFETCH_FACTOR = 4
+    PREFETCH_FACTOR = 2
     TOKEN_BUDGET = 1500
 
     SAMPLE_HW_P_LIST = list(range(5, 13))
