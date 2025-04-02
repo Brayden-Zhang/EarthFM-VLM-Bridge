@@ -63,7 +63,7 @@ class MAETrainModuleConfig(HeliosTrainModuleConfig):
             model: The model to train.
             device: The device to train on.
         """
-        kwargs = self.as_dict(exclude_none=True, recurse=False)
+        kwargs = self.prepare_kwargs()
         return MAETrainModule(
             model=model,
             device=device,
