@@ -28,6 +28,15 @@ MASKING_TYPES = [
     "space_time",
 ]
 MODEL_SIZE_ARGS = {
+    "tiny": {
+        "decoder_depth": 12,
+        "encoder_embedding_size": 192,
+        "decoder_embedding_size": 192,
+        "encoder_depth": 12,
+        "encoder_num_heads": 3,
+        "decoder_num_heads": 3,
+        "mlp_ratio": 4.0,
+    },
     "base": {
         "decoder_depth": 12,
         "encoder_embedding_size": 768,
@@ -64,11 +73,62 @@ MODEL_SIZE_ARGS = {
         "decoder_num_heads": 12,
         "mlp_ratio": 4.0,
     },
+    "large_super_shallow_decoder": {
+        "decoder_depth": 2,
+        "encoder_embedding_size": 1024,
+        "decoder_embedding_size": 1024,
+        "encoder_depth": 24,
+        "encoder_num_heads": 16,
+        "decoder_num_heads": 16,
+        "mlp_ratio": 4.0,
+    },
+    "base_super_shallow_decoder": {
+        "decoder_depth": 2,
+        "encoder_embedding_size": 768,
+        "decoder_embedding_size": 768,
+        "encoder_depth": 12,
+        "encoder_num_heads": 12,
+        "decoder_num_heads": 12,
+        "mlp_ratio": 4.0,
+    },
 }
 
-EMA_DECAYS = [0.841, 0.946, 0.974, 0.987, 0.992, 0.997, 0.9993]
+EXIT_CONFIG_TYPES = ["zero", "half", "full", "varied"]
 
-LEARNING_RATES = [3e-4, 1e-3, 2e-3]
+
+# TODO: THis should be added to the code so we don't have to configure directly anymore
+def build_token_exit_config(
+    config_type: str, modality_names: list[str], encoder_depth: int
+) -> str:
+    """Build the token exit config for an experiment."""
+    if config_type == "zero":
+        return " ".join(
+            f"--train_module.token_exit_cfg.{modality_name}=0"
+            for modality_name in modality_names
+        )
+    elif config_type == "half":
+        return " ".join(
+            f"--train_module.token_exit_cfg.{modality_name}={encoder_depth // 2}"
+            for modality_name in modality_names
+        )
+    elif config_type == "full":
+        return " ".join(
+            f"--train_module.token_exit_cfg.{modality_name}={encoder_depth}"
+            for modality_name in modality_names
+        )
+    elif config_type == "varied":
+        varied_args = []
+        for modality_name in modality_names:
+            if modality_name not in ["latlon", "worldcover"]:
+                varied_args.append(
+                    f"--train_module.token_exit_cfg.{modality_name}={encoder_depth}"
+                )
+            else:
+                varied_args.append(f"--train_module.token_exit_cfg.{modality_name}=0")
+        return " ".join(varied_args)
+    else:
+        raise ValueError(f"Invalid config type: {config_type}")
+
 
 # Base command template
 BASE_COMMAND = (
@@ -83,25 +143,50 @@ BASE_COMMAND = (
     "--model.encoder_config.mlp_ratio={mlp_ratio} "
     "--model.decoder_config.mlp_ratio={mlp_ratio} "
     "--train_module.masking_config.strategy_config.type={masking_type} "
-    "--train_module.ema_decay=\[{ema_decay}, {ema_decay}\] "
-    "--train_module.optim_config.lr={lr} "
-    "--launch.num_gpus=4"
+    "{token_exit_args} "
+    "--launch.num_gpus={num_gpus}"
 )
 
-# Iterate over all combinations of hyperparameters
-for size_str, args in MODEL_SIZE_ARGS.items():
-    # Construct run name indicating hyperparameters
-    for masking_type in MASKING_TYPES:
-        run_name = f"6latent_mim_{masking_type}_patch_disc_new_exit_zero_{size_str}"
 
-        # Construct full command
-        command = BASE_COMMAND.format(
-            run_name=run_name,
-            **args,
-            masking_type=masking_type,
-        )
+def main() -> None:
+    """Run the model ladder sweep."""
+    number_of_runs = len(MODEL_SIZE_ARGS) * len(MASKING_TYPES) * len(EXIT_CONFIG_TYPES)
+    print(f"Number of runs: {number_of_runs}")
+    # Iterate over all combinations of hyperparameters
+    for size_str, args in MODEL_SIZE_ARGS.items():
+        for masking_type in MASKING_TYPES:
+            for exit_config in EXIT_CONFIG_TYPES:
+                # Modality names for token exit configuration
+                modality_names = [
+                    "sentinel2_l2a",
+                    "sentinel1",
+                    "latlon",
+                    "worldcover",
+                ]
 
-        print(f"Launching: {command}")
+                encoder_depth = int(args["encoder_depth"])
+                # Build token exit config arguments
+                token_exit_args = build_token_exit_config(
+                    exit_config, modality_names, encoder_depth
+                )
 
-        # # Execute the command
-        subprocess.run(command, shell=True, check=True)  # nosec
+                # Construct run name indicating hyperparameters
+                run_name = f"6latent_mim_{masking_type}_patch_disc_new_exit_{exit_config}_{size_str}"
+
+                # Construct full command
+                command = BASE_COMMAND.format(
+                    run_name=run_name,
+                    **args,
+                    masking_type=masking_type,
+                    token_exit_args=token_exit_args,
+                    num_gpus=4,  # Added num_gpus param
+                )
+
+                print(f"Launching: {command}")
+
+                # Execute the command
+                subprocess.run(command, shell=True, check=True)  # nosec
+
+
+if __name__ == "__main__":
+    main()

@@ -42,56 +42,15 @@ MAX_PATCH_SIZE = 8
 MIN_PATCH_SIZE = 1
 
 
-# Tiny model
-# Fixed model parameters
-# ENCODER_EMBEDDING_SIZE = 192
-# DECODER_EMBEDDING_SIZE = 192
-# ENCODER_DEPTH = 12
-# DECODER_DEPTH = 12
-# ENCODER_NUM_HEADS = 3
-# DECODER_NUM_HEADS = 3
-# MLP_RATIO = 4.0
-
-
-# Base model
-# ENCODER_EMBEDDING_SIZE = 768
-# DECODER_EMBEDDING_SIZE = 768
-# ENCODER_DEPTH = 12
-# DECODER_DEPTH = 12
-# ENCODER_NUM_HEADS = 12
-# DECODER_NUM_HEADS = 12
-# MLP_RATIO = 4.0
-
-
-# # Large model
-ENCODER_EMBEDDING_SIZE = 1024
-DECODER_EMBEDDING_SIZE = 1024
-ENCODER_DEPTH = 24
-DECODER_DEPTH = 24
-ENCODER_NUM_HEADS = 16
-DECODER_NUM_HEADS = 16
-MLP_RATIO = 4.0
-
-
-# # Large shallow decoder model
-# ENCODER_EMBEDDING_SIZE = 1024
-# DECODER_EMBEDDING_SIZE = 1024
-# ENCODER_DEPTH = 24
-# DECODER_DEPTH = 3
-# ENCODER_NUM_HEADS = 16
-# DECODER_NUM_HEADS = 16
-
-# # Base shallow decoder model
-# ENCODER_EMBEDDING_SIZE = 768
-# DECODER_EMBEDDING_SIZE = 768
-# ENCODER_DEPTH = 12
-# DECODER_DEPTH = 3
-# ENCODER_NUM_HEADS = 12
-# DECODER_NUM_HEADS = 12
-
-
 def build_model_config(common: CommonComponents) -> LatentMIMConfig:
     """Build the model config for an experiment."""
+    ENCODER_EMBEDDING_SIZE = 1024
+    DECODER_EMBEDDING_SIZE = 1024
+    ENCODER_DEPTH = 24
+    DECODER_DEPTH = 24
+    ENCODER_NUM_HEADS = 16
+    DECODER_NUM_HEADS = 16
+    MLP_RATIO = 4.0
     encoder_config = EncoderConfig(
         supported_modality_names=common.supported_modality_names,
         embedding_size=ENCODER_EMBEDDING_SIZE,
