@@ -7,6 +7,7 @@ import logging
 from upath import UPath
 
 from helios.data.dataset import HeliosDatasetConfig
+from helios.data.normalize import compute_normalization_values
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +39,9 @@ dataset_config = HeliosDatasetConfig(
 )
 dataset = dataset_config.build()
 
-norm_dict = dataset.compute_normalization_values(
-    estimate_from=args_dict["estimate_from"]
+norm_dict = compute_normalization_values(
+    dataset=dataset,
+    estimate_from=args_dict["estimate_from"],
 )
 logger.info(f"Normalization stats: {norm_dict}")
 
