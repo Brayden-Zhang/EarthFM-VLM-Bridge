@@ -44,12 +44,12 @@ MIN_PATCH_SIZE = 1
 
 def build_model_config(common: CommonComponents) -> LatentMIMConfig:
     """Build the model config for an experiment."""
-    ENCODER_EMBEDDING_SIZE = 128
-    DECODER_EMBEDDING_SIZE = 128
-    ENCODER_DEPTH = 4
-    DECODER_DEPTH = 4
-    ENCODER_NUM_HEADS = 8
-    DECODER_NUM_HEADS = 8
+    ENCODER_EMBEDDING_SIZE = 1024
+    DECODER_EMBEDDING_SIZE = 1024
+    ENCODER_DEPTH = 24
+    DECODER_DEPTH = 24
+    ENCODER_NUM_HEADS = 16
+    DECODER_NUM_HEADS = 16
     MLP_RATIO = 4.0
     encoder_config = EncoderConfig(
         supported_modality_names=common.supported_modality_names,
@@ -84,7 +84,7 @@ def build_train_module_config(
 ) -> LatentMIMTrainModuleConfig:
     """Build the train module config for an experiment."""
     LR = 0.002
-    RANK_MICROBATCH_SIZE = 128
+    RANK_MICROBATCH_SIZE = 32
     ENCODE_RATIO = 0.1
     DECODE_RATIO = 0.75
     WD = 0.02
@@ -115,6 +115,7 @@ def build_train_module_config(
         loss_config=loss_config,
         rank_microbatch_size=RANK_MICROBATCH_SIZE,
         token_exit_cfg=token_exit_cfg,
+        autocast_precision=DType.bfloat16,
         max_grad_norm=1.0,
         dp_config=dp_config,
         scheduler=scheduler,
