@@ -93,7 +93,9 @@ MODEL_SIZE_ARGS = {
     },
 }
 
-EXIT_CONFIG_TYPES = ["zero", "half", "full", "varied"]
+EXIT_CONFIG_TYPES = ["zero", "full"]
+
+LEARNING_RATE_ARGS = [4e-5, 4e-4, 2e-3]
 
 
 # TODO: THis should be added to the code so we don't have to configure directly anymore
@@ -143,6 +145,7 @@ BASE_COMMAND = (
     "--model.encoder_config.mlp_ratio={mlp_ratio} "
     "--model.decoder_config.mlp_ratio={mlp_ratio} "
     "--train_module.masking_config.strategy_config.type={masking_type} "
+    "--train_module.optim_config.lr={lr} "
     "{token_exit_args} "
     "--launch.num_gpus={num_gpus}"
 )
@@ -156,36 +159,38 @@ def main() -> None:
     for size_str, args in MODEL_SIZE_ARGS.items():
         for masking_type in MASKING_TYPES:
             for exit_config in EXIT_CONFIG_TYPES:
-                # Modality names for token exit configuration
-                modality_names = [
-                    "sentinel2_l2a",
-                    "sentinel1",
-                    "latlon",
-                    "worldcover",
-                ]
+                for lr in LEARNING_RATE_ARGS:
+                    # Modality names for token exit configuration
+                    modality_names = [
+                        "sentinel2_l2a",
+                        "sentinel1",
+                        "latlon",
+                        "worldcover",
+                    ]
 
-                encoder_depth = int(args["encoder_depth"])
-                # Build token exit config arguments
-                token_exit_args = build_token_exit_config(
-                    exit_config, modality_names, encoder_depth
-                )
+                    encoder_depth = int(args["encoder_depth"])
+                    # Build token exit config arguments
+                    token_exit_args = build_token_exit_config(
+                        exit_config, modality_names, encoder_depth
+                    )
 
-                # Construct run name indicating hyperparameters
-                run_name = f"7latent_mim_{masking_type}_patch_disc_new_exit_{exit_config}_{size_str}"
+                    # Construct run name indicating hyperparameters
+                    run_name = f"8latent_mim_{masking_type}_patch_disc_new_exit_{exit_config}_lr_{lr}_{size_str}"
 
-                # Construct full command
-                command = BASE_COMMAND.format(
-                    run_name=run_name,
-                    **args,
-                    masking_type=masking_type,
-                    token_exit_args=token_exit_args,
-                    num_gpus=4,  # Added num_gpus param
-                )
+                    # Construct full command
+                    command = BASE_COMMAND.format(
+                        run_name=run_name,
+                        **args,
+                        masking_type=masking_type,
+                        token_exit_args=token_exit_args,
+                        lr=lr,
+                        num_gpus=4,  # Added num_gpus param
+                    )
 
-                print(f"Launching: {command}")
+                    print(f"Launching: {command}")
 
-                # Execute the command
-                subprocess.run(command, shell=True, check=True)  # nosec
+                    # Execute the command
+                    subprocess.run(command, shell=True, check=True)  # nosec
 
 
 if __name__ == "__main__":
