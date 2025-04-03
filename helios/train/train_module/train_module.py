@@ -216,7 +216,9 @@ class HeliosTrainModule(TrainModule):
                 self.model.apply_compile()
                 logger.info("Applied torch.compile() to the model")
             else:
-                logger.warning("torch.compile() not applied because CUDA is not available")
+                logger.warning(
+                    "torch.compile() not applied because CUDA is not available"
+                )
 
         # Maybe shard/replicate according to data parallel config.
         self._dp_config = dp_config

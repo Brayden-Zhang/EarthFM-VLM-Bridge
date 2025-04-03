@@ -252,7 +252,6 @@ class LatentMIMTrainModule(HeliosTrainModule):
         del batch, batch_data  # In case this helps with memory utilization.
         del masked_batch
 
-
     def model_forward(
         self, batch: MaskedHeliosSample, patch_size: int, token_exit_cfg: dict[str, int]
     ) -> tuple[torch.Tensor, TokensAndMasks, TokensAndMasks, TokensAndMasks]:

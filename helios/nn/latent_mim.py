@@ -1,7 +1,7 @@
 """Simple set up of latent predictor."""
 
-from copy import deepcopy
 import logging
+from copy import deepcopy
 from dataclasses import dataclass
 
 import torch
@@ -15,6 +15,7 @@ from helios.nn.utils import DistributedMixins
 from helios.train.masking import MaskedHeliosSample
 
 logger = logging.getLogger(__name__)
+
 
 class LatentMIM(nn.Module, DistributedMixins):
     """Latent MIM Style."""
