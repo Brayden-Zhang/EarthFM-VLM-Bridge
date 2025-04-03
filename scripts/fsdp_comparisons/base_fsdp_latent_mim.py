@@ -45,7 +45,9 @@ MIN_PATCH_SIZE = 1
 def build_model_config(common: CommonComponents) -> LatentMIMConfig:
     """Build the model config for an experiment."""
     ENCODER_EMBEDDING_SIZE = 1536
-    DECODER_EMBEDDING_SIZE = 1536 # we should try to do this with a full depth just to check
+    DECODER_EMBEDDING_SIZE = (
+        1536  # we should try to do this with a full depth just to check
+    )
     ENCODER_DEPTH = 40
     DECODER_DEPTH = 12
     ENCODER_NUM_HEADS = 16
