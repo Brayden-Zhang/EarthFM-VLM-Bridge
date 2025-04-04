@@ -1321,7 +1321,6 @@ class Predictor(FlexiHeliosBase):
         sorted_mask, indices = torch.sort(
             mask.int(), dim=1, descending=True, stable=True
         )
-        logger.info(f"sorted_mask: {sorted_mask}")
         tokens = tokens.gather(1, indices[:, :, None].expand_as(tokens))
 
         # Create binary masks for Encoder and Decoder
