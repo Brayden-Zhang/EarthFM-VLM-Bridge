@@ -86,8 +86,9 @@ def test_latentmim_with_loss(
         learnable_channel_embeddings=True,
     )
     latentmim = LatentMIM(encoder, predictor)
-    output = latentmim.forward(x, patch_size)
-    # output = predictor.forward(output, x.timestamps, patch_size, input_res)
+
+    _, output = latentmim.forward(x, patch_size)
+    output = predictor.forward(output, timestamps, patch_size, input_res)
     patched_H = H // patch_size
     patched_W = W // patch_size
     assert output.sentinel2_l2a is not None
