@@ -656,12 +656,22 @@ class ModalitySpaceTimeMaskingStrategy(MaskingStrategy):
 class ModalityCrossSpaceMaskingStrategy(MaskingStrategy):
     """Randomly select a modality and apply space masking to it."""
 
-    def __init__(self, encode_ratio: float = 0.5, decode_ratio: float = 0.5) -> None:
+    def __init__(
+        self,
+        max_unmasking_bandsets: int,
+        min_encoding_bandsets: int,
+        max_encoding_bandsets: int,
+        encode_ratio: float = 0.5,
+        decode_ratio: float = 0.5,
+    ) -> None:
         """Initialize the masking strategy."""
         self._encode_ratio = encode_ratio
         self._decode_ratio = decode_ratio
         self.space_strategy = SpaceMaskingStrategy(encode_ratio, decode_ratio)
         self.generator = np.random.default_rng(0)
+        self.max_unmasking_bandsets = max_unmasking_bandsets
+        self.min_encoding_bandsets = min_encoding_bandsets
+        self.max_encoding_bandsets = max_encoding_bandsets
 
     def apply_mask(
         self, batch: HeliosSample, patch_size: int | None = None, **kwargs: Any
@@ -670,49 +680,35 @@ class ModalityCrossSpaceMaskingStrategy(MaskingStrategy):
         space_masked_sample = self.space_strategy.apply_mask(
             batch, patch_size, **kwargs
         )
-        num_bandsets_per_modality_list = []
-        for modality in batch.modalities:
-            if modality == "timestamps":
-                continue
-            num_bandsets_per_modality_list.append(Modality.get(modality).num_band_sets)
-        total_bandsets = sum(num_bandsets_per_modality_list)
-
-        # Configurable values
-        max_unmasking_bandsets = 20
-        min_encoding_bandsets = 1
-        max_encoding_bandsets = 3  # Taken from galileleo not sure what this should be
         num_bandsets_to_encode = self.generator.integers(
-            low=min_encoding_bandsets, high=max_encoding_bandsets
+            low=self.min_encoding_bandsets, high=self.max_encoding_bandsets
         )
-        total_bandsets_to_encode = list(range(total_bandsets))
-        encoded_bandset_idxs = self.generator.choice(
-            total_bandsets_to_encode, size=num_bandsets_to_encode, replace=False
-        )
-        encoded_bandset_list = []
-        modality_offset = 0
-        for modality in batch.modalities:
-            if modality == "timestamps":
+
+        # we need to filter to bandset indices that don't include any not present modalities
+        filtered_bandset_list = []
+        for bandset_idx in ALL_BANDSET_IDXS:
+            if bandset_idx[0] not in batch.modalities:
                 continue
-            modality_num_bandsets = Modality.get(modality).num_band_sets
-            for bandset_idx in encoded_bandset_idxs:
-                bandset_idx -= modality_offset
-                if not (bandset_idx >= 0 and bandset_idx < modality_num_bandsets):
-                    continue
-                encoded_bandset_list.append((modality, bandset_idx))
-            modality_offset += modality_num_bandsets
-            # Each modality should have the indexes of the bandsets they are to put an encoder only mask on
-        logger.info(f"encoded_bandset_list: {encoded_bandset_list}")
+            filtered_bandset_list.append(bandset_idx)
+
+        idxs_list = list(range(len(filtered_bandset_list)))
+        encoded_bandset_idxs = self.generator.choice(
+            idxs_list, size=num_bandsets_to_encode, replace=False
+        ).tolist()
+        encoded_bandset_list = [filtered_bandset_list[i] for i in encoded_bandset_idxs]
+
+        # Each modality should have the indexes of the bandsets they are to put an encoder only mask on
+
         candidate_decoding_bandset_combinations = []
-        logger.info(f"ALL_BANDSET_POWSET total: {len(ALL_BANDSET_POWSET)}")
         # Should we have a miinimum decoding value so we are not only predicitng the encoded bandsets? Why would we not want to just pick the largest random subset of
         # the leftover bandsets that are less then the max unmasking bandsets?
         for bandset_combination in ALL_BANDSET_POWSET:
             if len(bandset_combination) == 0:
                 logger.debug("Skipping empty bandset combination")
                 continue
-            if len(bandset_combination) > max_unmasking_bandsets:
+            if len(bandset_combination) > self.max_unmasking_bandsets:
                 logger.debug(
-                    f"Skipping bandset combination with {len(bandset_combination)} bandsets (exceeds max {max_unmasking_bandsets})"
+                    f"Skipping bandset combination with {len(bandset_combination)} bandsets (exceeds max {self.max_unmasking_bandsets})"
                 )
                 continue
             # check if any of the modalities
@@ -742,6 +738,7 @@ class ModalityCrossSpaceMaskingStrategy(MaskingStrategy):
             self.generator.integers(0, len(candidate_decoding_bandset_combinations))
         ]
         logger.info(f"decoded_bandset_idxs: {decoded_bandset_idxs}")
+        logger.info(f"encoded_bandset_list: {encoded_bandset_list}")
 
         # Loop to handle the encoding bandset clamping
         space_masked_sample_dict = space_masked_sample.as_dict(return_none=False)

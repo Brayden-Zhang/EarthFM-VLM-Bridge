@@ -704,7 +704,11 @@ def test_space_cross_modality_masking() -> None:
         worldcover=torch.ones((b, h, w, 1, worldcover_num_bands)),
     )
     strategy = ModalityCrossSpaceMaskingStrategy(
+        max_unmasking_bandsets=20,
+        min_encoding_bandsets=2,
+        max_encoding_bandsets=3,
         encode_ratio=0.25,
         decode_ratio=0.5,
     )
-    masked_sample = strategy.apply_mask(batch, patch_size=patch_size)
+    for i in range(10):
+        masked_sample = strategy.apply_mask(batch, patch_size=patch_size)
