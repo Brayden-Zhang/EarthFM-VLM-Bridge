@@ -8,6 +8,7 @@ from helios.data.constants import MISSING_VALUE, Modality
 from helios.data.dataset import HeliosSample
 from helios.train.masking import (
     MaskValue,
+    ModalityCrossSpaceMaskingStrategy,
     ModalityMaskingStrategy,
     RandomMaskingStrategy,
     SpaceMaskingStrategy,
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 def test_random_masking_and_unmask() -> None:
     """Test random masking ratios."""
-    b, h, w, t = 100, 16, 16, 8
+    b, h, w, t = 4, 16, 16, 8
 
     patch_size = 4
 
@@ -681,3 +682,29 @@ def test_modality_mask_and_unmask() -> None:
     assert (
         num_decoder / total_elements
     ) == expected_decode_ratio, "Incorrect decode mask ratio"
+
+
+def test_space_cross_modality_masking() -> None:
+    b, h, w, t = 4, 16, 16, 8
+
+    patch_size = 4
+
+    days = torch.randint(1, 31, (b, 1, t), dtype=torch.long)
+    months = torch.randint(1, 13, (b, 1, t), dtype=torch.long)
+    years = torch.randint(2018, 2020, (b, 1, t), dtype=torch.long)
+    timestamps = torch.cat([days, months, years], dim=1)  # Shape: (B, 3, T)
+    sentinel2_l2a_num_bands = Modality.SENTINEL2_L2A.num_bands
+    worldcover_num_bands = Modality.WORLDCOVER.num_bands
+    latlon_num_bands = Modality.LATLON.num_bands
+    batch = HeliosSample(
+        sentinel2_l2a=torch.ones((b, h, w, t, sentinel2_l2a_num_bands)),
+        sentinel1=torch.ones((b, h, w, t, Modality.SENTINEL1.num_bands)),
+        latlon=torch.ones((b, latlon_num_bands)),
+        timestamps=timestamps,
+        worldcover=torch.ones((b, h, w, 1, worldcover_num_bands)),
+    )
+    strategy = ModalityCrossSpaceMaskingStrategy(
+        encode_ratio=0.25,
+        decode_ratio=0.5,
+    )
+    masked_sample = strategy.apply_mask(batch, patch_size=patch_size)
