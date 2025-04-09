@@ -3,35 +3,30 @@
 import logging
 
 from olmo_core.config import DType
-from olmo_core.distributed.parallel.data_parallel import (
-    DataParallelConfig,
-    DataParallelType,
-)
+from olmo_core.distributed.parallel.data_parallel import (DataParallelConfig,
+                                                          DataParallelType)
 from olmo_core.optim import AdamWConfig
 from olmo_core.optim.scheduler import CosWithWarmup
-from olmo_core.train.callbacks import (
-    ConfigSaverCallback,
-    GarbageCollectorCallback,
-    GPUMemoryMonitorCallback,
-)
+from olmo_core.train.callbacks import (ConfigSaverCallback,
+                                       GarbageCollectorCallback,
+                                       GPUMemoryMonitorCallback)
 from olmo_core.train.checkpoint import CheckpointerConfig
 from olmo_core.train.common import Duration, LoadStrategy
 from olmo_core.train.config import TrainerConfig
 from upath import UPath
 
-from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.constants import Modality
+from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig
 from helios.data.normalize import Strategy
 from helios.internal.common import build_common_components
-from helios.internal.experiment import CommonComponents, HeliosVisualizeConfig, main
+from helios.internal.experiment import (CommonComponents,
+                                        HeliosVisualizeConfig, main)
 from helios.nn.flexihelios import EncoderConfig, PoolingType, PredictorConfig
 from helios.nn.latent_mim import LatentMIMConfig
-from helios.train.callbacks import (
-    DownstreamEvaluatorCallbackConfig,
-    HeliosSpeedMonitorCallback,
-    HeliosWandBCallback,
-)
+from helios.train.callbacks import (DownstreamEvaluatorCallbackConfig,
+                                    HeliosSpeedMonitorCallback,
+                                    HeliosWandBCallback)
 from helios.train.callbacks.evaluator_callback import DownstreamTaskConfig
 from helios.train.loss import LossConfig
 from helios.train.masking import MaskingConfig
@@ -129,7 +124,7 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
     # things should be set during building
     # TODO: Include collate function here
 
-    NUM_WORKERS = 0
+    NUM_WORKERS = 8
     GLOBAL_BATCH_SIZE = 128
     PREFETCH_FACTOR = 4
     TOKEN_BUDGET = 1500
@@ -167,8 +162,8 @@ def build_dataset_config(common: CommonComponents) -> HeliosDatasetConfig:
 def build_trainer_config(common: CommonComponents) -> TrainerConfig:
     """Build the trainer config for an experiment."""
     MAX_DURATION = Duration.epochs(300)
-    METRICS_COLLECT_INTERVAL = 1
-    CANCEL_CHECK_INTERVAL = 1
+    METRICS_COLLECT_INTERVAL = 5
+    CANCEL_CHECK_INTERVAL = 20
     LOAD_STRATEGY = LoadStrategy.if_available
     WANDB_USERNAME = "eai-ai2"  # nosec
     WANDB_PROJECT = "helios-debug"
@@ -261,21 +256,21 @@ def build_visualize_config(common: CommonComponents) -> HeliosVisualizeConfig:
         std_multiplier=2.0,
     )
 
-def build_common_components_new(*args
-) -> CommonComponents:
+
+def build_common_components_new(*args) -> CommonComponents:
     """Build the common components for an experiment."""
     # Variables to be changed per user
     common = build_common_components(*args)
 
     TRAINING_MODALITIES = [
-            Modality.SENTINEL2_L2A.name,
-            Modality.SENTINEL1.name,
-            Modality.WORLDCOVER.name,
-            Modality.SRTM.name,
-            # # Modality.NAIP.name,
-            Modality.LANDSAT.name,
-            # Modality.OPENSTREETMAP_RASTER.name,
-        ]
+        Modality.SENTINEL2_L2A.name,
+        Modality.SENTINEL1.name,
+        Modality.WORLDCOVER.name,
+        # Modality.SRTM.name,
+        # # Modality.NAIP.name,
+        # Modality.LANDSAT.name,
+        # Modality.OPENSTREETMAP_RASTER.name,
+    ]
     return CommonComponents(
         run_name=common.run_name,
         save_folder=common.save_folder,
