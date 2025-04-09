@@ -112,7 +112,7 @@ MODEL_ARGS = [
 
 # Base command template
 BASE_COMMAND = (
-    "python3 scripts/parameter_sweeping/2025_04_01_multidataset/train.py launch {run_name} ai2/jupiter-cirrascale-2 "
+    "python3 scripts/parameter_sweeping/2025_04_09_multidataset/train.py launch {run_name} ai2/jupiter-cirrascale-2 "
     "--train_module.rank_microbatch_size={rank_microbatch_size} "
     "{token_exit_args} "
     "{model_args}"
