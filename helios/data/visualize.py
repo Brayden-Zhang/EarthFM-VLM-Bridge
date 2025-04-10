@@ -82,7 +82,7 @@ def visualize_sample(
     )
 
     # Load lat/lon data, e.g. [lat, lon]
-    latlon_data = HeliosDataset.get_latlon(sample)
+    latlon_data = sample.get_latlon()
     lat = float(latlon_data[0])
     lon = float(latlon_data[1])
 

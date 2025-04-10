@@ -5,10 +5,14 @@ from dataclasses import dataclass
 
 import numpy as np
 import numpy.typing as npt
+import pandas as pd
 import rasterio
 import rasterio.windows
+from pyproj import Transformer
 
-from helios.data.constants import IMAGE_TILE_SIZE, Modality, ModalitySpec, TimeSpan
+from helios.data.constants import (BASE_RESOLUTION, IMAGE_TILE_SIZE,
+                                   PROJECTION_CRS, Modality, ModalitySpec,
+                                   TimeSpan)
 
 from .parse import GridTile, ModalityTile
 
@@ -37,6 +41,48 @@ class SampleInformation:
     # The time spans from which the ModalityTiles are sourced should either match the
     # time span of the sample, or should be TimeSpan.STATIC.
     modalities: dict[ModalitySpec, ModalityTile]
+
+    def get_latlon(self) -> np.ndarray:
+        """Get the latlon of the sample."""
+        # Get coordinates at projection units, and then transform to latlon
+        grid_resolution = self.grid_tile.resolution_factor * BASE_RESOLUTION
+        x, y = (
+            (self.grid_tile.col + 0.5) * grid_resolution * IMAGE_TILE_SIZE,
+            (self.grid_tile.row + 0.5) * -grid_resolution * IMAGE_TILE_SIZE,
+        )
+        transformer = Transformer.from_crs(
+            self.grid_tile.crs, PROJECTION_CRS, always_xy=True
+        )
+        lon, lat = transformer.transform(x, y)
+        return np.array([lat, lon])
+
+    def get_timestamps(self) -> np.ndarray:
+        """Get the timestamps of the sample."""
+        # Assume that all multitemporal modalities have the same timestamps
+        if Modality.SENTINEL2_L2A in self.modalities:
+            sample_sentinel2_l2a = self.modalities[Modality.SENTINEL2_L2A]
+            timestamps = [i.start_time for i in sample_sentinel2_l2a.images]
+            dt = pd.to_datetime(timestamps)
+        elif Modality.SENTINEL1 in self.modalities:
+            logger.info("Using Sentinel1 data for timestamps")
+            sample_sentinel1 = self.modalities[Modality.SENTINEL1]
+            timestamps = [i.start_time for i in sample_sentinel1.images]
+            dt = pd.to_datetime(timestamps)
+        elif Modality.LANDSAT in self.modalities:
+            logger.info("Using Landsat data for timestamps")
+            sample_landsat = self.modalities[Modality.LANDSAT]
+            timestamps = [i.start_time for i in sample_landsat.images]
+            dt = pd.to_datetime(timestamps)
+        elif Modality.NAIP in self.modalities:
+            logger.info("Using NAIP data for timestamps")
+            sample_naip = self.modalities[Modality.NAIP]
+            timestamps = [i.start_time for i in sample_naip.images]
+            dt = pd.to_datetime(timestamps)
+        else:
+            raise ValueError("Sample does not have any multitemporal modalities")
+        # Note that month should be 0-indexed
+        # Note that month should be 0-indexed
+        return np.array([dt.day, dt.month - 1, dt.year]).T
 
 
 def image_tiles_to_samples(

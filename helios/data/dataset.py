@@ -2,10 +2,7 @@
 
 import hashlib
 import logging
-import multiprocessing as mp
-import os
 import random
-import tempfile
 from collections.abc import Sequence
 from dataclasses import dataclass
 from math import floor
@@ -16,8 +13,6 @@ import h5py
 import numpy as np
 import pandas as pd
 import torch
-from einops import rearrange
-from olmo_core.aliases import PathOrStr
 from olmo_core.config import Config, DType
 from olmo_core.distributed.utils import get_fs_local_rank
 from pyproj import Transformer
@@ -454,7 +449,6 @@ class HeliosDataset(Dataset):
         )
         return sha256_hash.hexdigest()
 
-
     @property
     def sample_metadata_path(self) -> UPath:
         """Get the path to the sample metadata file."""
@@ -473,28 +467,35 @@ class HeliosDataset(Dataset):
     def _filter_sample_indices_for_training(self) -> None:
         """Filter the sample indices for training.
 
-        Updates the sample indices numpy array to only include the indices we want to train on."""
+        Updates the sample indices numpy array to only include the indices we want to train on.
+        """
         # Read the metadata CSV
         metadata_df = pd.read_csv(self.sample_metadata_path)
         logger.info(f"Metadata CSV has {len(metadata_df)} samples")
         logger.info(f"columns: {metadata_df.columns}")
         # For now we want to filter out any samples that have NAIP DATA or don't have any of the training modalities
         # Get the indices of samples that have NAIP data
-        naip_indices = metadata_df[metadata_df['naip'] == 1].index
+        naip_indices = metadata_df[metadata_df["naip"] == 1].index
         self.naip_indices = naip_indices
         logger.info(f"NAIP indices: {naip_indices}")
 
         # Get the indices of samples that don't have any training modalities
-        no_training_indices = metadata_df[metadata_df[self.training_modalities].sum(axis=1) == 0].index
+        no_training_indices = metadata_df[
+            metadata_df[self.training_modalities].sum(axis=1) == 0
+        ].index
         # Filter these indices out
         logger.info(f"Filtering out {len(naip_indices)} samples with NAIP data")
-        logger.info(f"Filtering out {len(no_training_indices)} samples without any training modalities")
+        logger.info(
+            f"Filtering out {len(no_training_indices)} samples without any training modalities"
+        )
         self.sample_indices = np.setdiff1d(self.sample_indices, naip_indices)
         self.sample_indices = np.setdiff1d(self.sample_indices, no_training_indices)
         # raise an error if any of the naip indices are still in the sample indices
         if any(index in self.naip_indices for index in self.sample_indices):
             raise ValueError("Some NAIP indices are still in the sample indices")
-        logger.info(f"Filtered {len(naip_indices) + len(no_training_indices)} samples to {self.sample_indices.shape} samples")
+        logger.info(
+            f"Filtered {len(naip_indices) + len(no_training_indices)} samples to {self.sample_indices.shape} samples"
+        )
 
     def prepare(self, samples: list[SampleInformation] | None = None) -> None:
         """Prepare the dataset.
@@ -526,8 +527,7 @@ class HeliosDataset(Dataset):
 
     def _log_modality_distribution(self, samples: list[SampleInformation]) -> None:
         """Log the modality distribution."""
-
-        #TODO: have a version that reads this from the sample metadata file
+        # TODO: have a version that reads this from the sample metadata file
         # Log modality distribution
         modality_counts: dict[str, int] = {}
         modality_combinations: dict[frozenset[str], int] = {}
@@ -560,21 +560,6 @@ class HeliosDataset(Dataset):
                 f"{'+'.join(sorted(combination))}: {count} samples ({percentage:.1f}%)"
             )
 
-    @classmethod
-    def get_latlon(cls, sample: SampleInformation) -> np.ndarray:
-        """Get the latlon of the sample."""
-        # Get coordinates at projection units, and then transform to latlon
-        grid_resolution = sample.grid_tile.resolution_factor * BASE_RESOLUTION
-        x, y = (
-            (sample.grid_tile.col + 0.5) * grid_resolution * IMAGE_TILE_SIZE,
-            (sample.grid_tile.row + 0.5) * -grid_resolution * IMAGE_TILE_SIZE,
-        )
-        transformer = Transformer.from_crs(
-            sample.grid_tile.crs, cls.PROJECTION_CRS, always_xy=True
-        )
-        lon, lat = transformer.transform(x, y)
-        return np.array([lat, lon])
-
     def get_geographic_distribution(
         self, samples: list[SampleInformation]
     ) -> np.ndarray:
@@ -591,7 +576,7 @@ class HeliosDataset(Dataset):
             raise ValueError("No samples provided")
         latlons = []
         for sample in samples:
-            latlon = self.get_latlon(sample)
+            latlon = sample.get_latlon()
             latlons.append(latlon)
         latlons = np.vstack(latlons)
         self.save_latlon_distribution(latlons)
@@ -642,34 +627,6 @@ class HeliosDataset(Dataset):
                     )
 
         return sample_data
-
-    def _get_timestamps(self, sample: SampleInformation) -> np.ndarray:
-        """Get the timestamps of the sample."""
-        # Assume that all multitemporal modalities have the same timestamps
-        if Modality.SENTINEL2_L2A in sample.modalities:
-            sample_sentinel2_l2a = sample.modalities[Modality.SENTINEL2_L2A]
-            timestamps = [i.start_time for i in sample_sentinel2_l2a.images]
-            dt = pd.to_datetime(timestamps)
-        elif Modality.SENTINEL1 in sample.modalities:
-            logger.info(f"Using Sentinel1 data for timestamps")
-            sample_sentinel1 = sample.modalities[Modality.SENTINEL1]
-            timestamps = [i.start_time for i in sample_sentinel1.images]
-            dt = pd.to_datetime(timestamps)
-        elif Modality.LANDSAT in sample.modalities:
-            logger.info(f"Using Landsat data for timestamps")
-            sample_landsat = sample.modalities[Modality.LANDSAT]
-            timestamps = [i.start_time for i in sample_landsat.images]
-            dt = pd.to_datetime(timestamps)
-        elif Modality.NAIP in sample.modalities:
-            logger.info(f"Using NAIP data for timestamps")
-            sample_naip = sample.modalities[Modality.NAIP]
-            timestamps = [i.start_time for i in sample_naip.images]
-            dt = pd.to_datetime(timestamps)
-        else:
-            raise ValueError("Sample does not have any multitemporal modalities")
-        # Note that month should be 0-indexed
-        # Note that month should be 0-indexed
-        return np.array([dt.day, dt.month - 1, dt.year]).T
 
     def __len__(self) -> int:
         """Get the length of the dataset."""
@@ -722,12 +679,11 @@ class HeliosDataset(Dataset):
             with h5py.File(f, "r") as h5file:
                 logger.info(f"Reading h5 file {h5_file_path} with keys {h5file.keys()}")
                 # Not sure lat lon should be here
-                sample_dict = {k: v[()] for k, v in h5file.items() if k in self.training_modalities or k in ["latlon", "timestamps"]}
-        # TODO: Hack to make sure landsat works other than this
-        if "landsat" in sample_dict:
-            if sample_dict["landsat"].shape[2] != 12:
-                logger.info(f"Landsat shape: {sample_dict['landsat'].shape}")
-                sample_dict.pop("landsat")
+                sample_dict = {
+                    k: v[()]
+                    for k, v in h5file.items()
+                    if k in self.training_modalities or k in ["latlon", "timestamps"]
+                }
         return sample_dict
 
     def _get_h5_file_path(self, index: int) -> UPath:
