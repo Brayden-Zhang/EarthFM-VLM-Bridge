@@ -351,9 +351,6 @@ class FlexiHeliosPatchEmbeddings(nn.Module):
         modalities_to_process = get_modalities_to_process(
             input_data.modalities, self.supported_modality_names
         )
-        logger.info(f"Input data modalities: {input_data.modalities}")
-        logger.info(f"Supported modalities: {self.supported_modality_names}")
-        logger.info(f"Modalities to process for patchification: {modalities_to_process}")
         for modality in modalities_to_process:
             modality_tokens, modality_masks = self.apply_embedding_to_modality(
                 modality, input_data, patch_size
@@ -1468,10 +1465,7 @@ class Predictor(FlexiHeliosBase):
         modalities_to_process = get_modalities_to_process(
             available_modalities, self.supported_modality_names
         )
-        logger.info(f"Available modalities: {available_modalities}")
-        logger.info(f"Modalities to process: {modalities_to_process}")
         for modality in modalities_to_process:
-            logger.info(f"Processing modality: {modality}")
             x_modality = getattr(x, modality)
             # Are these normalizations masked correctly?
             x_modality = self.input_norm(x_modality)
