@@ -381,6 +381,8 @@ class HeliosDataset(Dataset):
             None
         """
         self.h5py_dir = h5py_dir
+        if not self.h5py_dir.exists():
+            raise FileNotFoundError(f"H5PY directory does not exist: {self.h5py_dir}")
 
         self.training_modalities = training_modalities
         self.use_samples_with_missing_supported_modalities = (
@@ -449,7 +451,7 @@ class HeliosDataset(Dataset):
     @property
     def is_dataset_prepared(self) -> bool:
         """Check if the dataset is prepared."""
-        return self.sample_indices is not None and self.h5py_dir.exists()
+        return self.sample_indices is not None
 
     def _filter_sample_indices_for_training(self) -> None:
         """Filter the sample indices for training.
