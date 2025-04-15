@@ -533,7 +533,7 @@ class InfoNCELoss(Loss):
     name = "InfoNCE"
 
     def __init__(self, tau: float = 0.1, weight: float = 1):
-        """Initialize adjusted patch discrimination loss.
+        """Initialize InfoNCE loss.
 
         Args:
             tau: the softmax temperature
