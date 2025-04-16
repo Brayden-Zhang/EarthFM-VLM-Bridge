@@ -21,7 +21,6 @@ from upath import UPath
 
 from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig
-from helios.data.normalize import Strategy
 from helios.internal.common import build_common_components
 from helios.internal.experiment import CommonComponents, HeliosVisualizeConfig, main
 from helios.nn.flexihelios import EncoderConfig, PoolingType, PredictorConfig
@@ -44,12 +43,12 @@ MIN_PATCH_SIZE = 1
 
 def build_model_config(common: CommonComponents) -> LatentMIMConfig:
     """Build the model config for an experiment."""
-    ENCODER_EMBEDDING_SIZE = 128
-    DECODER_EMBEDDING_SIZE = 128
-    ENCODER_DEPTH = 4
-    DECODER_DEPTH = 4
-    ENCODER_NUM_HEADS = 8
-    DECODER_NUM_HEADS = 8
+    ENCODER_EMBEDDING_SIZE = 192
+    DECODER_EMBEDDING_SIZE = 192
+    ENCODER_DEPTH = 12
+    DECODER_DEPTH = 12
+    ENCODER_NUM_HEADS = 3
+    DECODER_NUM_HEADS = 3
     MLP_RATIO = 4.0
     encoder_config = EncoderConfig(
         supported_modality_names=common.training_modalities,
@@ -101,7 +100,7 @@ def build_train_module_config(
             "type": "patch_discrimination_new",  # TODO: Should be registered via enum names
         }
     )
-    token_exit_cfg = {modality: 0 for modality in common.training_modalities}
+    token_exit_cfg = {modality: 12 for modality in common.training_modalities}
 
     WARMUP_EPOCHS = 20
     dp_config = DataParallelConfig(name=DataParallelType.ddp)
@@ -168,7 +167,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
     CANCEL_CHECK_INTERVAL = 1
     LOAD_STRATEGY = LoadStrategy.if_available
     WANDB_USERNAME = "eai-ai2"  # nosec
-    WANDB_PROJECT = "helios-debug"
+    WANDB_PROJECT = "helios-joer"
     checkpointer_config = CheckpointerConfig(work_dir=common.save_folder)
     wandb_callback = HeliosWandBCallback(
         name=common.run_name,
@@ -194,7 +193,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=False,
             probe_lr=0.1,
-            eval_interval=Duration.epochs(20),
+            eval_interval=Duration.epochs(10),
         ),
         "sen1floods11": DownstreamTaskConfig(
             dataset="sen1floods11",
@@ -203,7 +202,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
             probe_lr=0.1,
-            eval_interval=Duration.epochs(20),
+            eval_interval=Duration.epochs(10),
         ),
         "pastis": DownstreamTaskConfig(
             dataset="pastis",
@@ -212,7 +211,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
             probe_lr=0.1,
-            eval_interval=Duration.epochs(20),
+            eval_interval=Duration.epochs(10),
         ),
         "pastis-r": DownstreamTaskConfig(
             dataset="pastis-r",
@@ -221,7 +220,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
             probe_lr=0.1,
-            eval_interval=Duration.epochs(20),
+            eval_interval=Duration.epochs(10),
         ),
     }
     trainer_config = (
@@ -254,7 +253,6 @@ def build_visualize_config(common: CommonComponents) -> HeliosVisualizeConfig:
     return HeliosVisualizeConfig(
         num_samples=None,
         output_dir=str(UPath(common.save_folder) / "visualizations"),
-        normalize_strategy=Strategy.PREDEFINED,
         std_multiplier=2.0,
     )
 

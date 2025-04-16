@@ -157,9 +157,10 @@ class ConvertToH5py:
             raise ValueError("h5py_dir is not set")
         return self.h5py_dir / self.latlon_distribution_fname
 
-    def save_latlon_distribution(self, latlons: np.ndarray) -> None:
+    def save_latlon_distribution(self, samples: list[SampleInformation]) -> None:
         """Save the latlon distribution to a file."""
         logger.info(f"Saving latlon distribution to {self.latlon_distribution_path}")
+        latlons = np.array([sample.get_latlon() for sample in samples])
         with self.latlon_distribution_path.open("wb") as f:
             np.save(f, latlons)
 
@@ -307,6 +308,7 @@ class ConvertToH5py:
         """Prepare the h5 dataset."""
         self.set_h5py_dir(len(samples))
         self.save_sample_metadata(samples)
+        self.save_latlon_distribution(samples)
         logger.info("Attempting to create H5 files may take some time...")
         self.create_h5_dataset(samples)
 

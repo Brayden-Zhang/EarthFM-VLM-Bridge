@@ -54,12 +54,12 @@ MAE_MODALITIES = [
 
 def build_model_config(common: CommonComponents) -> MAEConfig:
     """Build the model config for an experiment."""
-    ENCODER_EMBEDDING_SIZE = 128
-    DECODER_EMBEDDING_SIZE = 128
-    ENCODER_DEPTH = 4
-    DECODER_DEPTH = 4
-    ENCODER_NUM_HEADS = 8
-    DECODER_NUM_HEADS = 8
+    ENCODER_EMBEDDING_SIZE = 192
+    DECODER_EMBEDDING_SIZE = 192
+    ENCODER_DEPTH = 12
+    DECODER_DEPTH = 12
+    ENCODER_NUM_HEADS = 3
+    DECODER_NUM_HEADS = 3
     MLP_RATIO = 4.0
     encoder_config = EncoderConfig(
         supported_modality_names=common.training_modalities,
