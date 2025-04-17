@@ -9,7 +9,6 @@ from typing import Any
 import numpy as np
 from olmo_core.config import Config
 from torch.utils.data import ConcatDataset, Dataset
-from upath import UPath
 
 from helios.data.constants import ModalitySpec
 
@@ -96,14 +95,6 @@ class HeliosConcatDataset(ConcatDataset):
                 raise ValueError(
                     "expected all sub datasets to have same training modalities"
                 )
-
-    def set_cache_dir(self, cache_dir: UPath) -> None:
-        """Set the cache directory to cache H5 files."""
-        # Make sure each dataset gets a different subdirectory to store the H5s.
-        for dataset_idx, dataset in enumerate(self.datasets):
-            cur_cache_dir = cache_dir / str(dataset_idx)
-            cur_cache_dir.mkdir(parents=True, exist_ok=True)
-            dataset.set_cache_dir(cur_cache_dir)
 
     @property
     def supported_modalities(self) -> list[ModalitySpec]:
