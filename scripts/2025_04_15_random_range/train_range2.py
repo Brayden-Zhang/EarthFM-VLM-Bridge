@@ -132,7 +132,7 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
     # things should be set during building
     # TODO: Include collate function here
 
-    NUM_WORKERS = 8
+    NUM_WORKERS = 4
     GLOBAL_BATCH_SIZE = 512
     TOKEN_BUDGET = 1500
 
