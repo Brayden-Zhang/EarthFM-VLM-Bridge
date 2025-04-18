@@ -4,6 +4,7 @@ import hashlib
 import logging
 import random
 import shutil
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from math import floor
@@ -361,6 +362,7 @@ class HeliosDataset(Dataset):
         normalize: bool = True,
         use_samples_with_missing_supported_modalities: bool = False,
         cache_dir: UPath | None = None,
+        samples_per_sec: int | None = None,
     ):
         """Initialize the dataset.
 
@@ -379,6 +381,9 @@ class HeliosDataset(Dataset):
                 normalization.
             use_samples_with_missing_supported_modalities: If True, use samples that are missing a supported modality.
             cache_dir: optional local directory to cache the H5 files.
+            samples_per_sec: throttle to reading this many samples per second. This
+                throttling only applies when reading from the h5py_dir, not the
+                cache_dir (if set).
 
         Returns:
             None
@@ -400,6 +405,12 @@ class HeliosDataset(Dataset):
         if self.normalize:
             self.normalizer_predefined = Normalizer(Strategy.PREDEFINED)
             self.normalizer_computed = Normalizer(Strategy.COMPUTED)
+
+        if samples_per_sec is None:
+            self.sec_per_sample = None
+        else:
+            self.sec_per_sample = 1 / samples_per_sec
+        self.last_read_time = time.time()
 
         self.sample_indices: np.ndarray | None = None
         self.latlon_distribution: np.ndarray | None = None
@@ -667,12 +678,29 @@ class HeliosDataset(Dataset):
             sample_subset = sample
         return sample_subset
 
+    def _apply_throttling(self) -> None:
+        """Apply read throttling.
+
+        This function is called when reading a sample from the h5py_dir, and it applies
+        the configured throttling.
+        """
+        if self.sec_per_sample is None:
+            return
+        elapsed = time.time() - self.last_read_time
+        time_to_sleep = self.sec_per_sample - elapsed
+        self.last_read_time = time.time()
+        logger.info(f"Sleeping for {time_to_sleep}")
+        if time_to_sleep <= 0:
+            return
+        time.sleep(time_to_sleep)
+
     def read_h5_file(self, h5_file_path: UPath) -> dict[str, Any]:
         """Read the h5 file."""
         if self.cache_dir is not None:
             cache_file_path = self.cache_dir / h5_file_path.name
             logger.info(f"Caching H5 file {h5_file_path} to {cache_file_path}")
             if not cache_file_path.exists():
+                self._apply_throttling()
                 # Copy to a temp file first and then atomically rename it to avoid
                 # concurrency issues.
                 tmp_file_path = self.cache_dir / (h5_file_path.name + ".tmp")
@@ -680,6 +708,9 @@ class HeliosDataset(Dataset):
                     shutil.copyfileobj(src, dst)
                 tmp_file_path.rename(cache_file_path)
             h5_file_path = cache_file_path
+
+        else:
+            self._apply_throttling()
 
         sample_dict = {}
         with h5_file_path.open("rb") as f:
@@ -748,6 +779,7 @@ class HeliosDatasetConfig(Config):
     normalize: bool = True
     use_samples_with_missing_supported_modalities: bool = False
     cache_dir: str | None = None
+    samples_per_sec: int | None = None
 
     def validate(self) -> None:
         """Validate the configuration and build kwargs.
