@@ -7,7 +7,7 @@
 import subprocess  # nosec
 
 DECODER_DEPTHS = [2, 4]
-LEARNING_RATES = [0.0001, 0.004]
+LEARNING_RATES = [0.00001, 0.0001, 0.004]
 
 
 BASE_COMMAND = (
@@ -20,7 +20,7 @@ BASE_COMMAND = (
 # 4 experiments
 for decoder_depth in DECODER_DEPTHS:
     for lr in LEARNING_RATES:
-        run_name = f"2_galileo_base_decoder_{decoder_depth}_lr_{lr}"
+        run_name = f"3_galileo_base_decoder_{decoder_depth}_lr_{lr}"
         command = BASE_COMMAND.format(
             run_name=run_name,
             decoder_depth=decoder_depth,
