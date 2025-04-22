@@ -113,10 +113,21 @@ def test_mae_with_loss(
         drop_path=DROP_PATH,
         learnable_channel_embeddings=True,
     )
+    predictor2 = Predictor(
+        supported_modalities=supported_modalities,
+        encoder_embedding_size=ENCODER_EMBEDDING_SIZE,
+        decoder_embedding_size=DECODER_EMBEDDING_SIZE,
+        depth=DEPTH,
+        mlp_ratio=MLP_RATIO,
+        num_heads=NUM_HEADS,
+        max_sequence_length=MAX_SEQ_LENGTH,
+        drop_path=DROP_PATH,
+        learnable_channel_embeddings=True,
+    )
     reconstructor = Reconstructor(
+        decoder=predictor2,
         supported_modalities=supported_modalities,
         max_patch_size=MAX_PATCH_SIZE,
-        embedding_size=ENCODER_EMBEDDING_SIZE,
     )
     mae = MAE(encoder, predictor, reconstructor)
     _, _, output = mae.forward(x, patch_size)
