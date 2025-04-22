@@ -778,7 +778,6 @@ class STEncoder(STBase):
                 attention_mode = AttentionMode.TEMPORAL
             else:
                 attention_mode = AttentionMode.SPATIAL
-            attention_mode = AttentionMode.FULL
             print(f"STEncoder doing attention {attention_mode} in block {i_blk}")
             # for modality, val in x.items():
             #    print(modality, val.min(), val.max())
@@ -1083,7 +1082,6 @@ class STPredictor(STBase):
                 attention_mode = AttentionMode.TEMPORAL
             else:
                 attention_mode = AttentionMode.SPATIAL
-            attention_mode = AttentionMode.FULL
             print(f"STPredictor doing attention {attention_mode} in block {i_blk}")
             # for modality, val in x.items():
             #    print(modality, val.min(), val.max())
