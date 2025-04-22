@@ -86,9 +86,9 @@ def build_train_module_config(
 ) -> LatentMIMTrainModuleConfig:
     """Build the train module config for an experiment."""
     LR = 0.0001
-    RANK_MICROBATCH_SIZE = 16
-    ENCODE_RATIO = 0.3
-    DECODE_RATIO = 0.7
+    RANK_MICROBATCH_SIZE = 64
+    ENCODE_RATIO = 0.6
+    DECODE_RATIO = 0.4
     WD = 0.02
     optim_config = AdamWConfig(lr=LR, weight_decay=WD)
     masking_config = MaskingConfig(

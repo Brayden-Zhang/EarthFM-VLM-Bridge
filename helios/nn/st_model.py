@@ -787,7 +787,9 @@ class STEncoder(STBase):
             tokens, indices, new_mask = self.remove_masked_tokens(x, bool_mask)
             tokens = blk(x=tokens, y=None, attn_mask=new_mask)
 
-            tokens = self.norm(tokens)
+            # Apply normalization on last block.
+            if i_blk == len(self.blocks) - 1:
+                tokens = self.norm(tokens)
 
             tokens, _ = self.add_removed_tokens(tokens, indices, new_mask)
             x = self.split_and_expand_per_modality(
@@ -1092,7 +1094,6 @@ class STPredictor(STBase):
             # note that we are not taking the inverse of the mask, since split_x_y gives us
             # true values for values we want to take part in attention
             x = blk(x=x, y=y, attn_mask=y_mask.bool())
-            x = self.norm(x)
 
             x = self.combine_x_y(
                 tokens_to_decode=x,
