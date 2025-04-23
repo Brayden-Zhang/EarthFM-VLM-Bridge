@@ -290,7 +290,6 @@ class ConvertToH5py:
             / "_".join(
                 sorted([modality.name for modality in self.supported_modalities])
             )
-            / "compressed"
             / str(num_samples)
         )
         self.h5py_dir = h5py_dir
