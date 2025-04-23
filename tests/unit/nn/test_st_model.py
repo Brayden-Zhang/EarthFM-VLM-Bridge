@@ -6,9 +6,8 @@ import pytest
 import torch
 
 from helios.data.constants import Modality
-from helios.nn.st_model import (
-    STBase,
-)
+from helios.nn.flexihelios import get_modalities_to_process, return_modalities_from_dict
+from helios.nn.st_model import STBase
 
 logger = logging.getLogger(__name__)
 
@@ -75,10 +74,11 @@ class TestSTBase:
             "latlon": latlon,
             "latlon_mask": latlon_mask,
         }
+        modalities_to_process = get_modalities_to_process(
+            return_modalities_from_dict(x), st_base.supported_modality_names
+        )
         modalities_to_dims_dict = {
-            modality: val.shape
-            for modality, val in x.items()
-            if not modality.endswith("_mask")
+            modality: x[modality].shape for modality in modalities_to_process
         }
         tokens, masks = st_base.collapse_and_combine_spatial(x)
         assert tokens.shape == (B * (T * B_S + B_S + 1), H * W, D)
@@ -111,12 +111,12 @@ class TestSTBase:
             "latlon": latlon,
             "latlon_mask": latlon_mask,
         }
+        modalities_to_process = get_modalities_to_process(
+            return_modalities_from_dict(x), st_base.supported_modality_names
+        )
         modalities_to_dims_dict = {
-            modality: val.shape
-            for modality, val in x.items()
-            if not modality.endswith("_mask")
+            modality: x[modality].shape for modality in modalities_to_process
         }
-        print(modalities_to_dims_dict)
         tokens, masks = st_base.collapse_and_combine_temporal(x)
         assert tokens.shape == (B * H * W, T * B_S + B_S + 1, D)
         assert masks.shape == (B * H * W, T * B_S + B_S + 1)
