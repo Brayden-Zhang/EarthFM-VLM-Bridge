@@ -308,6 +308,7 @@ class GalileoTrainModule(HeliosTrainModule):
             total_batch_loss,
             ReduceType.mean,
         )
+        self.trainer.record_metric("train/epoch", self.trainer.epoch)
         self.log_regularization(total_batch_reg)
         if self.contrastive_loss is not None:
             self.trainer.record_metric(
