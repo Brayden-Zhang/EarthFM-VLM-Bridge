@@ -99,9 +99,9 @@ class ConvertToH5py:
 
         Use for folder naming.
         """
-        compression_str = "_"
+        compression_str = ""
         if self.compression is not None:
-            compression_str = self.compression
+            compression_str = f"_{self.compression}"
         if self.compression_opts is not None:
             compression_str += f"_{self.compression_opts}"
         if self.shuffle is not None:
