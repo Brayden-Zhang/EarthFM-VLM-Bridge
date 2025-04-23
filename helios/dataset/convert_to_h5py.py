@@ -132,7 +132,7 @@ class ConvertToH5py:
         total_sample_indices = len(samples)
 
         if self.multiprocessed_h5_creation:
-            num_processes = max(1, mp.cpu_count() - 2)
+            num_processes = max(1, mp.cpu_count() - 4)
             logger.info(f"Creating H5 dataset using {num_processes} processes")
             with mp.Pool(processes=num_processes) as pool:
                 # Process samples in parallel and track progress with tqdm
@@ -332,11 +332,21 @@ class ConvertToH5py:
             multitemporal_modalities = [
                 modality for modality in sample.modalities if modality.is_multitemporal
             ]
+            total_multitemporal_modalities = len(multitemporal_modalities)
             # Pop off any modalities that don't have 12 months of data
             for modality in multitemporal_modalities:
                 if len(sample.modalities[modality].images) != 12:
-                    logger.info(f"Sk {modality} has less than 12 months of data")
+                    logger.info(
+                        f"Skipping {modality} because it has less than 12 months of data"
+                    )
                     sample.modalities.pop(modality)
+                    total_multitemporal_modalities -= 1
+            # If there's no multitemporal modalities, skip the sample
+            if total_multitemporal_modalities == 0:
+                logger.info(
+                    "Skipping sample because it has no multitemporal modalities"
+                )
+                continue
 
             filtered_samples.append(sample)
         logger.info(f"Number of samples after filtering: {len(filtered_samples)}")

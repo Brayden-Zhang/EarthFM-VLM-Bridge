@@ -500,12 +500,13 @@ class HeliosDataset(Dataset):
         no_multitemporal_indices = metadata_df[
             metadata_df[multitemporal_training_modalities].sum(axis=1) == 0
         ].index
+
         # Filter these indices out
         logger.info(f"Filtering out {len(self.naip_indices)} samples with NAIP data")
+        self.sample_indices = np.setdiff1d(self.sample_indices, self.naip_indices)
         logger.info(
             f"Filtering out {len(no_multitemporal_indices)} samples without any training modalities"
         )
-        self.sample_indices = np.setdiff1d(self.sample_indices, self.naip_indices)
         self.sample_indices = np.setdiff1d(
             self.sample_indices, no_multitemporal_indices
         )
