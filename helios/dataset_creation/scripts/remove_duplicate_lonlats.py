@@ -49,7 +49,7 @@ def get_existing_tiles(ds_path: UPath) -> list[tuple[str, int, int]]:
 
 
 def remove_duplicate_lonlats(
-    lonlats: list[tuple[float, float]], ds_paths: list[str]
+    lonlats: list[tuple[float, float]], ds_paths: list[UPath]
 ) -> list[tuple[float, float]]:
     """Prune (lon, lat) pairs that appear in existing datasets.
 
@@ -80,7 +80,7 @@ def remove_duplicate_lonlats(
         existing_tiles.add(tile)
         pruned_lonlats.append(lonlat)
 
-    print(f"got {pruned_lonlats} after pruning")
+    print(f"got {len(pruned_lonlats)} after pruning")
     return pruned_lonlats
 
 
@@ -110,6 +110,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     with open(args.in_fname) as f:
         lonlats = json.load(f)
-    pruned_lonlats = remove_duplicate_lonlats(lonlats, args.ds_path)
+    pruned_lonlats = remove_duplicate_lonlats(
+        lonlats, [UPath(ds_path) for ds_path in args.ds_path]
+    )
     with open(args.out_fname, "w") as f:
         json.dump(pruned_lonlats, f)
