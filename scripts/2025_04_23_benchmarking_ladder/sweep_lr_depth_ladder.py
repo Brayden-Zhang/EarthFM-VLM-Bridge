@@ -13,13 +13,13 @@ MODEL_SIZES = {
 # Sweep parameters
 CLUSTERS = ["ai2/jupiter-cirrascale-2", "ai2/titan-cirrascale"]
 
-DECODER_DEPTHS = [2, 4]
+DECODER_DEPTHS = [2, 4, 12]
 LEARNING_RATES = [4e-3, 1e-4, 4e-4, 1e-5]
 CONTRASTIVE_WEIGHTS = [0.05]
 
 # Base command template
 BASE_COMMAND = (
-    "python3 scripts/2025_04_23_benchmarking_ladder/base_galileo_max.py launch {run_name} "
+    "python3 scripts/2025_04_23_benchmarking_ladder/base_galileo_max.py dry_run {run_name} "
     "{cluster} "
     "--model.encoder_config.embedding_size={encoder_embedding_size} "
     "--model.encoder_config.depth={encoder_depth} "
@@ -32,7 +32,9 @@ BASE_COMMAND = (
     "--model.decoder_config.mlp_ratio={mlp_ratio} "
     "--train_module.contrastive_config.loss_config.type=InfoNCE "
     "--train_module.contrastive_config.loss_config.weight={contrastive_weight} "
-    "--train_module.optim_config.lr={lr}"
+    "--train_module.optim_config.lr={lr} "
+    "--launch.priority=urgent "
+    "--launch.num_gpus=8 "
 )
 # Generate all combinations
 all_combinations = list(
@@ -42,7 +44,7 @@ print(f"Running {len(all_combinations)} jobs")
 # First 6 jobs go to titan, the rest to jupiter
 for i, ((size_name, size_config), decoder_depth, lr) in enumerate(all_combinations):
     # Determine which cluster to use
-    cluster = "ai2/titan-cirrascale" if i < 6 else "ai2/jupiter-cirrascale-2"
+    cluster = "ai2/titan-cirrascale" if i < 8 else "ai2/jupiter-cirrascale-2"
 
     cluster_name = "titan" if "titan" in cluster else "jupiter"
     # Construct run name
@@ -61,6 +63,7 @@ for i, ((size_name, size_config), decoder_depth, lr) in enumerate(all_combinatio
         encoder_num_heads=size_config["encoder_num_heads"],
         decoder_num_heads=size_config["decoder_num_heads"],
         mlp_ratio=size_config["mlp_ratio"],
+        contrastive_weight=CONTRASTIVE_WEIGHTS[0],
         lr=lr,  # Use sweep parameter
     )
 
