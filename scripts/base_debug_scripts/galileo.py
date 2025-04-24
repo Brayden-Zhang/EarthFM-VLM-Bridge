@@ -64,6 +64,7 @@ def build_model_config(common: CommonComponents) -> GalileoConfig:
         supported_modality_names=common.training_modalities,
         embedding_size=ENCODER_EMBEDDING_SIZE,
         max_patch_size=MAX_PATCH_SIZE,
+        min_patch_size=MIN_PATCH_SIZE,
         num_heads=ENCODER_NUM_HEADS,
         depth=ENCODER_DEPTH,
         mlp_ratio=MLP_RATIO,
