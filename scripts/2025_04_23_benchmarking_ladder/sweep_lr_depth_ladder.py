@@ -20,7 +20,7 @@ CONTRASTIVE_WEIGHTS = [0.05]
 
 # Base command template
 BASE_COMMAND = (
-    "python3 scripts/2025_04_23_benchmarking_ladder/base_galileo_max.py dry_run {run_name} "
+    "python3 scripts/2025_04_23_benchmarking_ladder/base_galileo_max.py launch {run_name} "
     "{cluster} "
     "--model.encoder_config.embedding_size={encoder_embedding_size} "
     "--model.encoder_config.depth={encoder_depth} "
