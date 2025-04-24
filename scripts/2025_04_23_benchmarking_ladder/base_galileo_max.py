@@ -45,7 +45,7 @@ MAX_PATCH_SIZE = 8  # NOTE: actual patch_size <= max_patch_size
 MIN_PATCH_SIZE = 1
 NUM_WORKERS = 8
 
-base_model_args = MODEL_SIZE_ARGS["giga_shallow_decoder"]
+base_model_args = MODEL_SIZE_ARGS["base_super_shallow_decoder"]
 
 
 def build_model_config(common: CommonComponents) -> GalileoConfig:
@@ -212,7 +212,7 @@ def build_dataset_config(common: CommonComponents) -> Config:
 def build_trainer_config(common: CommonComponents) -> TrainerConfig:
     """Build the trainer config for an experiment."""
     MAX_DURATION = Duration.epochs(400)
-    METRICS_COLLECT_INTERVAL = 1  # SHould be turned off for final run
+    METRICS_COLLECT_INTERVAL = 10  # SHould be turned off for final run
     CANCEL_CHECK_INTERVAL = 25  # should be turned off for final run
     LOAD_STRATEGY = LoadStrategy.if_available
     WANDB_USERNAME = "eai-ai2"  # nosec
