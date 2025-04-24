@@ -5,7 +5,7 @@ import json
 import random
 
 # Size of tiles to split world into in degrees.
-TILE_SIZE = 0.01
+TILE_SIZE = 0.001
 
 
 def sample_tiles(in_fname: str, out_fname: str, tiles_per_category: int) -> None:
