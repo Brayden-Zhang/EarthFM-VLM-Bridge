@@ -157,7 +157,7 @@ def build_train_module_config(
         token_exit_cfg_a=token_exit_cfg_a,
         token_exit_cfg_b=token_exit_cfg_b,
         autocast_precision=DType.bfloat16,  # how does this interact with the fsdp?
-        compile_model=True,
+        compile_model=False,
         max_grad_norm=1.0,
         dp_config=dp_config,
         scheduler=scheduler,
