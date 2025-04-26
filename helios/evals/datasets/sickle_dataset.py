@@ -18,6 +18,7 @@ import rasterio
 import torch
 import torch.multiprocessing
 from torch.utils.data import Dataset
+from upath import UPath
 
 from helios.data.constants import Modality
 from helios.data.dataset import HeliosSample
@@ -32,9 +33,11 @@ from helios.evals.datasets.constants import (
 from helios.evals.datasets.normalize import normalize_bands
 from helios.train.masking import MaskedHeliosSample
 
-CSV_PATH = "/weka/dfive-default/helios/evaluation/SICKLE/sickle_dataset_tabular.csv"
-DATA_DIR = "/weka/dfive-default/helios/evaluation/SICKLE"
-SICKLE_DIR = "/weka/dfive-default/presto_eval_sets/sickle"
+CSV_PATH = UPath(
+    "/weka/dfive-default/helios/evaluation/SICKLE/sickle_dataset_tabular.csv"
+)
+DATA_DIR = UPath("/weka/dfive-default/helios/evaluation/SICKLE")
+SICKLE_DIR = UPath("/weka/dfive-default/presto_eval_sets/sickle")
 
 MONTH_TO_INT = {
     "jan": 1,
@@ -466,12 +469,13 @@ class SICKLEProcessor:
 
 
 def process_sickle(
+    csv_path: str = CSV_PATH,
     data_dir: str = DATA_DIR,
     output_dir: str = SICKLE_DIR,
 ) -> None:
     """Process SICKLE dataset."""
     processor = SICKLEProcessor(
-        csv_path=CSV_PATH,
+        csv_path=csv_path,
         data_dir=data_dir,
         output_dir=output_dir,
     )
@@ -483,7 +487,7 @@ class SICKLERDataset(Dataset):
 
     def __init__(
         self,
-        path_to_splits: Path = Path(SICKLE_DIR),
+        path_to_splits: Path = SICKLE_DIR,
         split: str = "train",
         partition: str = "default",
         is_multimodal: bool = True,
