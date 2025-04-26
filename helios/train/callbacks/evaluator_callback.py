@@ -146,7 +146,7 @@ class DownstreamEvaluatorCallback(Callback):
             eval_interval_steps = self.trainer.convert_duration_to_steps(
                 evaluator.eval_interval
             )
-            if self.step % eval_interval_steps != 0:
+            if eval_interval_steps == 0 or self.step % eval_interval_steps != 0:
                 continue
             logger.info(f"Running {evaluator.dataset} evaluations...")
             start_time = time.monotonic()
