@@ -268,7 +268,9 @@ class GalileoTrainModule(HeliosTrainModule):
                 for loss in (loss_a, loss_b):
                     if torch.isnan(loss).any() or torch.isinf(loss).any():
                         logger.warning(
-                            f"loss is nan or inf: {loss} not adding to total loss"
+                            f"loss is nan or inf: {loss} not adding to total loss. "
+                            f"rank: {self.local_rank}, epoch: {self.trainer.epoch}, "
+                            f"step: {self.trainer.global_step}"
                         )
                         self.trainer.record_metric(
                             "step_skipped", 1, ReduceType.sum, namespace="optim"
@@ -301,7 +303,9 @@ class GalileoTrainModule(HeliosTrainModule):
                         or torch.isinf(contrastive_loss).any()
                     ):
                         logger.warning(
-                            f"contrastive loss is nan or inf: {contrastive_loss} not adding to total loss"
+                            f"contrastive loss is nan or inf: {contrastive_loss} not adding to total loss. "
+                            f"rank: {self.local_rank}, epoch: {self.trainer.epoch}, "
+                            f"step: {self.trainer.global_step}"
                         )
                     else:
                         loss += contrastive_loss

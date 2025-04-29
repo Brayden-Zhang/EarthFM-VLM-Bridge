@@ -12,6 +12,7 @@ from olmo_core.optim import AdamWConfig
 from olmo_core.optim.scheduler import CosWithWarmup
 from olmo_core.train.callbacks import (
     BeakerCallback,
+    CheckpointerCallback,
     ConfigSaverCallback,
     GarbageCollectorCallback,
     GPUMemoryMonitorCallback,
@@ -213,8 +214,8 @@ def build_dataset_config(common: CommonComponents) -> Config:
 def build_trainer_config(common: CommonComponents) -> TrainerConfig:
     """Build the trainer config for an experiment."""
     MAX_DURATION = Duration.epochs(400)
-    METRICS_COLLECT_INTERVAL = 1  # SHould be turned off for final run
-    CANCEL_CHECK_INTERVAL = 1 # should be turned off for final run
+    METRICS_COLLECT_INTERVAL = 10  # SHould be turned off for final run
+    CANCEL_CHECK_INTERVAL = 25  # should be turned off for final run
     LOAD_STRATEGY = LoadStrategy.if_available
     WANDB_USERNAME = "eai-ai2"  # nosec
     WANDB_PROJECT = "2025-04-23-galileo-contrastive-ladder"
@@ -306,8 +307,6 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
                 ephemeral_save_interval=EPHERMERAL_SAVE_INTERVAL,
             ),
         )
-        .with_callback("profiler", ProfilerCallback())
-
     )
     return trainer_config
 
@@ -319,9 +318,9 @@ def build_common_components_limited_modalities(*args: Any) -> CommonComponents:
         Modality.SENTINEL1.name,
         Modality.SENTINEL2_L2A.name,
         Modality.WORLDCOVER.name,
-    #     Modality.LANDSAT.name,
-    #     Modality.OPENSTREETMAP_RASTER.name,
-    #     Modality.SRTM.name,
+        #     Modality.LANDSAT.name,
+        #     Modality.OPENSTREETMAP_RASTER.name,
+        #     Modality.SRTM.name,
     ]
     return config
 
