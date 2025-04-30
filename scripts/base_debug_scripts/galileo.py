@@ -226,7 +226,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             num_workers=8,
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
-            eval_interval=Duration.epochs(1),
+            eval_interval=Duration.epochs(20),
         ),
         "m-brick-kiln": DownstreamTaskConfig(
             dataset="m-brick-kiln",
@@ -234,15 +234,15 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             num_workers=8,
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
-            eval_interval=Duration.epochs(1),
+            eval_interval=Duration.epochs(20),
         ),
         "m-so2sat": DownstreamTaskConfig(
-            dataset="m-brick-kiln",
+            dataset="m-so2sat",
             batch_size=128,
             num_workers=8,
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
-            eval_interval=Duration.epochs(1),
+            eval_interval=Duration.epochs(20),
         ),
         "breizhcrops": DownstreamTaskConfig(
             dataset="breizhcrops",
