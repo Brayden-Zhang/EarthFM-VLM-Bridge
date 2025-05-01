@@ -250,6 +250,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             num_workers=8,
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
+            probe_lr=0.1,
             eval_interval=Duration.epochs(1),
         ),
         "m-cashew-plant": DownstreamTaskConfig(
@@ -258,6 +259,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             num_workers=8,
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
+            probe_lr=0.1,
             eval_interval=Duration.epochs(1),
         ),
         "breizhcrops": DownstreamTaskConfig(
