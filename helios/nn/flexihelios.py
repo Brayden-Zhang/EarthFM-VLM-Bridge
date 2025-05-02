@@ -126,7 +126,11 @@ class TokensAndMasks(NamedTuple):
     @property
     def modalities(self) -> list[str]:
         """Return all data fields."""
-        return [x for x in self._fields if not x.endswith("mask") and x is not None]
+        return [
+            x
+            for x in self._fields
+            if not x.endswith("mask") and getattr(self, x) is not None
+        ]
 
     def get_shape_dict(self) -> dict[str, tuple]:
         """Return a dictionary of the shapes of the fields."""
