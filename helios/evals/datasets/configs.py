@@ -52,6 +52,20 @@ DATASET_TO_CONFIG = {
         num_classes=2,
         is_multilabel=False,
     ),
+    "m-sa-crop-type": EvalDatasetConfig(
+        task_type=TaskType.SEGMENTATION,
+        imputes=[("11 - SWIR", "10 - SWIR - Cirrus")],
+        num_classes=10,
+        is_multilabel=False,
+        height_width=256,
+    ),
+    "m-cashew-plant": EvalDatasetConfig(
+        task_type=TaskType.SEGMENTATION,
+        imputes=[("11 - SWIR", "10 - SWIR - Cirrus")],
+        num_classes=7,
+        is_multilabel=False,
+        height_width=256,
+    ),
     "mados": EvalDatasetConfig(
         task_type=TaskType.SEGMENTATION,
         imputes=[
