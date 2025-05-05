@@ -53,6 +53,7 @@ class GeobenchDataset(Dataset):
             norm_method: Normalization method to use, only when norm_stats_from_pretrained is False
             visualize_samples: Whether to visualize samples
         """
+        self.dataset_name = dataset
         config = DATASET_TO_CONFIG[dataset]
         self.config = config
         self.num_classes = config.num_classes
@@ -160,7 +161,7 @@ class GeobenchDataset(Dataset):
         assert (
             x.shape[-1] == 13
         ), f"All datasets must have 13 channels, not {x.shape[-1]}"
-        if self.dataset == "m-so2sat":
+        if self.dataset_name == "m-so2sat":
             x = x * 10_000
 
         # Normalize using the downstream task's normalization stats
