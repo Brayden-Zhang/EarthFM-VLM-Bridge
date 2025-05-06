@@ -204,7 +204,7 @@ def build_dataset_config(common: CommonComponents) -> Config:
             training_modalities=common.training_modalities,
             use_samples_with_missing_supported_modalities=True,
             dtype=DType.float32,
-            # cache_dir="/helios_cache/osm_sampling",
+            cache_dir="/helios_cache/osm_sampling",
             # samples_per_sec=4 / NUM_WORKERS,  # 2/ GBS
         ),
     ]
