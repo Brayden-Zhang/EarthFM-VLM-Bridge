@@ -107,6 +107,7 @@ def parse_modality_csv(
                 resolution_factor=modality.tile_resolution_factor,
                 col=int(csv_row["col"]),
                 row=int(csv_row["row"]),
+                image_tile_size_factor=modality.image_tile_size_factor,
             )
             image = ModalityImage(
                 start_time=datetime.fromisoformat(csv_row["start_time"]),

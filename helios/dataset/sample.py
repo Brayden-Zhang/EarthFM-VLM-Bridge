@@ -108,6 +108,8 @@ def image_tiles_to_samples(
         for time_span, time_span_tiles in modality_tiles.items():
             for tile in time_span_tiles:
                 index_key = (modality, tile.grid_tile, time_span)
+                if modality.name == "naip_10":
+                    logger.info(f"adding tile {index_key} to index")
                 image_tile_index[index_key] = tile
 
     # Enumerate all the (grid_tile, time_span) tuples present in the dataset.
@@ -118,9 +120,11 @@ def image_tiles_to_samples(
     # based on WorldCover being available if Sentinel-2 and others are only available
     # for one-year, but to still add NAIP or Maxar tiles.)
     unique_image_tiles: set[tuple[GridTile, TimeSpan]] = set()
-    for _, grid_tile, time_span in image_tile_index.keys():
+    for modality, grid_tile, time_span in image_tile_index.keys():
         if time_span == TimeSpan.STATIC:
-            if grid_tile.resolution_factor > 1:
+            # Now that we have NAIP_10, we want to include it in both datasets always
+            if grid_tile.resolution_factor > 1 and modality.name != Modality.NAIP_10.name:
+                logger.info(f"ignoring static tile {grid_tile.resolution_factor} because it is coarser than the base resolution for modality {_}")
                 continue
             else:
                 unique_image_tiles.add((grid_tile, TimeSpan.TWO_WEEK))  # type: ignore
@@ -128,6 +132,7 @@ def image_tiles_to_samples(
         else:
             unique_image_tiles.add((grid_tile, time_span))  # type: ignore
 
+    # DO we want NAIP only data to be in both datasets
     # Now for each (grid_tile, time_span), construct the Sample object.
     # We also skip if not all modalities are available.
     samples: list[SampleInformation] = []
@@ -147,7 +152,10 @@ def image_tiles_to_samples(
                 continue
             # We only use modalities that are at an equal or coarser resolution.
             if modality.tile_resolution_factor < sample.grid_tile.resolution_factor:
+                logger.info(f"ignoring modality {modality.name} with resolution factor {modality.tile_resolution_factor} because it is coarser than the sample grid tile resolution factor {sample.grid_tile.resolution_factor}")
                 continue
+
+            # Why are we downscaling here?
             downscale_factor = (
                 modality.tile_resolution_factor // sample.grid_tile.resolution_factor
             )
@@ -173,6 +181,7 @@ def image_tiles_to_samples(
 
             index_key = (modality, modality_grid_tile, lookup_time_span)
             if index_key not in image_tile_index:
+                logger.info(f"ignoring modality {modality.name} because no tile found for index_key={index_key}")
                 continue
             image_tile = image_tile_index[index_key]
 
@@ -208,15 +217,13 @@ def load_image_for_sample(
         function.
     """
     # Compute the factor by which image_tile is bigger (coarser) than the sample.
-    logger.info(f"image_tile.grid_tile.resolution_factor={image_tile.grid_tile.resolution_factor}")
-    logger.info(f"sample.grid_tile.resolution_factor={sample.grid_tile.resolution_factor}")
     factor = (
         image_tile.grid_tile.resolution_factor // sample.grid_tile.resolution_factor)
     # Read the modality image one band set at a time.
     # For now we resample all bands to the grid resolution of the modality.
     band_set_images = []
     for band_set, fname in image_tile.band_sets.items():
-        logger.info(f"band_set={band_set}, fname={fname}")
+        logger.debug(f"band_set={band_set}, fname={fname}")
         with fname.open("rb") as f:
             with rasterio.open(f) as raster:
                 # Identify the portion of the tile that we need to read.
@@ -227,12 +234,8 @@ def load_image_for_sample(
                     )
                 # Assuming all tiles cover the same area as the resolution factor 16 tile
                 subtile_size = raster.width // factor
-                logger.info(f"subtile_size={subtile_size}")
-                logger.info(f"sample.grid_tile.col={sample.grid_tile.col}")
-                logger.info(f"sample.grid_tile.row={sample.grid_tile.row}")
                 col_offset = subtile_size * (sample.grid_tile.col % factor)
                 row_offset = subtile_size * (sample.grid_tile.row % factor)
-                logger.info(f"col_offset={col_offset}, row_offset={row_offset}")
 
                 # Now we can perform a windowed read.
                 rasterio_window = rasterio.windows.Window(
@@ -250,7 +253,6 @@ def load_image_for_sample(
                 # If the factor is less than 1 we want the desired size to be multiplied by the thing
                 # If the tile size is greater we want to keep that extent
                 desired_subtile_size = int(IMAGE_TILE_SIZE * image_tile.grid_tile.image_tile_size_factor // factor) # if factor >= 1 else subtile_size
-                logger.info(f"desired_subtile_size={desired_subtile_size}")
                 if desired_subtile_size < subtile_size:
                     # In this case we need to downscale.
                     # This should not be common, since usually bands would be stored at
