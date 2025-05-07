@@ -112,7 +112,7 @@ def image_tiles_to_samples(
 
     # Enumerate all the (grid_tile, time_span) tuples present in the dataset.
     # Each of these identifies a training example.
-    # We ignore static time span here, unless it is at the base resolution, in which
+    # We ignore static time span here, unless it is at the base resolution or if it is NAIP_10, in which
     # case we add it as both year and two-week, since currently all data at the base
     # resolution is static. (The intention here is to avoid adding a two-week tile
     # based on WorldCover being available if Sentinel-2 and others are only available
@@ -135,7 +135,6 @@ def image_tiles_to_samples(
         else:
             unique_image_tiles.add((grid_tile, time_span))  # type: ignore
 
-    # DO we want NAIP only data to be in both datasets
     # Now for each (grid_tile, time_span), construct the Sample object.
     # We also skip if not all modalities are available.
     samples: list[SampleInformation] = []
