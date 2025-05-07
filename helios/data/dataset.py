@@ -502,8 +502,8 @@ class HeliosDataset(Dataset):
         logger.info(f"columns: {metadata_df.columns}")
         # For now we want to filter out any samples that have NAIP DATA or don't have any of the training modalities
         # Get the indices of samples that have NAIP data
-        if "naip" in metadata_df.columns:
-            naip_indices = metadata_df[metadata_df["naip"] == 1].index
+        if  "naip_10" in metadata_df.columns:
+            naip_indices = metadata_df[(metadata_df["naip_10"] == 1)].index
             self.naip_indices = naip_indices
         else:
             self.naip_indices = np.array([])
