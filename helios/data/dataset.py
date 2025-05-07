@@ -664,7 +664,6 @@ class HeliosDataset(Dataset):
         self, sample_dict: dict[str, Any]
     ) -> tuple[HeliosSample, list[str]]:
         """Fill the sample with missing values."""
-        # TODO: This is still relatively slow
         missing_modalities = []
         sample = HeliosSample(**sample_dict)
         for modality in self.training_modalities:
@@ -765,8 +764,6 @@ class HeliosDataset(Dataset):
                     for k, v in h5file.items()
                     if k in self.training_modalities or k in ["latlon", "timestamps"]
                 }
-        logger.info(f"Sample dict keys {sample_dict.keys()}")
-
         return sample_dict
 
     def _get_h5_file_path(self, index: int) -> UPath:
@@ -792,27 +789,25 @@ class HeliosDataset(Dataset):
         subset_sample = self.apply_subset(sample, args)
 
         sample_dict = subset_sample.as_dict(ignore_nones=True)
-        logger.debug(f"Sample dict keys {sample_dict.keys()}")
-        # Sample modalities should be written into the metadata of the h5 dataset
-        # the modality get here is super redundant
-        sample_modalities = list(
-            [Modality.get(key) for key in sample_dict.keys() if key != "timestamps"]
-        )
 
         if self.normalize:
-            for modality in sample_modalities:
+            for modality_name in sample_dict.keys():
+                if modality_name == "timestamps":
+                    continue
                 # DO NOT NORMALIZE MISSING MODALITIES otherwise the MISSING_VALUE will be normalized
-                if modality.name in missing_modalities:
+                if modality_name in missing_modalities:
                     logger.info(
-                        f"Skipping normalization for {modality.name} because it is in missing_modalities"
+                        f"Skipping normalization for {modality_name} because it is in missing_modalities"
                     )
                     continue
-                logger.info(f"Normalizing {modality.name}")
-                modality_data = sample_dict[modality.name]
+                logger.info(f"Normalizing {modality_name}")
+                modality_data = sample_dict[modality_name]
                 missing_mask = modality_data == MISSING_VALUE
-                normalized_data = self.normalize_image(modality, modality_data)
+                normalized_data = self.normalize_image(
+                    Modality.get(modality_name), modality_data
+                )
                 # Sentinel Values must be reset after normalization so they can be recognized by missing mask
-                sample_dict[modality.name] = np.where(
+                sample_dict[modality_name] = np.where(
                     missing_mask, modality_data, normalized_data
                 )
 
