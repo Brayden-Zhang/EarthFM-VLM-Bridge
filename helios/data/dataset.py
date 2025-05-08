@@ -14,7 +14,7 @@ import h5py
 import numpy as np
 import pandas as pd
 import torch
-from olmo_core.config import Config
+from olmo_core.config import Config, DType
 from torch.distributed import DeviceMesh
 from torch.distributed.tensor import distribute_tensor
 from torch.utils.data import Dataset
@@ -179,13 +179,12 @@ class HeliosSample(NamedTuple):
     @property
     def height(self) -> int:
         """Get the height of the data."""
-        height_width_time_modalities = [
-            "sentinel2_l2a",
-            "sentinel1",
-            "worldcover",
-            "landsat",
-        ]
-        for modality in height_width_time_modalities:
+        for modality in self.modalities:
+            if modality == "timestamps":
+                continue
+            modality_spec = Modality.get(modality)
+            if not modality_spec.is_spatial:
+                continue
             x = getattr(self, modality)
             if x is not None:
                 if len(x.shape) == 5:
@@ -200,13 +199,12 @@ class HeliosSample(NamedTuple):
     @property
     def width(self) -> int:
         """Get the height of the data."""
-        height_width_time_modalities = [
-            "sentinel2_l2a",
-            "sentinel1",
-            "worldcover",
-            "landsat",
-        ]
-        for modality in height_width_time_modalities:
+        for modality in self.modalities:
+            if modality == "timestamps":
+                continue
+            modality_spec = Modality.get(modality)
+            if not modality_spec.is_spatial:
+                continue
             x = getattr(self, modality)
             if x is not None:
                 if len(x.shape) == 5:
@@ -276,7 +274,10 @@ class HeliosSample(NamedTuple):
         return min(floor(max_t_within_budget), self.time)
 
     def subset(
-        self, patch_size: int, max_tokens_per_instance: int, sampled_hw_p: int
+        self,
+        patch_size: int,
+        max_tokens_per_instance: int,
+        sampled_hw_p: int,
     ) -> "HeliosSample":
         """Subset a HelioSample that is unbatched ie no batch dimension.
 
@@ -301,6 +302,8 @@ class HeliosSample(NamedTuple):
         sampled_hw = sampled_hw_p * patch_size
         start_h = np.random.choice(self.height - sampled_hw + 1)
         start_w = np.random.choice(self.width - sampled_hw + 1)
+
+        # TODO:Try to pick a start_t and a max_t such that there is at least one modality present at each timestep
         start_t = np.random.choice(self.time - max_t + 1)
         new_data_dict: dict[str, ArrayTensor] = {}
         for attribute, modality in self.as_dict(ignore_nones=True).items():
@@ -367,7 +370,7 @@ class HeliosDataset(Dataset):
         self,
         h5py_dir: UPath,
         training_modalities: list[str],
-        dtype: np.dtype,
+        dtype: DType,
         normalize: bool = True,
         use_samples_with_missing_supported_modalities: bool = False,
         cache_dir: UPath | None = None,
@@ -492,11 +495,9 @@ class HeliosDataset(Dataset):
         # Get the indices of samples that have NAIP data
         if "naip_10" in metadata_df.columns:
             naip_indices = metadata_df[(metadata_df["naip_10"] == 1)].index
-        elif "naip" in metadata_df.columns:
-            naip_indices = metadata_df[metadata_df["naip"] == 1].index
+            self.naip_indices = naip_indices
         else:
-            naip_indices = np.array([])
-        self.naip_indices = naip_indices
+            self.naip_indices = np.array([])
         logger.info(f"NAIP indices: {self.naip_indices}")
 
         # Get the indices of samples that don't have any training modalities that are
@@ -545,8 +546,6 @@ class HeliosDataset(Dataset):
         self.latlon_distribution = self.get_geographic_distribution()
         self.sample_indices = np.arange(num_samples)
         self._filter_sample_indices_for_training()
-
-    # TODO: Needs to be gotten or owned from th other class
 
     def save_latlon_distribution(self, latlons: np.ndarray) -> None:
         """Save the latlon distribution to a file."""
@@ -676,43 +675,40 @@ class HeliosDataset(Dataset):
                     dtype=self.dtype,
                 )
                 missing_modalities.append(modality)
+
+            modality_data = sample_dict[modality]
+
+            if modality == Modality.SRTM.name:
+                # SRTM can natively be all 0 if we are on the ocean!
+                # Seems like we could tokenize this more intelligently in some cases
+                continue
+            # cast to appropriate dtype to prevent overflow from missing values
+            modality_data = modality_data.astype(self.dtype)
+
+            missing_timesteps = []
+            # Check all timesteps at once for zeros
+            all_zeros_mask = np.all(
+                modality_data[..., :, :] == 0, axis=(-1, -3, -4)
+            )  # Checks H, W, bands dimensions
+            missing_timesteps = np.where(all_zeros_mask)[
+                0
+            ]  # Get indices where all values are 0
+
+            if len(missing_timesteps) > 0:
+                logger.info(
+                    f"Filling {modality} timesteps {missing_timesteps} with missing values"
+                )
+                # Fill all missing timesteps at once
+                modality_data[..., missing_timesteps, :] = MISSING_VALUE
+
+            sample_dict[modality] = modality_data
         return HeliosSample(**sample_dict), missing_modalities
-
-
-        #     modality_data = sample_dict[modality]
-
-        #     if modality == Modality.SRTM.name:
-        #         # SRTM can natively be all 0 if we are on the ocean!
-        #         # Seems like we could tokenize this more intelligently in some cases
-        #         continue
-        #     # cast to appropriate dtype to prevent overflow from missing values
-        #     modality_data = modality_data.astype(self.dtype)
-
-        #     missing_timesteps = []
-        #     # Check all timesteps at once for zeros
-        #     all_zeros_mask = np.all(
-        #         modality_data[..., :, :] == 0, axis=(-1, -3, -4)
-        #     )  # Checks H, W, bands dimensions
-        #     missing_timesteps = np.where(all_zeros_mask)[
-        #         0
-        #     ]  # Get indices where all values are 0
-
-        #     if len(missing_timesteps) > 0:
-        #         logger.debug(
-        #             f"Filling {modality} timesteps {missing_timesteps} with missing values"
-        #         )
-        #         # Fill all missing timesteps at once
-        #         modality_data[..., missing_timesteps, :] = MISSING_VALUE
-
-        #     sample_dict[modality] = modality_data
-        # return HeliosSample(**sample_dict), missing_modalities
 
     def apply_subset(
         self,
         sample: HeliosSample,
         args: GetItemArgs,
     ) -> HeliosSample:
-
         """Apply the subset to the sample."""
         if args.token_budget is not None:
             sample_subset = sample.subset(
@@ -781,23 +777,17 @@ class HeliosDataset(Dataset):
         else:
             index = args.idx
         h5_file_path = self._get_h5_file_path(index)
-
+        logger.debug(f"H5 file path: {h5_file_path}")
         if not h5_file_path.exists():
             raise FileNotFoundError(
                 f"H5 file {h5_file_path} does not exist, Be Sure to run prepare before starting Training"
             )
-        # We are currently reading the entire h5 file into memory this can be made faster by chunking the dataset appropriately and only reading in the optimal chunks
-        # THis io is the current bottleneck of the getitem operation
-        sample_dict = self.read_h5_file(h5_file_path)
 
+        sample_dict = self.read_h5_file(h5_file_path)
         # fill sample currently takes like .08 seconds which may bottleneck smaller models
         sample, missing_modalities = self.fill_sample_with_missing_values(sample_dict)
         subset_sample = self.apply_subset(sample, args)
 
-
-        # Fill any training modalities that are not present in the h5 file with missing values
-        sample, missing_modalities = self.fill_sample_with_missing_values(sample_dict)
-        subset_sample = self.apply_subset(sample, args)
         sample_dict = subset_sample.as_dict(ignore_nones=True)
 
         if self.normalize:
@@ -805,7 +795,6 @@ class HeliosDataset(Dataset):
                 if modality_name == "timestamps":
                     continue
                 # DO NOT NORMALIZE MISSING MODALITIES otherwise the MISSING_VALUE will be normalized
-
                 if modality_name in missing_modalities:
                     logger.info(
                         f"Skipping normalization for {modality_name} because it is in missing_modalities"
@@ -820,7 +809,6 @@ class HeliosDataset(Dataset):
                 # Sentinel Values must be reset after normalization so they can be recognized by missing mask
                 sample_dict[modality_name] = np.where(
                     missing_mask, modality_data, normalized_data
-
                 )
 
         return args.patch_size, HeliosSample(**sample_dict)
@@ -832,7 +820,7 @@ class HeliosDatasetConfig(Config):
 
     h5py_dir: str
     training_modalities: list[str]
-    dtype: str = "float32"
+    dtype: DType = DType.float32
     normalize: bool = True
     use_samples_with_missing_supported_modalities: bool = False
     cache_dir: str | None = None
@@ -850,15 +838,6 @@ class HeliosDatasetConfig(Config):
         # Validate supported_modalities
         if not isinstance(self.training_modalities, list):
             raise ValueError("training_modalities must be a list")
-
-    def get_numpy_dtype(self) -> np.dtype:
-        """Get the numpy dtype."""
-        if self.dtype == "float16":
-            return np.float16
-        elif self.dtype == "float32":
-            return np.float32
-        else:
-            raise ValueError(f"Unsupported dtype: {self.dtype}")
 
     @property
     def h5py_dir_upath(self) -> UPath:
@@ -878,6 +857,5 @@ class HeliosDatasetConfig(Config):
         kwargs["cache_dir"] = (
             self.cache_dir_upath if self.cache_dir is not None else None
         )
-        kwargs["dtype"] = self.get_numpy_dtype()
         logger.info(f"HeliosDataset kwargs: {kwargs}")
         return HeliosDataset(**kwargs)
