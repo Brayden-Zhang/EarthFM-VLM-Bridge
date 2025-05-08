@@ -146,11 +146,11 @@ class DownstreamEvaluatorCallback(Callback):
     def post_step(self) -> None:
         """Run the evaluators."""
         for evaluator in self.evaluators:
-            eval_interval_steps = self.trainer.convert_duration_to_steps(
-                evaluator.eval_interval
-            )
-            if self.step <= 1 or self.step % eval_interval_steps != 0:
-                continue
+            # eval_interval_steps = self.trainer.convert_duration_to_steps(
+            #     evaluator.eval_interval
+            # )
+            # if self.step <= 1 or self.step % eval_interval_steps != 0:
+            #     continue
             logger.info(f"Running {evaluator.dataset} evaluations...")
             start_time = time.monotonic()
             val_result = evaluator.val()
