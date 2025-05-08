@@ -107,8 +107,8 @@ MODEL_SIZE_ARGS = {
         "encoder_embedding_size": 1536,
         "decoder_embedding_size": 1536,
         "encoder_depth": 40,
-        "encoder_num_heads": 16,
-        "decoder_num_heads": 16,
+        "encoder_num_heads": 24,
+        "decoder_num_heads": 24,
         "mlp_ratio": 4.0,
     },
 }

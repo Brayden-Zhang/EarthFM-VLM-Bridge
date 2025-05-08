@@ -155,7 +155,6 @@ def train(config: HeliosExperimentConfig) -> None:
     )
     trainer = config.trainer.build(train_module, data_loader)
 
-
     # Record the config to W&B/Comet and each checkpoint dir.
     config_dict = config.as_config_dict()
     cast(WandBCallback, trainer.callbacks["wandb"]).config = config_dict
