@@ -54,6 +54,7 @@ class HeliosSample(NamedTuple):
     # Unsure what the shapes should be for this one
     # TODO: Should this be called naip_10??
     naip: ArrayTensor | None = None  # [B, H, W, T, len(NAIP_bands)]
+    naip_10: ArrayTensor | None = None  # [B, H, W, T, len(NAIP_bands)]
 
     # TODO: Add unit tests for this
     def shape(self, attribute: str, mask: bool = False) -> Sequence[int]:
@@ -762,6 +763,7 @@ class HeliosDataset(Dataset):
         # THis io is the current bottleneck of the getitem operation
         sample_dict = self.read_h5_file(h5_file_path)
 
+        """
         keys_to_replace = []
         for key in sample_dict.keys():
             if key.endswith("_10"):
@@ -772,6 +774,7 @@ class HeliosDataset(Dataset):
             sample_dict[key[:-3]] = val
             # remove the "_10"
             del sample_dict[key]
+        """
 
         # Fill any training modalities that are not present in the h5 file with missing values
         sample, missing_modalities = self.fill_sample_with_missing_values(sample_dict)
