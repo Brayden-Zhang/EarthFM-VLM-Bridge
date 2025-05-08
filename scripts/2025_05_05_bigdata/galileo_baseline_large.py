@@ -66,7 +66,7 @@ def my_build_train_module_config(
 ) -> GalileoTrainModuleConfig:
     """Build the train module config for an experiment."""
     train_module_config = build_train_module_config(common)
-    train_module_config.rank_microbatch_size = 16
+    train_module_config.rank_microbatch_size = 8
     return train_module_config
 
 

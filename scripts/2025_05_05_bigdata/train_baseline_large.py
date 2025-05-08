@@ -14,6 +14,7 @@ from helios.internal.common import build_common_components
 from helios.internal.experiment import CommonComponents, main
 from helios.nn.flexihelios import EncoderConfig, PredictorConfig
 from helios.nn.latent_mim import LatentMIMConfig
+from helios.train.train_module.latent_mim import LatentMIMTrainModuleConfig
 
 
 def build_model_config(common: CommonComponents) -> LatentMIMConfig:
@@ -54,11 +55,20 @@ def build_model_config(common: CommonComponents) -> LatentMIMConfig:
     return model_config
 
 
+def my_build_train_module_config(
+    common: CommonComponents,
+) -> LatentMIMTrainModuleConfig:
+    """Build the train module config for an experiment."""
+    train_module_config = build_train_module_config(common)
+    train_module_config.rank_microbatch_size = 8
+    return train_module_config
+
+
 if __name__ == "__main__":
     main(
         common_components_builder=build_common_components,
         model_config_builder=build_model_config,
-        train_module_config_builder=build_train_module_config,
+        train_module_config_builder=my_build_train_module_config,
         dataset_config_builder=build_dataset_config,
         dataloader_config_builder=build_dataloader_config,
         trainer_config_builder=build_trainer_config,
