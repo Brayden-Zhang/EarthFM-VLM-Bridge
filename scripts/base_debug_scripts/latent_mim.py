@@ -155,7 +155,7 @@ def build_dataset_config(common: CommonComponents) -> HeliosDatasetConfig:
         h5py_dir=h5py_dir,
         use_samples_with_missing_supported_modalities=True,
         training_modalities=common.training_modalities,
-        dtype=DType.float32,
+        dtype="float32",
     )
 
 
