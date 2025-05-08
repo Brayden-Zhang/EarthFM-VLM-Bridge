@@ -88,6 +88,8 @@ class TokensAndMasks(NamedTuple):
     landsat_mask: Tensor | None = None
     naip: Tensor | None = None
     naip_mask: Tensor | None = None
+    naip_10: Tensor | None = None
+    naip_10_mask: Tensor | None = None
 
     @property
     def device(self) -> torch.device:
