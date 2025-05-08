@@ -151,7 +151,7 @@ def build_common_components(
         Modality.WORLDCOVER.name,
         # Modality.SRTM.name,
         # Modality.NAIP.name,
-        # Modality.LANDSAT.name,
+        Modality.LANDSAT.name,
         # Modality.OPENSTREETMAP_RASTER.name,
     ]
     cmd_to_launch = SubCmd.train
