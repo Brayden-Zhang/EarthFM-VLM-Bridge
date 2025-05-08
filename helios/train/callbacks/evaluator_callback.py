@@ -27,6 +27,7 @@ class DownstreamEvaluator:
 
     def __init__(
         self,
+        evaluation_name: str,
         dataset: str,
         trainer: Trainer,
         eval_interval: Duration,
@@ -39,7 +40,23 @@ class DownstreamEvaluator:
         probe_lr: float | None = None,
         input_modalities: list[str] = field(default_factory=list),
     ) -> None:
-        """Initialize the downstream evaluator."""
+        """Initialize the downstream evaluator.
+
+        Args:
+            evaluation_name: Name of the evaluation.
+            dataset: Dataset to evaluate on.
+            trainer: Trainer object.
+            eval_interval: Interval to evaluate on.
+            batch_size: Batch size.
+            num_workers: Number of workers.
+            patch_size: Patch size.
+            pooling_type: Pooling type.
+            norm_stats_from_pretrained: Whether to use normalized stats from pretrained model.
+            device: Device to evaluate on.
+            probe_lr: Learning rate for probe.
+            input_modalities: Input modalities, only used for multimodal tasks.
+        """
+        self.evaluation_name = evaluation_name
         self.dataset = dataset
         self.config = DATASET_TO_CONFIG[dataset]
         self.eval_interval = eval_interval
@@ -128,7 +145,7 @@ class DownstreamEvaluator:
             )
         else:
             raise ValueError(f"Unrecognized task type: {self.config.task_type}")
-        logger.info(f"Downstream evaluator {self.dataset} score: {val_result}")
+        logger.info(f"Downstream evaluator {self.evaluation_name} score: {val_result}")
         # free memory
         del train_embeddings, train_labels, test_embeddings, test_labels
         torch.cuda.empty_cache()
@@ -146,17 +163,17 @@ class DownstreamEvaluatorCallback(Callback):
     def post_step(self) -> None:
         """Run the evaluators."""
         for evaluator in self.evaluators:
-            # eval_interval_steps = self.trainer.convert_duration_to_steps(
-            #     evaluator.eval_interval
-            # )
-            # if self.step <= 1 or self.step % eval_interval_steps != 0:
-            #     continue
-            logger.info(f"Running {evaluator.dataset} evaluations...")
+            eval_interval_steps = self.trainer.convert_duration_to_steps(
+                evaluator.eval_interval
+            )
+            if self.step <= 1 or self.step % eval_interval_steps != 0:
+                continue
+            logger.info(f"Running {evaluator.evaluation_name} evaluations...")
             start_time = time.monotonic()
             val_result = evaluator.val()
-            self.trainer.record_metric(f"eval/{evaluator.dataset}", val_result)
+            self.trainer.record_metric(f"eval/{evaluator.evaluation_name}", val_result)
             logger.info(
-                f"Finished {evaluator.dataset} evaluations in {time.monotonic() - start_time:.1f} seconds."
+                f"Finished {evaluator.evaluation_name} evaluations in {time.monotonic() - start_time:.1f} seconds."
             )
 
 
@@ -214,6 +231,7 @@ class DownstreamEvaluatorCallbackConfig(CallbackConfig):
 
             evaluators.append(
                 DownstreamEvaluator(
+                    evaluation_name=evaluation_name,
                     dataset=task.dataset,
                     trainer=trainer,
                     batch_size=task.batch_size,

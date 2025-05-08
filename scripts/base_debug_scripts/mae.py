@@ -260,15 +260,17 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             norm_stats_from_pretrained=True,
             probe_lr=0.1,
             eval_interval=Duration.epochs(20),
+            input_modalities=["sentinel2"],
         ),
         "pastis-r": DownstreamTaskConfig(
-            dataset="pastis-r",
+            dataset="pastis",
             batch_size=8,
             num_workers=2,
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
             probe_lr=0.1,
             eval_interval=Duration.epochs(20),
+            input_modalities=["sentinel1", "sentinel2"],
         ),
         "sickle": DownstreamTaskConfig(
             dataset="sickle",
@@ -278,15 +280,17 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             norm_stats_from_pretrained=True,
             probe_lr=0.1,
             eval_interval=Duration.epochs(20),
+            input_modalities=["landsat8"],
         ),
         "sickle-r": DownstreamTaskConfig(
-            dataset="sickle-r",
+            dataset="sickle",
             batch_size=8,
             num_workers=2,
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
             probe_lr=0.1,
             eval_interval=Duration.epochs(20),
+            input_modalities=["landsat8", "sentinel1", "sentinel2"],
         ),
     }
     trainer_config = (
