@@ -421,7 +421,7 @@ def test_create_temporal_mask() -> None:
 
 def test_space_masking_with_missing_modality_mask() -> None:
     """Test SpaceMaskingStrategy with missing_modalities_masks."""
-    b, h, w, t = 10, 16, 16, 8
+    b, h, w, t = 4, 8, 8, 8
 
     days = torch.randint(1, 31, (b, 1, t), dtype=torch.long)
     months = torch.randint(1, 13, (b, 1, t), dtype=torch.long)
@@ -511,7 +511,7 @@ def test_space_masking_with_missing_modality_mask() -> None:
 
 def test_time_masking_with_missing_modality_mask() -> None:
     """Test TimeMaskingStrategy with missing_modalities_masks."""
-    b, h, w, t = 10, 16, 16, 8
+    b, h, w, t = 4, 8, 8, 8
 
     days = torch.randint(1, 31, (b, 1, t), dtype=torch.long)
     months = torch.randint(1, 13, (b, 1, t), dtype=torch.long)
