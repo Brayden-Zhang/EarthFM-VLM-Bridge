@@ -838,6 +838,7 @@ class HeliosDatasetConfig(Config):
     h5py_dir: str
     training_modalities: list[str]
     dtype: DType = DType.float32
+    use_modalities_with_missing_timesteps: bool = True
     normalize: bool = True
     cache_dir: str | None = None
     samples_per_sec: float | None = None
