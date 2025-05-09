@@ -340,6 +340,7 @@ def collate_helios(batch: list[tuple[int, HeliosSample]]) -> tuple[int, HeliosSa
         # For partially missing samples we use MISSING_VALUE so we only check the first sample
         if getattr(batch[0][1], attr) is None:
             return None
+        logger.info(f"Stacked {attr}")
         stacked_tensor = torch.stack(
             [torch.from_numpy(getattr(sample, attr)) for _, sample in batch], dim=0
         )
@@ -676,35 +677,37 @@ class HeliosDataset(Dataset):
                 missing_modalities.append(modality)
 
             modality_data = sample_dict[modality]
-            if modality != Modality.LANDSAT.name:
-                continue
-
-            if modality == Modality.SRTM.name or modality == Modality.OPENSTREETMAP_RASTER.name :
-                # SRTM can natively be all 0 if we are on the ocean!
-                # Seems like we could tokenize this more intelligently in some cases
-                continue
             # cast to appropriate dtype to prevent overflow from missing values
             modality_data = modality_data.astype(self.dtype)
 
-            missing_timesteps = []
-            # Use the missing_timesteps_mask if available for this modality
+            # For multi-temporal modalities, we need to handle missing timesteps
+            # The missing_timesteps_masks indicates which timesteps are present (True) or missing (False)
             if modality in missing_timesteps_masks:
-                # Get indices where the mask is False (missing timesteps)
-                missing_timesteps = np.where(~missing_timesteps_masks[modality])[0]
-            # else:
-            #     # Fallback to checking for zeros if mask not available
-            #     all_zeros_mask = np.all(
-            #         modality_data[..., :, :] == 0, axis=(-1, -3, -4)
-            #     )  # Checks H, W, bands dimensions
-            #     missing_timesteps = np.where(all_zeros_mask)[0]
+                mask = missing_timesteps_masks[modality]
 
-            if len(missing_timesteps) > 0:
-                logger.info(
-                    f"Filling {modality} timesteps {missing_timesteps} with missing values"
-                )
-                # Fill all missing timesteps at once
-                modality_data[..., missing_timesteps, :] = MISSING_VALUE
+                # If we have any missing timesteps (where mask is False)
+                if not np.all(mask):
+                    # Get the shape of the data to create properly sized temporal layers
+                    h, w, t, c = modality_data.shape
 
+                    # Create a new array with all timesteps (both present and missing)
+                    # This will have the same shape as the original but with all timesteps
+                    full_timesteps_data = np.full((h, w, len(mask), c), MISSING_VALUE, dtype=self.dtype)
+
+                    # Copy the existing data to the appropriate timestep positions
+                    present_indices = np.where(mask)[0]
+                    for i, idx in enumerate(present_indices):
+                        if i < t:  # Only copy if we have data for this timestep
+                            full_timesteps_data[..., idx, :] = modality_data[..., i, :]
+
+                    logger.info(
+                        f"Imputed {modality} data: added {np.sum(~mask)} missing timestep layers"
+                    )
+
+                    # Replace the original data with the imputed version
+                    modality_data = full_timesteps_data
+
+            # Update the sample dictionary with the potentially imputed data
             sample_dict[modality] = modality_data
         return HeliosSample(**sample_dict), missing_modalities
 
@@ -767,11 +770,11 @@ class HeliosDataset(Dataset):
                 sample_dict = {
                     k: v[()]
                     for k, v in h5file.items()
-                    if k in self.training_modalities or k in [Modality.LATLON.name, "timestamps", "missing_timesteps_masks"]
+                    if k in self.training_modalities or k in [Modality.LATLON.name, "timestamps"]
                 }
                 missing_timesteps_masks = {
                     k: v[()]
-                    for k, v in h5file["missing_timesteps_masks"].items()
+                    for k, v in h5file["missing_timesteps_masks"].items() if k in self.training_modalities
                 }
         return sample_dict, missing_timesteps_masks
 
