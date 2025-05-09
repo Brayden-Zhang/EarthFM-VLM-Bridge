@@ -202,6 +202,7 @@ def build_dataset_config(common: CommonComponents) -> Config:
         HeliosDatasetConfig(
             h5py_dir="/weka/dfive-default/helios/dataset/osm_sampling/h5py_data_gzip_3_shuffle/landsat_naip_10_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/75000",
             training_modalities=common.training_modalities,
+            use_modalities_with_missing_timesteps=False,
             dtype=DType.float32,
             # cache_dir="/helios_cache/osm_sampling",
             # samples_per_sec=4 / NUM_WORKERS,  # 2/ GBS
