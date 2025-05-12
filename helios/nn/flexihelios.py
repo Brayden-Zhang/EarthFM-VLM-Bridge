@@ -146,33 +146,15 @@ class TokensAndMasks(NamedTuple):
         Tokens will have shape [B, T, D] and masks will have shape [B, T]
         """
         flattened_x, flattened_masks = [], []
-        samples_with_nothing_decoded = set()
         for attr_name in self.modalities:
             mask_attr_name = self.get_masked_modality_name(attr_name)
             attr = getattr(self, attr_name)
             masked_attr = getattr(self, mask_attr_name)
-            if masked_attr is not None:
-                # check if any tokens are decoded for each sample in the batch
-                for batch_idx in range(masked_attr.shape[0]):
-                    if not (masked_attr[batch_idx] == MaskValue.DECODER.value).any():
-                        logger.info(
-                            f"modality {attr_name} is not being decoded at all for sample {batch_idx}"
-                        )
-                        if batch_idx not in samples_with_nothing_decoded:
-                            samples_with_nothing_decoded.add(batch_idx)
-                        if batch_idx in samples_with_nothing_decoded:
-                            samples_with_nothing_decoded.remove(batch_idx)
-
-            if len(samples_with_nothing_decoded) > 0:
-                logger.info(f"samples with nothing decoded: {samples_with_nothing_decoded}")
-                raise ValueError(
-                    f"Samples with nothing decoded: {samples_with_nothing_decoded}"
-                )
             if attr is not None:
                 if masked_attr is None:
-                        raise ValueError(
-                            f"Can't have present {attr_name} but None {mask_attr_name}"
-                        )
+                    raise ValueError(
+                        f"Can't have present {attr_name} but None {mask_attr_name}"
+                    )
                 masked_attr = masked_attr.unsqueeze(dim=-1)
                 flattened_x.append(self._flatten(attr))
                 flattened_masks.append(self._flatten(masked_attr))
@@ -376,26 +358,6 @@ class FlexiHeliosPatchEmbeddings(nn.Module):
                 token_mask = modality_mask[:, 0::patch_size, 0::patch_size, ..., idx]
                 modality_specific_kwargs = {"patch_size": patch_size}
             # Now apply the embedding to the patchified data
-<<<<<<< HEAD
-            if self.is_any_data_seen_by_encoder(token_mask):
-                patchified_data = modality_data[..., channel_set_indices]
-                embedding_module = self.per_modality_embeddings[modality][
-                    self._get_embedding_module_name(modality, idx)
-                ]
-                patchified_data = embedding_module(
-                    patchified_data, **modality_specific_kwargs
-                )
-            else:
-                logger.info(f"modality {modality} bandset {idx} is not seen by encoder")
-                patchified_data = torch.zeros(
-                    modality_data.shape[0],
-                    *patchified_dims,
-                    self.embedding_size,
-                    dtype=modality_data.dtype,
-                    device=modality_data.device,
-                )
-                logger.info(f"{modality} bandset {idx} is assigned empty embedding!")
-=======
             patchified_data = modality_data[..., channel_set_indices]
             embedding_module = self.per_modality_embeddings[modality][
                 self._get_embedding_module_name(modality, idx)
@@ -403,7 +365,6 @@ class FlexiHeliosPatchEmbeddings(nn.Module):
             patchified_data = embedding_module(
                 patchified_data, **modality_specific_kwargs
             )
->>>>>>> main
             modality_tokens.append(patchified_data)
             modality_masks.append(token_mask)
         return torch.stack(modality_tokens, dim=-2), torch.stack(modality_masks, dim=-1)
