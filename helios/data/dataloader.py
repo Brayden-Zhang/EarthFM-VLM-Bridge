@@ -125,13 +125,63 @@ class HeliosDataLoader(DataLoaderBase):
         if self.shuffle:
             # Deterministically shuffle based on epoch and seed
             rng = get_rng(self.seed + self.epoch)  # type: ignore
-        indices: np.ndarray
-        indices = np.arange(len(self.dataset), dtype=np.uint32)
-        if rng is not None:
-            rng.shuffle(indices)
-        # Remove tail of data to make it evenly divisible
-        indices = indices[: self.total_size]
-        return indices
+
+        if self.dataset.naip_10_indices is None:
+            indices: np.ndarray
+            indices = np.arange(len(self.dataset), dtype=np.uint32)
+            if rng is not None:
+                rng.shuffle(indices)
+            # Remove tail of data to make it evenly divisible
+            indices = indices[: self.total_size]
+            return indices
+        else:
+            # we want NAIP batches to be evenly distributed throughout
+            # the epoch
+            all_indices: np.ndarray = np.arange(len(self.dataset), dtype=np.uint32)
+            naip_indices = self.dataset.naip_10_indices
+            non_naip_indices = [x for x in all_indices if x not in naip_indices]
+
+            if rng is not None:
+                rng.shuffle(naip_indices)
+                rng.shuffle(non_naip_indices)
+
+            num_naip_batches = len(naip_indices) // self.rank_batch_size
+            num_non_naip_batches = len(non_naip_indices) // self.rank_batch_size
+
+            # the // behaves the same as the truncation above [: self.total_size]
+            total_num_batches = len(all_indices) // self.rank_batch_size
+
+            naip_every = num_non_naip_batches // num_naip_batches
+
+            cur_non_naip_batch = 0
+            cur_naip_batch = 0
+
+            index_list: list[np.ndarray] = []
+
+            for i in range(total_num_batches):
+                if i % naip_every == 0:
+                    if cur_naip_batch < num_naip_batches:
+                        index_list.append(
+                            naip_indices[
+                                cur_naip_batch * self.rank_batch_size : (
+                                    cur_naip_batch + 1
+                                )
+                                * self.rank_batch_size
+                            ]
+                        )
+                        cur_naip_batch += 1
+                else:
+                    if cur_non_naip_batch < num_non_naip_batches:
+                        index_list.append(
+                            non_naip_indices[
+                                cur_non_naip_batch * self.rank_batch_size : (
+                                    cur_non_naip_batch + 1
+                                )
+                                * self.rank_batch_size
+                            ]
+                        )
+                        cur_non_naip_batch += 1
+            return np.concatenate(index_list)
 
     def build_and_save_global_indices(self, in_memory: bool = False) -> None:
         """Build and save global indices."""

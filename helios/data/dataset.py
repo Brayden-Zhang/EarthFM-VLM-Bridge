@@ -483,6 +483,7 @@ class HeliosDataset(Dataset):
 
         self.sample_indices: np.ndarray | None = None
         self.latlon_distribution: np.ndarray | None = None
+        self.naip_10_indices = self._find_naip_10_indices()
 
     @property
     def fingerprint_version(self) -> str:
@@ -541,6 +542,19 @@ class HeliosDataset(Dataset):
     def is_dataset_prepared(self) -> bool:
         """Check if the dataset is prepared."""
         return self.sample_indices is not None
+
+    def _find_naip_10_indices(self) -> np.ndarray | None:
+        if Modality.NAIP_10.name not in self.training_modalities:
+            return None
+        # Read the metadata CSV
+        metadata_df = pd.read_csv(self.sample_metadata_path)
+        logger.info(f"Metadata CSV has {len(metadata_df)} samples")
+        logger.info(f"columns: {metadata_df.columns}")
+
+        if "naip_10" not in metadata_df.columns:
+            return None
+
+        return metadata_df[metadata_df["naip_10"] == 1].index
 
     def _filter_sample_indices_for_training(self) -> None:
         """Filter the sample indices for training.
