@@ -129,6 +129,12 @@ def build_train_module_config(
             "type": "patch_discrimination_new",
         }
     )
+    contrastive_config = LossConfig(
+        loss_config={
+            "type": "InfoNCE",
+            "weight": 0.05,
+        }
+    )
     mae_loss_config = LossConfig(
         loss_config={
             "type": "mae",
@@ -164,6 +170,7 @@ def build_train_module_config(
         masking_config_b=masking_config_b,
         loss_config_a=loss_config_a,
         loss_config_b=loss_config_b,
+        contrastive_config=contrastive_config,
         rank_microbatch_size=RANK_MICROBATCH_SIZE,
         token_exit_cfg_a=token_exit_cfg_a,
         token_exit_cfg_b=token_exit_cfg_b,
