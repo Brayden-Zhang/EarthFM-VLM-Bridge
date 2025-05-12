@@ -498,8 +498,8 @@ class HeliosDataset(Dataset):
                 naip_indices = naip_indices
             elif "naip" in metadata_df.columns:
                 naip_indices = metadata_df[(metadata_df["naip"] == 1)].index
-        else:
-            naip_indices = np.array([])
+            else:
+                naip_indices = np.array([])
         self.naip_indices = naip_indices
         logger.info(f"NAIP indices: {self.naip_indices}")
 
@@ -795,10 +795,14 @@ class HeliosDataset(Dataset):
                     for k, v in h5file.items()
                     if k in self.training_modalities or k in [Modality.LATLON.name, "timestamps"]
                 }
-                missing_timesteps_masks = {
-                    k: v[()]
-                    for k, v in h5file["missing_timesteps_masks"].items() if k in self.training_modalities
-                }
+                if "missing_timesteps_masks" in h5file:
+                    missing_timesteps_masks = {
+                        k: v[()]
+                        for k, v in h5file["missing_timesteps_masks"].items() if k in self.training_modalities
+                    }
+                else:
+                    # To preserve backwards compatibility, we set missing_timesteps_masks to an empty dict if it doesn't exist in file
+                    missing_timesteps_masks = {}
         return sample_dict, missing_timesteps_masks
 
     def _get_h5_file_path(self, index: int) -> UPath:
