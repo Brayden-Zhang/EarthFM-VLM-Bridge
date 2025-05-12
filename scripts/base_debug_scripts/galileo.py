@@ -46,18 +46,18 @@ from helios.train.train_module.galileo import GalileoTrainModuleConfig
 
 logger = logging.getLogger(__name__)
 
-MAX_PATCH_SIZE = 16  # NOTE: actual patch_size <= max_patch_size
-MIN_PATCH_SIZE = 2
+MAX_PATCH_SIZE = 8  # NOTE: actual patch_size <= max_patch_size
+MIN_PATCH_SIZE = 1
 
 
 def build_model_config(common: CommonComponents) -> GalileoConfig:
     """Build the model config for an experiment."""
-    ENCODER_EMBEDDING_SIZE = 192
-    DECODER_EMBEDDING_SIZE = 192
+    ENCODER_EMBEDDING_SIZE = 768
+    DECODER_EMBEDDING_SIZE = 768
     ENCODER_DEPTH = 12
-    DECODER_DEPTH = 4
-    ENCODER_NUM_HEADS = 3
-    DECODER_NUM_HEADS = 3
+    DECODER_DEPTH = 2
+    ENCODER_NUM_HEADS = 12
+    DECODER_NUM_HEADS = 12
     MLP_RATIO = 4.0
 
     encoder_config = EncoderConfig(
@@ -134,7 +134,7 @@ def build_train_module_config(
             "type": "mae",
             "loss_function": "SmoothL1Loss",
             "beta": 0.1,
-            "weight": 1,
+            "weight": 0.1,
         }
     )
     token_exit_cfg_a = {
