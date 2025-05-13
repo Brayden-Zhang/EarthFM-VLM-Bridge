@@ -193,7 +193,6 @@ def build_dataset_config(common: CommonComponents) -> Config:
         HeliosDatasetConfig(
             h5py_dir="/weka/dfive-default/helios/dataset/presto/h5py_data_w_missing_timesteps_gzip_3/landsat_naip_10_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/117473",
             training_modalities=common.training_modalities,
-            use_samples_with_missing_supported_modalities=True,
             dtype=DType.float32,
             # cache_dir="/helios_cache/presto",
             # samples_per_sec=4 / NUM_WORKERS,  # 2/ GBS
