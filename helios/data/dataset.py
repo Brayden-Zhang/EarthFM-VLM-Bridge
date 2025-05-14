@@ -300,9 +300,7 @@ class HeliosSample(NamedTuple):
         sampled_hw = sampled_hw_p * patch_size
         start_h = np.random.choice(self.height - sampled_hw + 1)
         start_w = np.random.choice(self.width - sampled_hw + 1)
-
         start_t = np.random.choice(self.time - max_t + 1)
-        logger.info(f"Start t: {start_t}")
         new_data_dict: dict[str, ArrayTensor] = {}
         for attribute, modality in self.as_dict(ignore_nones=True).items():
             assert modality is not None
