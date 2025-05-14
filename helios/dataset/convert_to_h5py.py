@@ -200,47 +200,53 @@ class ConvertToH5py:
         with self.latlon_distribution_path.open("wb") as f:
             np.save(f, latlons)
 
+    def _find_longest_timestamps_array(
+        self, multi_temporal_timestamps_dict: dict[ModalitySpec, np.ndarray]
+    ) -> np.ndarray:
+        """Find the timestamps for the sample with the most timestamps."""
+        return max(
+            multi_temporal_timestamps_dict,
+            key=lambda k: len(multi_temporal_timestamps_dict[k]),
+        )
+
+    def _create_missing_timesteps_masks(
+        self,
+        multi_temporal_timestamps_dict: dict[ModalitySpec, np.ndarray],
+        longest_timestamps_array: np.ndarray,
+    ) -> dict[str, np.ndarray]:
+        """Create missing timesteps masks for each modality."""
+        missing_timesteps_masks_data: dict[str, np.ndarray] = {}
+        for mod_spec, mod_timestamps in multi_temporal_timestamps_dict.items():
+            # Create a boolean mask indicating presence of each timestamp from longest_timestamps_array
+            # in the current modality's timestamps.
+            # np.all(..., axis=1) checks for full row match (day, month, year)
+            # np.any(...) checks if any of mod_timestamps' rows match the current longest_ts
+            mask = np.array(
+                [
+                    np.any(np.all(longest_ts == mod_timestamps, axis=1))
+                    for longest_ts in longest_timestamps_array
+                ],
+                dtype=bool,
+            )
+            missing_timesteps_masks_data[mod_spec.name] = mask
+        return missing_timesteps_masks_data
+
     def _create_h5_file(
         self, sample: SampleInformation, h5_file_path: UPath
     ) -> dict[str, Any]:
         """Create the h5 file."""
         sample_dict = {}
         sample_dict["latlon"] = sample.get_latlon().astype(np.float32)
-
         multi_temporal_timestamps_dict = sample.get_timestamps()
+        longest_timestamps_array = self._find_longest_timestamps_array(
+            multi_temporal_timestamps_dict
+        )
 
-        # Determine the longest timestamp array to be used as the reference
-        longest_timestamps_array = np.array([])
-        if multi_temporal_timestamps_dict:
-            # Find the ModalitySpec corresponding to the timestamp array with the maximum number of entries
-            longest_ts_modality_spec = max(
-                multi_temporal_timestamps_dict,
-                key=lambda k: len(multi_temporal_timestamps_dict[k]),
-            )
-            longest_timestamps_array = multi_temporal_timestamps_dict[
-                longest_ts_modality_spec
-            ]
+        missing_timesteps_masks_data = self._create_missing_timesteps_masks(
+            multi_temporal_timestamps_dict, longest_timestamps_array
+        )
 
         sample_dict["timestamps"] = longest_timestamps_array
-
-        # Create masks for missing timesteps for each multi-temporal modality
-        missing_timesteps_masks_data: dict[str, np.ndarray] = {}
-        if (
-            longest_timestamps_array.size > 0
-        ):  # Proceed only if there's a reference timestamp array
-            for mod_spec, mod_timestamps in multi_temporal_timestamps_dict.items():
-                # Create a boolean mask indicating presence of each timestamp from longest_timestamps_array
-                # in the current modality's timestamps.
-                # np.all(..., axis=1) checks for full row match (day, month, year)
-                # np.any(...) checks if any of mod_timestamps' rows match the current longest_ts
-                mask = np.array(
-                    [
-                        np.any(np.all(longest_ts == mod_timestamps, axis=1))
-                        for longest_ts in longest_timestamps_array
-                    ],
-                    dtype=bool,
-                )
-                missing_timesteps_masks_data[mod_spec.name] = mask
 
         # Load image data for all modalities in the sample
         for modality in sample.modalities:

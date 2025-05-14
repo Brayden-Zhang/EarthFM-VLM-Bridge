@@ -326,9 +326,6 @@ class TimeMaskingStrategy(MaskingStrategy):
         encode_times = max(int(self.encode_ratio * t), 1)
         decode_times = max(int(self.decode_ratio * t), 1)
         target_times = t - encode_times - decode_times
-        logger.info(f"encode_times: {encode_times}")
-        logger.info(f"decode_times: {decode_times}")
-        logger.info(f"target_times: {target_times}")
 
         flat_mask = torch.cat(
             [
@@ -393,6 +390,7 @@ class TimeMaskingStrategy(MaskingStrategy):
                         temporal_mask = self._create_temporal_mask(shape, device)
                     b_s = modality.num_band_sets
                     b, h, w = list(shape[:-2]) + [1] * (3 - len(shape[:-2]))
+                    # Repeat shares a view of the temporal masks so if we don't clone future changes may propogate across modalities
                     mask = repeat(
                         temporal_mask, "b t -> b h w t b_s", h=h, w=w, b_s=b_s
                     )
@@ -463,8 +461,6 @@ class SpaceMaskingStrategy(MaskingStrategy):
         mask = repeat(
             patch_mask, "b h w -> b (h hp) (w wp)", hp=patch_size, wp=patch_size
         )
-        if (mask == MaskValue.MISSING.value).all():
-            raise ValueError(f"All tokens are missing for modality {modality.name} before missing values are assigned within spatial masking strategy")
         return mask
 
     def apply_mask(
@@ -509,7 +505,9 @@ class SpaceMaskingStrategy(MaskingStrategy):
             modality = Modality.get(modality_name)
             shape = instance.shape
             if not modality.is_spatial:
-                logger.warning(f"Modality {modality.name} is not spatial, random masking strategy will be applied")
+                logger.warning(
+                    f"Modality {modality.name} is not spatial, random masking strategy will be applied"
+                )
                 mask = self._create_random_mask(modality, shape, patch_size, device)
             else:
                 if spatial_mask is None:
@@ -530,9 +528,9 @@ class SpaceMaskingStrategy(MaskingStrategy):
 
             # Keep data as is
             output_dict[modality_name] = instance
-            output_dict[
-                MaskedHeliosSample.get_masked_modality_name(modality_name)
-            ] = mask
+            output_dict[MaskedHeliosSample.get_masked_modality_name(modality_name)] = (
+                mask
+            )
         return MaskedHeliosSample(**output_dict)
 
 
