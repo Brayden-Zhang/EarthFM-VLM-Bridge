@@ -757,11 +757,6 @@ class HeliosDataset(Dataset):
         else:
             index = args.idx
         h5_file_path = self._get_h5_file_path(index)
-        logger.debug(f"H5 file path: {h5_file_path}")
-        if not h5_file_path.exists():
-            raise FileNotFoundError(
-                f"H5 file {h5_file_path} does not exist, Be Sure to run prepare before starting Training"
-            )
 
         sample_dict, missing_timesteps_masks = self.read_h5_file(h5_file_path)
         sample_dict = self._pad_timestamps(sample_dict)
@@ -770,18 +765,6 @@ class HeliosDataset(Dataset):
             sample_dict, missing_timesteps_masks
         )
 
-        # Debugging where we are getting the collate shape mismatch
-        for modality in sample.modalities:
-            if modality == "timestamps":
-                continue
-            if Modality.get(modality).is_multitemporal:
-                logger.info(
-                    f"Modality {modality} has {sample.shape(modality)[2]} timesteps"
-                )
-                if sample.shape(modality)[2] < self.max_sequence_length:
-                    raise ValueError(
-                        f"Modality {modality} has {sample.shape(modality)[2]} timesteps, expected {self.max_sequence_length}"
-                    )
         subset_sample = self.apply_subset(sample, args)
 
         sample_dict = subset_sample.as_dict(ignore_nones=True)
