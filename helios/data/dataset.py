@@ -450,10 +450,14 @@ class HeliosDataset(Dataset):
             supported_modalities.remove("raster")
             supported_modalities.remove("openstreetmap")
             supported_modalities.append("openstreetmap_raster")
+
         if "naip" in supported_modalities and "10" in supported_modalities:
             supported_modalities.remove("naip")
             supported_modalities.remove("10")
             supported_modalities.append("naip_10")
+        # latlons are saved with every h5py file, see
+        # helios.dataset.convert_to_h5py.ConvertToH5py._create_h5_file
+        supported_modalities.append("latlon")
         num_samples = int(self.h5py_dir.name)
 
         tile_path = self.h5py_dir.parent.parent.parent

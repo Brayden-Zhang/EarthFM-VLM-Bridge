@@ -33,7 +33,9 @@ from helios.train.callbacks import (
 from helios.train.callbacks.evaluator_callback import DownstreamTaskConfig
 from helios.train.loss import LossConfig
 from helios.train.masking import MaskingConfig
-from helios.train.train_module.latent_mim import LatentMIMTrainModuleConfig
+from helios.train.train_module.contrastive_latentmim import (
+    ContrastiveLatentMIMTrainModuleConfig,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +51,6 @@ def build_model_config(common: CommonComponents) -> LatentMIMConfig:
     DECODER_DEPTH = 12
     ENCODER_NUM_HEADS = 3
     DECODER_NUM_HEADS = 3
-
     MLP_RATIO = 4.0
     encoder_config = EncoderConfig(
         supported_modality_names=common.training_modalities,
@@ -81,9 +82,9 @@ def build_model_config(common: CommonComponents) -> LatentMIMConfig:
 
 def build_train_module_config(
     common: CommonComponents,
-) -> LatentMIMTrainModuleConfig:
+) -> ContrastiveLatentMIMTrainModuleConfig:
     """Build the train module config for an experiment."""
-    LR = 0.0001
+    LR = 0.002
     RANK_MICROBATCH_SIZE = 128
     ENCODE_RATIO = 0.1
     DECODE_RATIO = 0.75
@@ -108,7 +109,7 @@ def build_train_module_config(
 
     # TODO: would need a scheduler config and registry to be able to change this with overrides
     scheduler = CosWithWarmup()
-    train_module_config = LatentMIMTrainModuleConfig(
+    train_module_config = ContrastiveLatentMIMTrainModuleConfig(
         optim_config=optim_config,
         masking_config=masking_config,
         warmup_duration=Duration.epochs(WARMUP_EPOCHS),
@@ -150,13 +151,13 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
 
 def build_dataset_config(common: CommonComponents) -> HeliosDatasetConfig:
     """Build the dataset config for an experiment."""
+    # NOTE: Change this directory based on the supported modalities
+    h5py_dir = "/weka/dfive-default/helios/dataset/presto/h5py_data_gzip_1/landsat_naip_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/118861"
     return HeliosDatasetConfig(
-        h5py_dir="/weka/dfive-default/helios/dataset/osm_sampling/h5py_data_w_missing_timesteps_gzip_3/landsat_naip_10_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/285288",
+        h5py_dir=h5py_dir,
+        use_samples_with_missing_supported_modalities=True,
         training_modalities=common.training_modalities,
-        use_modalities_with_missing_timesteps=True,  # False,
         dtype=DType.float32,
-        # cache_dir="/helios_cache/osm_sampling",
-        # samples_per_sec=4 / NUM_WORKERS,  # 2/ GBS
     )
 
 
@@ -245,37 +246,15 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             norm_stats_from_pretrained=True,
             probe_lr=0.1,
             eval_interval=Duration.epochs(20),
-            input_modalities=["sentinel2"],
         ),
         "pastis-r": DownstreamTaskConfig(
-            dataset="pastis",
+            dataset="pastis-r",
             batch_size=8,
             num_workers=2,
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
             probe_lr=0.1,
             eval_interval=Duration.epochs(20),
-            input_modalities=["sentinel1", "sentinel2"],
-        ),
-        "sickle": DownstreamTaskConfig(
-            dataset="sickle",
-            batch_size=8,
-            num_workers=2,
-            pooling_type=PoolingType.MEAN,
-            norm_stats_from_pretrained=True,
-            probe_lr=0.1,
-            eval_interval=Duration.epochs(20),
-            input_modalities=["landsat8"],
-        ),
-        "sickle-r": DownstreamTaskConfig(
-            dataset="sickle",
-            batch_size=8,
-            num_workers=2,
-            pooling_type=PoolingType.MEAN,
-            norm_stats_from_pretrained=True,
-            probe_lr=0.1,
-            eval_interval=Duration.epochs(20),
-            input_modalities=["landsat8", "sentinel1", "sentinel2"],
         ),
     }
     trainer_config = (
