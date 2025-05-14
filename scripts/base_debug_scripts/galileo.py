@@ -13,6 +13,7 @@ from olmo_core.distributed.parallel.data_parallel import (
 from olmo_core.optim import AdamWConfig
 from olmo_core.optim.scheduler import CosWithWarmup
 from olmo_core.train.callbacks import (
+    BeakerCallback,
     ConfigSaverCallback,
     GarbageCollectorCallback,
     GPUMemoryMonitorCallback,
@@ -20,7 +21,6 @@ from olmo_core.train.callbacks import (
 from olmo_core.train.checkpoint import CheckpointerConfig
 from olmo_core.train.common import Duration, LoadStrategy
 from olmo_core.train.config import TrainerConfig
-from upath import UPath
 
 from helios.data.constants import Modality
 from helios.data.dataloader import HeliosDataLoaderConfig
@@ -51,13 +51,13 @@ MAX_SEQUENCE_LENGTH = 12
 
 def build_model_config(common: CommonComponents) -> GalileoConfig:
     """Build the model config for an experiment."""
-    ENCODER_EMBEDDING_SIZE = tiny_model_args["encoder_embedding_size"]
-    DECODER_EMBEDDING_SIZE = tiny_model_args["decoder_embedding_size"]
-    ENCODER_DEPTH = tiny_model_args["encoder_depth"]
-    DECODER_DEPTH = tiny_model_args["decoder_depth"]
-    ENCODER_NUM_HEADS = tiny_model_args["encoder_num_heads"]
-    DECODER_NUM_HEADS = tiny_model_args["decoder_num_heads"]
-    MLP_RATIO = tiny_model_args["mlp_ratio"]
+    ENCODER_EMBEDDING_SIZE = int(tiny_model_args["encoder_embedding_size"])
+    DECODER_EMBEDDING_SIZE = int(tiny_model_args["decoder_embedding_size"])
+    ENCODER_DEPTH = int(tiny_model_args["encoder_depth"])
+    DECODER_DEPTH = int(tiny_model_args["decoder_depth"])
+    ENCODER_NUM_HEADS = int(tiny_model_args["encoder_num_heads"])
+    DECODER_NUM_HEADS = int(tiny_model_args["decoder_num_heads"])
+    MLP_RATIO = float(tiny_model_args["mlp_ratio"])
 
     encoder_config = EncoderConfig(
         supported_modality_names=common.training_modalities,
@@ -122,13 +122,13 @@ def build_train_module_config(
         }
     )
     token_exit_cfg_a = {
-        Modality.SENTINEL2_L2A.name: tiny_model_args["encoder_depth"],
-        Modality.LATLON.name: tiny_model_args["encoder_depth"],
-        Modality.SENTINEL1.name: tiny_model_args["encoder_depth"],
+        Modality.SENTINEL2_L2A.name: int(tiny_model_args["encoder_depth"]),
+        Modality.LATLON.name: int(tiny_model_args["encoder_depth"]),
+        Modality.SENTINEL1.name: int(tiny_model_args["encoder_depth"]),
         Modality.WORLDCOVER.name: 0,
-        Modality.SRTM.name: tiny_model_args["encoder_depth"] // 2,
+        Modality.SRTM.name: int(tiny_model_args["encoder_depth"] // 2),
         Modality.OPENSTREETMAP_RASTER.name: 0,
-        Modality.LANDSAT.name: tiny_model_args["encoder_depth"],
+        Modality.LANDSAT.name: int(tiny_model_args["encoder_depth"]),
     }
     if any(modality not in token_exit_cfg_a for modality in common.training_modalities):
         raise ValueError(
@@ -189,13 +189,13 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
 def build_dataset_config(common: CommonComponents) -> HeliosDatasetConfig:
     """Build the dataset config for an experiment."""
     return HeliosDatasetConfig(
-            h5py_dir="/weka/dfive-default/helios/dataset/osm_sampling/h5py_data_w_missing_timesteps_gzip_3/landsat_naip_10_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/285288",
-            training_modalities=common.training_modalities,
-            use_modalities_with_missing_timesteps=False,
-            dtype=DType.float32,
-            # cache_dir="/helios_cache/osm_sampling",
-            # samples_per_sec=4 / NUM_WORKERS,  # 2/ GBS
-        )
+        h5py_dir="/weka/dfive-default/helios/dataset/osm_sampling/h5py_data_w_missing_timesteps_gzip_3/landsat_naip_10_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/285288",
+        training_modalities=common.training_modalities,
+        use_modalities_with_missing_timesteps=False,
+        dtype=DType.float32,
+        # cache_dir="/helios_cache/osm_sampling",
+        # samples_per_sec=4 / NUM_WORKERS,  # 2/ GBS
+    )
 
 
 def build_trainer_config(common: CommonComponents) -> TrainerConfig:
@@ -339,9 +339,9 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             ),
         )
         .with_callback("garbage_collector", garbage_collector_callback)
+        .with_callback("beaker", BeakerCallback())
     )
     return trainer_config
-
 
 
 if __name__ == "__main__":
