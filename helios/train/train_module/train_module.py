@@ -253,7 +253,11 @@ class HeliosTrainModule(TrainModule):
                 )
                 logger.info("Applied FSDP to the model")
             elif dp_config.name == DataParallelType.ddp:
-                self.model.apply_ddp(dp_mesh=dp_mesh, compile_enabled=compile_model, find_unused_parameters=find_unused_parameters)
+                self.model.apply_ddp(
+                    dp_mesh=dp_mesh,
+                    compile_enabled=compile_model,
+                    find_unused_parameters=find_unused_parameters,
+                )
                 logger.info("Applied DDP to the model")
             else:
                 raise NotImplementedError(dp_config.name)
@@ -288,7 +292,9 @@ class HeliosTrainModule(TrainModule):
     @property
     def is_fsdp(self) -> bool:
         """Check if the model is FSDP."""
-        return self._dp_config is not None and self._dp_config.name in (DataParallelType.fsdp)
+        return self._dp_config is not None and self._dp_config.name in (
+            DataParallelType.fsdp
+        )
 
     @property
     def eval_batch_spec(self) -> EvalBatchSpec:
