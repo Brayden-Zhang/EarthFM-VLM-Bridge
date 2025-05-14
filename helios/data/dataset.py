@@ -578,6 +578,47 @@ class HeliosDataset(Dataset):
         except Exception:
             return self.normalizer_predefined.normalize(modality, image)
 
+    def _fill_missing_timesteps(
+        self,
+        modality_data: np.ndarray,
+        missing_timestep_mask: np.ndarray,
+    ) -> np.ndarray:
+        """Fill the missing timesteps with the missing value."""
+        # cast to appropriate dtype to prevent overflow from missing values
+        modality_data = modality_data.astype(self.dtype)
+        # Get the shape of the data to create properly sized temporal layers
+        h, w, t, c = modality_data.shape
+
+        # Create a new array with all timesteps (both present and missing)
+        # This will have the same shape as the original but with all timesteps
+        if len(missing_timestep_mask) < self.max_sequence_length:
+            logger.warning(
+                f"Mask length {len(missing_timestep_mask)} is less than max_sequence_length {self.max_sequence_length}. Padding with MISSING_VALUE"
+            )
+        full_timesteps_data = np.full(
+            (h, w, self.max_sequence_length, c),
+            MISSING_VALUE,
+            dtype=self.dtype,
+        )
+
+        # Copy the existing data to the appropriate timestep positions
+        present_indices = np.where(missing_timestep_mask)[0]
+        for i, idx in enumerate(present_indices):
+            if i < t:  # Only copy if we have data for this timestep
+                full_timesteps_data[..., idx, :] = modality_data[..., i, :]
+
+        return full_timesteps_data
+
+    def _fill_missing_modality(
+        self, sample: HeliosSample, modality: str
+    ) -> HeliosSample:
+        """Fill an array of shape of modality with the missing value."""
+        return np.full(
+            sample.get_expected_shape(modality),
+            fill_value=MISSING_VALUE,
+            dtype=self.dtype,
+        )
+
     def fill_sample_with_missing_values(
         self, sample_dict: dict[str, Any], missing_timesteps_masks: dict[str, Any]
     ) -> tuple[HeliosSample, list[str]]:
@@ -590,62 +631,30 @@ class HeliosDataset(Dataset):
         for modality in self.training_modalities:
             if modality not in sample_dict.keys():
                 logger.debug(f"Filling {modality} with missing values")
-                sample_dict[modality] = np.full(
-                    sample.get_expected_shape(modality),
-                    fill_value=MISSING_VALUE,
-                    dtype=self.dtype,
-                )
+                sample_dict[modality] = self._fill_missing_modality(sample, modality)
                 missing_modalities.append(modality)
                 continue
-
-            modality_data = sample_dict[modality]
-            # cast to appropriate dtype to prevent overflow from missing values
-            modality_data = modality_data.astype(self.dtype)
 
             # For multi-temporal modalities, we need to handle missing timesteps
             # The missing_timesteps_masks indicates which timesteps are present (True) or missing (False)
             if modality in missing_timesteps_masks:
                 mask = missing_timesteps_masks[modality]
+                modality_data = sample_dict[modality]
+                # cast to appropriate dtype to prevent overflow from missing values
+                modality_data = modality_data.astype(self.dtype)
 
                 # If we have any missing timesteps
-                if not np.all(mask) or len(mask) < self.max_sequence_length:
+                has_missing_timesteps = (
+                    not np.all(mask) or len(mask) < self.max_sequence_length
+                )
+                if has_missing_timesteps:
                     if self.use_modalities_with_missing_timesteps:
-                        # Get the shape of the data to create properly sized temporal layers
-                        h, w, t, c = modality_data.shape
-
-                        # Create a new array with all timesteps (both present and missing)
-                        # This will have the same shape as the original but with all timesteps
-                        if len(mask) < self.max_sequence_length:
-                            logger.warning(
-                                f"Mask length {len(mask)} is less than max_sequence_length {self.max_sequence_length}. Padding with MISSING_VALUE"
-                            )
-                        full_timesteps_data = np.full(
-                            (h, w, self.max_sequence_length, c),
-                            MISSING_VALUE,
-                            dtype=self.dtype,
+                        modality_data = self._fill_missing_timesteps(
+                            modality_data, mask
                         )
-
-                        # Copy the existing data to the appropriate timestep positions
-                        present_indices = np.where(mask)[0]
-                        for i, idx in enumerate(present_indices):
-                            if i < t:  # Only copy if we have data for this timestep
-                                full_timesteps_data[..., idx, :] = modality_data[
-                                    ..., i, :
-                                ]
-
-                        logger.info(
-                            f"Imputed {modality} data: added {np.sum(~mask)} missing timestep layers"
-                        )
-
-                        # Replace the original data with the imputed version
-                        modality_data = full_timesteps_data
                     else:
-                        modality_data = np.full(
-                            sample.get_expected_shape(modality),
-                            fill_value=MISSING_VALUE,
-                            dtype=self.dtype,
-                        )
-
+                        # Treat a modality with missing timesteps as entirely missing
+                        modality_data = self._fill_missing_modality(sample, modality)
             # Update the sample dictionary with the potentially imputed data
             sample_dict[modality] = modality_data
         return HeliosSample(**sample_dict), missing_modalities
