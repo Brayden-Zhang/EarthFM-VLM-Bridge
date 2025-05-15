@@ -165,9 +165,13 @@ class PatchDiscriminationLossNew(Loss):
         if any(count == 0):
             logger.warning("Some samples have no decoder tokens.")
         if all(count == 1):
-            logger.warning("All samples have only one decoder token. Using AllDisc loss.")
+            logger.warning(
+                "All samples have only one decoder token. Using AllDisc loss."
+            )
             # set up and apply alldisc loss
-            all_disc_loss = AllDiscriminationLoss(tau=self.tau, pred2unit=self.pred2unit)
+            all_disc_loss = AllDiscriminationLoss(
+                tau=self.tau, pred2unit=self.pred2unit
+            )
             return all_disc_loss.compute(predictions, targets)
         losses = []
         start = 0

@@ -101,7 +101,7 @@ def build_train_module_config(
             "type": "modality_cross_space_time",
             "max_unmasking_bandsets": 20,
             "min_encoding_bandsets": 2,
-            "max_encoding_bandsets": 6, # THis needs to be compared with the number of available bandsets so we have enough decoding bandsets
+            "max_encoding_bandsets": 6,  # THis needs to be compared with the number of available bandsets so we have enough decoding bandsets
             "encode_ratio": ENCODE_RATIO,
             "decode_ratio": DECODE_RATIO,
         }

@@ -840,9 +840,6 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
                 is_encoded = (modality, bandset_idx) in encoded_bandset_list
                 # what about time based data and static data?
                 if not is_encoded:
-                    logger.info(
-                        f"Clamping {modality}  bandset {bandset_idx} to  min {MaskValue.TARGET_ENCODER_ONLY.value}"
-                    )
                     modality_mask[..., bandset_idx] = torch.clamp(
                         modality_mask[..., bandset_idx],
                         min=MaskValue.TARGET_ENCODER_ONLY.value,
@@ -868,11 +865,7 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
 
             for bandset_idx in range(modality_num_bandsets):
                 is_decoded = (modality, bandset_idx) in decoded_bandset_idxs
-                # what about time based data and static data?
                 if not is_decoded:
-                    logger.info(
-                        f"Clamping {modality} bandset {bandset_idx} to max {MaskValue.TARGET_ENCODER_ONLY.value}"
-                    )
                     modality_mask[..., bandset_idx] = torch.clamp(
                         modality_mask[..., bandset_idx],
                         max=MaskValue.TARGET_ENCODER_ONLY.value,
@@ -881,17 +874,8 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
                 # We do this because non spatial data is randomly masked and we want it to be masked based
                 # on the modality channels instead
                 if is_decoded and self.overide_random_mask_condition(modality_spec):
-                    logger.info(
-                        f"Setting {modality} bandset {bandset_idx} to {MaskValue.DECODER.value}"
-                    )
-                    logger.info(f"modality_mask shape: {modality_mask.shape}")
                     modality_mask[..., bandset_idx] = MaskValue.DECODER.value
             masked_batch_dict[masked_modality_name] = modality_mask
-            # check how many decoder tokens the worldcover mask has after every modality
-            worldcover_mask = masked_batch_dict["worldcover_mask"]
-            logger.info(
-                f"Number of decoder tokens for worldcover: {(worldcover_mask[..., 0] == MaskValue.DECODER.value).sum()}"
-            )
 
         masked_batch = MaskedHeliosSample(**masked_batch_dict)
         return masked_batch
