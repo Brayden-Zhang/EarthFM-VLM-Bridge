@@ -759,35 +759,29 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
         """Select the decoded bandsets."""
         candidate_decoding_bandset_combinations = []
         for bandset_combination in ALL_BANDSET_POWSET:
-            if len(bandset_combination) == 0:
-                logger.debug("Skipping empty bandset combination")
-                continue
-            if len(bandset_combination) > self.max_unmasking_bandsets:
-                logger.debug(
-                    f"Skipping bandset combination with {len(bandset_combination)} bandsets (exceeds max {self.max_unmasking_bandsets})"
-                )
-                continue
-            # check if any of the modalities
-            if any(
+            is_empty_bandset_combination = len(bandset_combination) == 0
+            is_too_large_bandset_combination = (
+                len(bandset_combination) > self.max_unmasking_bandsets
+            )
+            is_modality_combination_not_in_batch = any(
                 modality not in batch.modalities for modality, _ in bandset_combination
-            ):
-                logger.debug(
-                    f"Skipping bandset combination {bandset_combination} because it contains modalities not in batch {batch.modalities}"
-                )
+            )
+            is_encoded_bandset_combination = set(bandset_combination) & set(
+                encoded_bandset_list
+            )
+            is_single_bandset_latlon = len(
+                bandset_combination
+            ) == 1 and bandset_combination == ((Modality.LATLON.name, 0),)
+            should_skip_combination = (
+                is_empty_bandset_combination
+                or is_too_large_bandset_combination
+                or is_modality_combination_not_in_batch
+                or is_encoded_bandset_combination
+                or is_single_bandset_latlon
+            )
+            if should_skip_combination:
                 continue
-            # Check if any of the bandsets in the combination are in the encoded bandset list
-            if set(bandset_combination) & set(encoded_bandset_list):
-                logger.debug(
-                    f"Skipping bandset combination {bandset_combination} because it overlaps with encoded bandsets {encoded_bandset_list}"
-                )
-                continue
-            if len(bandset_combination) == 1 and bandset_combination == (
-                ("latlon", 0),
-            ):
-                logger.debug(
-                    f"Skipping bandset combination {bandset_combination} because it creates a single token per modality"
-                )
-                continue
+
             candidate_decoding_bandset_combinations.append(bandset_combination)
 
         # Sort combinations by length (descending) and pick the longest one
