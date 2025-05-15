@@ -229,8 +229,8 @@ class GalileoTrainModule(HeliosTrainModule):
         self.model.train()
 
         # Set the maximum number of tokens
-        total_space_time_mask_loss = torch.tensor(0.0, device=self.device)
-        total_random_mask_loss = torch.tensor(0.0, device=self.device)
+        total_mask_a_loss = torch.tensor(0.0, device=self.device)
+        total_mask_b_loss = torch.tensor(0.0, device=self.device)
         total_batch_loss = torch.tensor(0.0, device=self.device)
         total_batch_reg = torch.tensor(0.0, device=self.device)
         total_batch_con = torch.tensor(0.0, device=self.device)
@@ -266,10 +266,10 @@ class GalileoTrainModule(HeliosTrainModule):
                     )
                 )
                 loss = (loss_a + loss_b) / 2
-                total_space_time_mask_loss += (
+                total_mask_a_loss += (
                     get_local_tensor(loss_a.detach()) / num_microbatches
                 )
-                total_random_mask_loss += (
+                total_mask_b_loss += (
                     get_local_tensor(loss_b.detach()) / num_microbatches
                 )
 
@@ -316,9 +316,6 @@ class GalileoTrainModule(HeliosTrainModule):
                         f"Skipping batch on rank {self.local_rank}, "
                         f"step {self.trainer.global_step}, epoch {self.trainer.epoch}"
                     )
-                    self.trainer.record_metric(
-                        "step_skipped", 1, ReduceType.sum, namespace="optim"
-                    )
                     if self.is_fsdp:
                         raise ValueError(
                             "FSDP does not support skipping bad batches as the backwards pass will not sync correctly"
@@ -336,12 +333,8 @@ class GalileoTrainModule(HeliosTrainModule):
         total_batch_loss = torch.nan_to_num(total_batch_loss, nan=float("inf"))
         total_batch_reg = torch.nan_to_num(total_batch_reg, nan=float("inf"))
         total_batch_con = torch.nan_to_num(total_batch_con, nan=float("inf"))
-        total_space_time_mask_loss = torch.nan_to_num(
-            total_space_time_mask_loss, nan=float("inf")
-        )
-        total_random_mask_loss = torch.nan_to_num(
-            total_random_mask_loss, nan=float("inf")
-        )
+        total_mask_a_loss = torch.nan_to_num(total_mask_a_loss, nan=float("inf"))
+        total_mask_b_loss = torch.nan_to_num(total_mask_b_loss, nan=float("inf"))
 
         self.trainer.record_metric(
             f"train/{self.total_loss_name}",
@@ -349,14 +342,14 @@ class GalileoTrainModule(HeliosTrainModule):
             ReduceType.mean,
         )
         self.trainer.record_metric(
-            "space_time_mask_loss",
-            total_space_time_mask_loss,
+            f"{self.masking_strategy_a.name}_masking_{self.base_loss_a.name}",
+            total_mask_a_loss,
             ReduceType.mean,
             namespace="train",
         )
         self.trainer.record_metric(
-            "random_mask_loss",
-            total_random_mask_loss,
+            f"{self.masking_strategy_b.name}_masking_{self.base_loss_b.name}",
+            total_mask_b_loss,
             ReduceType.mean,
             namespace="train",
         )

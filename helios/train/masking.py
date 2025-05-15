@@ -192,6 +192,25 @@ class MaskingStrategy:
     Be sure to implement apply_mask in subclasses.
     """
 
+    @property
+    def name(self) -> str:
+        """Return the name of the masking strategy."""
+        return self.__class__.__name__.replace("MaskingStrategy", "").lower()
+
+    @property
+    def encode_ratio(self) -> float:
+        """Return the encode ratio."""
+        if not hasattr(self, "_encode_ratio"):
+            raise AttributeError("Encode ratio not set")
+        return self._encode_ratio
+
+    @property
+    def decode_ratio(self) -> float:
+        """Return the decode ratio."""
+        if not hasattr(self, "_decode_ratio"):
+            raise AttributeError("Decode ratio not set")
+        return self._decode_ratio
+
     def apply_mask(
         self, batch: HeliosSample, patch_size: int | None = None, **kwargs: Any
     ) -> MaskedHeliosSample:
@@ -290,20 +309,6 @@ class MaskingStrategy:
             )
         return mask
 
-    @property
-    def encode_ratio(self) -> float:
-        """Get the encode ratio."""
-        if not hasattr(self, "_encode_ratio"):
-            raise AttributeError("Encode ratio not set")
-        return self._encode_ratio
-
-    @property
-    def decode_ratio(self) -> float:
-        """Get the decode ratio."""
-        if not hasattr(self, "_decode_ratio"):
-            raise AttributeError("Decode ratio not set")
-        return self._decode_ratio
-
 
 MASKING_STRATEGY_REGISTRY = ClassRegistry[MaskingStrategy]()
 
@@ -329,7 +334,6 @@ class TimeMaskingStrategy(MaskingStrategy):
         b = shape[0]
         t = shape[-2]
         assert t >= 3
-        logger.info(f"t: {t}")
         encode_times = max(int(self.encode_ratio * t), 1)
         decode_times = max(int(self.decode_ratio * t), 1)
         target_times = t - encode_times - decode_times
@@ -443,9 +447,6 @@ class SpaceMaskingStrategy(MaskingStrategy):
         encode_patches = int(self.encode_ratio * patches)
         decode_patches = int(self.decode_ratio * patches)
         target_patches = patches - encode_patches - decode_patches
-        logger.info(f"encode_patches: {encode_patches}")
-        logger.info(f"decode_patches: {decode_patches}")
-        logger.info(f"target_patches: {target_patches}")
 
         flat_mask = torch.cat(
             [
