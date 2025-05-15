@@ -63,7 +63,6 @@ class SampleInformation:
 
     def get_timestamps(self) -> dict[ModalitySpec, np.ndarray]:
         """Get the timestamps of the sample."""
-        # Assume that all multitemporal modalities have the same timestamps
         timestamps_dict: dict[ModalitySpec, np.ndarray] = {}
 
         for modality in self.modalities:
@@ -71,10 +70,6 @@ class SampleInformation:
                 sample_modality = self.modalities[modality]
                 timestamps = [i.start_time for i in sample_modality.images]
                 dt = pd.to_datetime(timestamps)
-                # if len(timestamps) != 12:
-                #     raise ValueError(
-                #         "Expected 12 timestamps for multitemporal modality, must adapt if this is to change"
-                #     )
                 timestamps_dict[modality] = np.array([dt.day, dt.month - 1, dt.year]).T
 
         return timestamps_dict
