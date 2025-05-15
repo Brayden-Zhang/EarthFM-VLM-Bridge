@@ -291,26 +291,26 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             eval_interval=Duration.steps(5),
             input_modalities=["sentinel1", "sentinel2"],
         ),
-        "sickle": DownstreamTaskConfig(
-            dataset="sickle",
-            batch_size=8,
-            num_workers=2,
-            pooling_type=PoolingType.MEAN,
-            norm_stats_from_pretrained=True,
-            probe_lr=0.1,
-            eval_interval=Duration.steps(5),
-            input_modalities=["landsat8"],
-        ),
-        "sickle-r": DownstreamTaskConfig(
-            dataset="sickle",
-            batch_size=8,
-            num_workers=2,
-            pooling_type=PoolingType.MEAN,
-            norm_stats_from_pretrained=True,
-            probe_lr=0.1,
-            eval_interval=Duration.steps(5),
-            input_modalities=["landsat8", "sentinel1", "sentinel2"],
-        ),
+        # "sickle": DownstreamTaskConfig(
+        #     dataset="sickle",
+        #     batch_size=8,
+        #     num_workers=2,
+        #     pooling_type=PoolingType.MEAN,
+        #     norm_stats_from_pretrained=True,
+        #     probe_lr=0.1,
+        #     eval_interval=Duration.steps(5),
+        #     input_modalities=["landsat8"],
+        # ),
+        # "sickle-r": DownstreamTaskConfig(
+        #     dataset="sickle",
+        #     batch_size=8,
+        #     num_workers=2,
+        #     pooling_type=PoolingType.MEAN,
+        #     norm_stats_from_pretrained=True,
+        #     probe_lr=0.1,
+        #     eval_interval=Duration.steps(5),
+        #     input_modalities=["landsat8", "sentinel1", "sentinel2"],
+        # ),
     }
     # Let us not use garbage collector fallback
     trainer_config = (
@@ -345,7 +345,6 @@ def build_visualize_config(common: CommonComponents) -> HeliosVisualizeConfig:
         output_dir=str(UPath(common.save_folder) / "visualizations"),
         std_multiplier=2.0,
     )
-
 
 
 if __name__ == "__main__":
