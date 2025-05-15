@@ -164,28 +164,25 @@ class DownstreamEvaluatorCallback(Callback):
 
     def post_step(self) -> None:
         """Run the evaluators."""
-        # we only want to evaluate on rank zero to prevent contention and syncing issues within eval code
-        if get_rank() == 0:
-            for evaluator in self.evaluators:
-                eval_interval_steps = self.trainer.convert_duration_to_steps(
+        for evaluator in self.evaluators:
+            eval_interval_steps = self.trainer.convert_duration_to_steps(
                     evaluator.eval_interval
-                )
-                if self.step <= 1 or self.step % eval_interval_steps != 0:
-                    continue
-                logger.info(f"Running {evaluator.evaluation_name} evaluations...")
-                start_time = time.monotonic()
-                val_result = evaluator.val()
-                self.trainer.record_metric(
-                    f"eval/{evaluator.evaluation_name}", val_result
-                )
-                eval_time = time.monotonic() - start_time
-                self.trainer.record_metric(
-                    f"eval_time/{evaluator.evaluation_name}", eval_time
-                )
-                logger.info(
-                    f"Finished {evaluator.evaluation_name} evaluations in {eval_time:.1f} seconds."
-                )
-        barrier()
+        )
+            if self.step <= 1 or self.step % eval_interval_steps != 0:
+                return
+            logger.info(f"Running {evaluator.evaluation_name} evaluations...")
+            start_time = time.monotonic()
+            val_result = evaluator.val()
+            self.trainer.record_metric(
+                f"eval/{evaluator.evaluation_name}", val_result
+            )
+            eval_time = time.monotonic() - start_time
+            self.trainer.record_metric(
+                f"eval_time/{evaluator.evaluation_name}", eval_time
+            )
+            logger.info(
+                f"Finished {evaluator.evaluation_name} evaluations in {eval_time:.1f} seconds."
+            )
 
 
 @dataclass
