@@ -4,6 +4,7 @@ import gc
 import logging
 import time
 from dataclasses import dataclass, field
+from typing import Any
 
 import torch
 from olmo_core.train.callbacks.callback import Callback, CallbackConfig
@@ -162,7 +163,7 @@ class DownstreamEvaluatorCallback(Callback):
     eval_on_startup: bool = False
     cancel_after_first_eval: bool = False
 
-    def pre_step(self) -> None:
+    def pre_step(self, batch: dict[str, Any]) -> None:
         """Run the evaluators on startup."""
         if self.eval_on_startup:
             logger.info(f"Running {len(self.evaluators)} evaluators on startup.")

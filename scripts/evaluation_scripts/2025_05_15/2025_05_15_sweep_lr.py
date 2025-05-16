@@ -6,16 +6,16 @@ from helios.internal.utils import MODEL_SIZE_ARGS
 
 # Model size configurations
 MODEL_SIZES = {
-    # "base": MODEL_SIZE_ARGS["base_shallow_decoder"],
+    "base": MODEL_SIZE_ARGS["base_shallow_decoder"],
     "large": MODEL_SIZE_ARGS["large_shallow_decoder"],
     "giga": MODEL_SIZE_ARGS["giga_shallow_decoder"],
 }
 
 # Checkpoint paths
 CHECKPOINT_PATHS = {
-    # "base": "/weka/dfive-default/helios/checkpoints/yawenzzzz/20250514_galileo_all_evals_test_3_base_linear_probe_lr_0.01/step0",
-    "large": "/weka/dfive-default/helios/checkpoints/yawenzzzz/20250514_galileo_all_evals_test_3_large_linear_probe_lr_0.01/step0",
-    "giga": "/weka/dfive-default/helios/checkpoints/yawenzzzz/20250514_galileo_all_evals_test_3_giga_linear_probe_lr_0.01/step0",
+    "base": "/weka/dfive-default/helios/checkpoints/yawenzzzz/20250515_galileo_all_evals_test_9_base_linear_probe_lr_0.01/step0",
+    "large": "/weka/dfive-default/helios/checkpoints/yawenzzzz/20250515_galileo_all_evals_test_9_large_linear_probe_lr_0.01/step0",
+    "giga": "/weka/dfive-default/helios/checkpoints/yawenzzzz/20250515_galileo_all_evals_test_9_giga_linear_probe_lr_0.01/step0",
 }
 
 # Base command template
