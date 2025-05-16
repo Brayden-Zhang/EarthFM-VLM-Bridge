@@ -49,6 +49,7 @@ def build_model_config(common: CommonComponents) -> LatentMIMConfig:
     DECODER_DEPTH = 12
     ENCODER_NUM_HEADS = 3
     DECODER_NUM_HEADS = 3
+
     MLP_RATIO = 4.0
     encoder_config = EncoderConfig(
         supported_modality_names=common.training_modalities,
@@ -149,13 +150,13 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
 
 def build_dataset_config(common: CommonComponents) -> HeliosDatasetConfig:
     """Build the dataset config for an experiment."""
-    # NOTE: Change this directory based on the supported modalities
-    h5py_dir = "/weka/dfive-default/helios/dataset/presto/h5py_data_gzip_1/landsat_naip_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/118861"
     return HeliosDatasetConfig(
-        h5py_dir=h5py_dir,
-        use_samples_with_missing_supported_modalities=True,
+        h5py_dir="/weka/dfive-default/helios/dataset/osm_sampling/h5py_data_w_missing_timesteps_gzip_3/landsat_naip_10_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/285288",
         training_modalities=common.training_modalities,
-        dtype="float32",
+        use_modalities_with_missing_timesteps=True,  # False,
+        dtype=DType.float32,
+        # cache_dir="/helios_cache/osm_sampling",
+        # samples_per_sec=4 / NUM_WORKERS,  # 2/ GBS
     )
 
 
