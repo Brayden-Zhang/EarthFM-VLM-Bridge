@@ -166,6 +166,10 @@ class PatchDiscriminationLossNew(Loss):
         start = 0
         for c in count:
             end = start + c
+            if c == 0:
+                # we will occasionally get a sample with no decoded values due to missing data this will let us skip it
+                logger.warning("No decoded values for this sample")
+                continue
             pred_sample = pred[:, start:end, :]
             target_sample = target[:, start:end, :]
             score_sample = (
