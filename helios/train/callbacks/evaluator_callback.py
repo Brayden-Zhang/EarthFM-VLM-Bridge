@@ -227,7 +227,7 @@ class DownstreamTaskConfig:
     # Sweep across lrs for segmentation tasks
     probe_lr: float | None = None
     patch_size: int = 4
-    eval_interval: Duration = field(default_factory=lambda: Duration.epochs(0))
+    eval_interval: Duration = field(default_factory=lambda: Duration.epochs(1))
 
 
 @dataclass
