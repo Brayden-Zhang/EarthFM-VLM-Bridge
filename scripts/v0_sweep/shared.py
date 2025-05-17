@@ -44,7 +44,7 @@ from helios.train.callbacks import (
 from helios.train.callbacks.evaluator_callback import DownstreamTaskConfig
 from helios.train.loss import LossConfig
 from helios.train.masking import MaskingConfig
-from helios.train.train_module.constrastive_latentmim import (
+from helios.train.train_module.contrastive_latentmim import (
     ContrastiveLatentMIMTrainModuleConfig,
 )
 from helios.train.train_module.galileo import GalileoTrainModuleConfig
