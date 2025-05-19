@@ -355,7 +355,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
         project=WANDB_PROJECT,
         entity=WANDB_USERNAME,
         enabled=True,  # set to False to avoid wandb errors
-        config={"timeout": 240},
+        config={"init_timeout": 240},
     )
     # Safe to collect every step for now
     garbage_collector_callback = GarbageCollectorCallback(gc_interval=1)
