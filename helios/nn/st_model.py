@@ -690,8 +690,8 @@ class STBase(nn.Module):
         for modality, dims in modalities_to_dims_dict.items():
             if len(dims) == 5:
                 batch, h, w, b_s, _ = dims
-                hn = (h + window_size - 1) // window_size
-                wn = (w + window_size - 1) // window_size
+                hn = (h + offset_padding + window_size - 1) // window_size
+                wn = (w + offset_padding + window_size - 1) // window_size
                 # Extract tokens for this modality (b*hn*wn bs*hs*ws d).
                 # Modalities are stacked on the token axis.
                 num_tokens_for_modality = b_s * window_size * window_size
