@@ -180,22 +180,17 @@ def build_dataset_config(common: CommonComponents) -> HeliosDatasetConfig:
     # NOTE: Change this directory based on the supported modalities
     dataset_configs = [
         HeliosDatasetConfig(
-            h5py_dir="/weka/dfive-default/helios/dataset/presto/h5py_data/sentinel1_sentinel2_l2a_worldcover/116711",
+            h5py_dir="/weka/dfive-default/helios/dataset/presto/h5py_data_w_missing_timesteps_zstd_3/landsat_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/117473",
             training_modalities=common.training_modalities,
             dtype=DType.float32,
         ),
         HeliosDatasetConfig(
-            h5py_dir="/weka/dfive-default/helios/dataset/osm_sampling/h5py_data_rerun/sentinel1_sentinel2_l2a_worldcover/283204",
+            h5py_dir="/weka/dfive-default/helios/dataset/osm_sampling/h5py_data_w_missing_timesteps_zstd_3/landsat_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/285288",
             training_modalities=common.training_modalities,
             dtype=DType.float32,
         ),
         HeliosDatasetConfig(
-            h5py_dir="/weka/dfive-default/helios/dataset/presto_neighbor/h5py_data/sentinel1_sentinel2_l2a_worldcover/853624",
-            training_modalities=common.training_modalities,
-            dtype=DType.float32,
-        ),
-        HeliosDatasetConfig(
-            h5py_dir="/weka/dfive-default/helios/dataset/osmbig/h5py_data/sentinel1_sentinel2_l2a_worldcover/320831",
+            h5py_dir="/weka/dfive-default/helios/dataset/osmbig/h5py_data_w_missing_timesteps_zstd_3/landsat_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/324482",
             training_modalities=common.training_modalities,
             dtype=DType.float32,
         ),
