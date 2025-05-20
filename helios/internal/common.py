@@ -168,10 +168,9 @@ def build_common_components(
         Modality.SENTINEL1.name,
         Modality.WORLDCOVER.name,
         Modality.LATLON.name,
-        # Modality.SRTM.name,
-        # Modality.NAIP.name,
+        Modality.SRTM.name,
         Modality.LANDSAT.name,
-        # Modality.OPENSTREETMAP_RASTER.name,
+        Modality.OPENSTREETMAP_RASTER.name,
     ]
     cmd_to_launch = SubCmd.train
     if cmd == SubCmd.launch_prep:

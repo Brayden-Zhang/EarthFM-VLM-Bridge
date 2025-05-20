@@ -1033,7 +1033,7 @@ class STEncoder(STBase):
         patch_size: int,
         input_res: int = BASE_GSD,
         token_exit_cfg: dict | None = None,
-    ) -> TokensAndMasks:
+    ) -> tuple[TokensAndMasks, torch.Tensor]:
         """Process masked input samples into token representations.
 
         Args:
@@ -1057,7 +1057,7 @@ class STEncoder(STBase):
                 input_res=input_res,
                 token_exit_cfg=token_exit_cfg,
             )
-        return TokensAndMasks(**patchified_tokens_and_masks)
+        return TokensAndMasks(**patchified_tokens_and_masks), torch.tensor(0)
 
     def apply_fsdp(self, **fsdp_kwargs: Any) -> None:
         """Apply FSDP to the model."""
