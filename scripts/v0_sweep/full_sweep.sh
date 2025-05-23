@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Sweeping different models over masking strategies
+
 # Basic Latent MIM
 python scripts/v0_sweep/latent_mim.py launch v0_base_latent_mim_random ai2/jupiter-cirrascale-2 --model.decoder_config.depth=4 --common.launch.num_gpus=8 --train_module.masking_config.strategy_config.type=random  --model.reconstructor_config=null --train_module.mae_loss_config=null
 python scripts/v0_sweep/latent_mim.py launch v0_base_latent_mim_space_time ai2/jupiter-cirrascale-2 --model.decoder_config.depth=4 --common.launch.num_gpus=8 --train_module.masking_config.strategy_config.type=space_time --model.reconstructor_config=null --train_module.mae_loss_config=null
