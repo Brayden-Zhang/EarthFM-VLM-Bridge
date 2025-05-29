@@ -140,21 +140,6 @@ class MaskedHeliosSample(NamedTuple):
         """Get the number of time steps in the data."""
         return self.timestamps.shape[1]
 
-    @property
-    def valid_time(self) -> int:
-        """Get the minimum number of valid time steps in the data."""
-        # Go through each sample, check the number of unique timesteps and get the minimum
-        # For imputed samples, the timestamps may be just copies of the last timestep
-        min_valid_time = 12
-        for i in range(self.timestamps.shape[0]):
-            unique_timesteps = torch.unique(self.timestamps[i])
-            min_valid_time = min(min_valid_time, unique_timesteps.shape[0])
-        if min_valid_time < self.time:
-            logger.debug(
-                f"valid_time is smaller than time: {min_valid_time} < {self.time}"
-            )
-        return min_valid_time
-
     @staticmethod
     def get_masked_modality_name(modality: str) -> str:
         """Get the masked modality name."""
