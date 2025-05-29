@@ -569,12 +569,19 @@ class HeliosTrainModule(TrainModule):
                 cur_ema_value,
                 ReduceType.mean,
             )
-            # for param, target_param in zip(
-            #     self.model.encoder.parameters(), self.model.target_encoder.parameters()
-            # ):
-            #     get_full_tensor(target_param.data).mul_(cur_ema_value).add_(
-            #         get_full_tensor(param.data), alpha=(1 - cur_ema_value)
-            #     )
+            for p, tp in zip(
+                self.model.encoder.parameters(), self.model.target_encoder.parameters()
+            ):
+                if isinstance(p.data, DTensor):
+                    # get the local shard, update it in place
+                    p_local = p.data.to_local()
+                    tp_local = tp.data.to_local()
+                    tp_local.mul_(cur_ema_value).add_(
+                        p_local, alpha=(1 - cur_ema_value)
+                    )
+                else:
+                    # fallback for any plain Tensor
+                    tp.data.mul_(cur_ema_value).add_(p.data, alpha=(1 - cur_ema_value))
 
     def eval_batch(
         self, batch: dict[str, Any], labels: torch.Tensor | None = None
