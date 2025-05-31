@@ -329,13 +329,13 @@ def build_dataset_config(common: CommonComponents) -> HeliosDatasetConfig:
             cache_dir="/helios_cache/osm_sampling",
         ),
         # osmbig
-        HeliosDatasetConfig(
-            h5py_dir="/weka/dfive-default/helios/dataset/osmbig/h5py_data_w_missing_timesteps_zstd_3/landsat_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/324482/",
-            training_modalities=TRAINING_MODALITIES,
-            # use_samples_with_missing_supported_modalities=False,
-            dtype=DType.float32,
-            cache_dir="/helios_cache/osmbig",
-        ),
+        # HeliosDatasetConfig(
+        #    h5py_dir="/weka/dfive-default/helios/dataset/osmbig/h5py_data_w_missing_timesteps_zstd_3/landsat_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/324482/",
+        #    training_modalities=TRAINING_MODALITIES,
+        #    # use_samples_with_missing_supported_modalities=False,
+        #    dtype=DType.float32,
+        #    cache_dir="/helios_cache/osmbig",
+        # ),
     ]
     return HeliosConcatDatasetConfig(dataset_configs=dataset_configs)
 
