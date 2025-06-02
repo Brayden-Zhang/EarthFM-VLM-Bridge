@@ -129,13 +129,15 @@ class HeliosSample(NamedTuple):
         return [modality for modality in self.as_dict(ignore_nones=True).keys()]
 
     @property
-    def missing_modalities(self) -> list[str]:
-        """Get the modalities missing from the sample."""
-        # TODO: THis does nto apply to sentinel values so maybe should be removed
+    def valid_modalities(self) -> list[str]:
+        """Get the modalities present in the sample.
+
+        Includes timestamps and latlon
+        """
         return [
             modality
-            for modality in self.as_dict(ignore_nones=True).keys()
-            if self.as_dict(ignore_nones=True)[modality] is None
+            for modality in self.modalities
+            if not np.all(self.as_dict(ignore_nones=True)[modality] == MISSING_VALUE)
         ]
 
     def to_device(self, device: torch.device) -> "HeliosSample":

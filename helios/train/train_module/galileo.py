@@ -300,6 +300,7 @@ class GalileoTrainModule(HeliosTrainModule):
                             f"rank: {self.local_rank}, epoch: {self.trainer.epoch}, "
                             f"step: {self.trainer.global_step}"
                         )
+                        exit(0)
                     else:
                         loss += contrastive_loss
                         total_batch_con += (

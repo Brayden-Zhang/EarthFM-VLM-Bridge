@@ -22,6 +22,7 @@ from olmo_core.train.checkpoint import CheckpointerConfig
 from olmo_core.train.common import Duration, LoadStrategy
 from olmo_core.train.config import TrainerConfig
 
+from helios.data.concat import HeliosConcatDatasetConfig
 from helios.data.constants import Modality
 from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig
@@ -99,7 +100,7 @@ def build_train_module_config(
     optim_config = AdamWConfig(lr=LR, weight_decay=WD)
     masking_config_a = MaskingConfig(
         strategy_config={
-            "type": "space_time",
+            "type": "modality_cross_space_time",
             "encode_ratio": ENCODE_RATIO,
             "decode_ratio": DECODE_RATIO,
         }
@@ -186,15 +187,36 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
     return dataloader_config
 
 
+# def build_dataset_config(common: CommonComponents) -> HeliosDatasetConfig:
+#     """Build the dataset config for an experiment."""
+#     return HeliosDatasetConfig(
+#         h5py_dir="/weka/dfive-default/helios/dataset/presto/h5py_data_w_missing_timesteps_zstd_3/landsat_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/117473/",
+#         training_modalities=common.training_modalities,
+#         dtype="float32",
+#         # cache_dir="/helios_cache/osm_sampling",
+#         # samples_per_sec=4 / NUM_WORKERS,  # 2/ GBS
+#     )
+
+
 def build_dataset_config(common: CommonComponents) -> HeliosDatasetConfig:
     """Build the dataset config for an experiment."""
-    return HeliosDatasetConfig(
-        h5py_dir="/weka/dfive-default/helios/dataset/presto/h5py_data_w_missing_timesteps_zstd_3/landsat_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/117473/",
-        training_modalities=common.training_modalities,
-        dtype="float32",
-        # cache_dir="/helios_cache/osm_sampling",
-        # samples_per_sec=4 / NUM_WORKERS,  # 2/ GBS
-    )
+    dataset_configs = [
+        # presto
+        HeliosDatasetConfig(
+            h5py_dir="/weka/dfive-default/helios/dataset/presto/h5py_data_w_missing_timesteps_zstd_3/landsat_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/117473/",
+            training_modalities=common.training_modalities,
+            dtype="float32",
+            cache_dir="/helios_cache/presto",
+        ),
+        # osm_sampling
+        HeliosDatasetConfig(
+            h5py_dir="/weka/dfive-default/helios/dataset/osm_sampling/h5py_data_w_missing_timesteps_zstd_3/landsat_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/285288/",
+            training_modalities=common.training_modalities,
+            dtype="float32",
+            cache_dir="/helios_cache/osm_sampling",
+        ),
+    ]
+    return HeliosConcatDatasetConfig(dataset_configs=dataset_configs)
 
 
 def build_trainer_config(common: CommonComponents) -> TrainerConfig:

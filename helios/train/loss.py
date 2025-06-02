@@ -572,8 +572,23 @@ class InfoNCELoss(Loss):
         # online_encodings_b = predictions.pool_unmasked_tokens(
         #     PoolingType.MEAN, spatial_pooling=False
         # )
+        # Check for NaN or Inf values in predictions and targets
+        valid_mask = (
+            ~torch.isnan(predictions)
+            & ~torch.isinf(predictions)
+            & ~torch.isnan(targets)
+            & ~torch.isinf(targets)
+        )
+
+        # Apply the mask to both predictions and targets to ensure they have the same first dimension
+        predictions = predictions[valid_mask]
+        targets = targets[valid_mask]
+
+        # Normalize the valid predictions and targets
         predictions = F.normalize(predictions, p=2, dim=-1)
         targets = F.normalize(targets, p=2, dim=-1)
+
+        # Compute logits
         logits = predictions @ targets.transpose(-2, -1)
 
         # Positive keys are the entries on the diagonal
