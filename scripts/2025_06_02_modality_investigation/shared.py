@@ -59,7 +59,7 @@ MIN_PATCH_SIZE = 1
 MAX_SEQUENCE_LENGTH = 12
 
 TRAINING_MODALITIES = [
-    Modality.SENTINEL2_L2A.name,
+    # Modality.SENTINEL2_L2A.name,
     Modality.SENTINEL1.name,
     Modality.WORLDCOVER.name,
     Modality.SRTM.name,
@@ -239,6 +239,7 @@ def build_train_module_config(model: str = "galileo") -> HeliosTrainModuleConfig
             token_exit_cfg_b=token_exit_cfg_zero,
             autocast_precision=DType.bfloat16,
             max_grad_norm=1.0,
+            ema_decay=[1.0, 1.0],
             dp_config=dp_config,
             scheduler=scheduler,
         )
@@ -347,7 +348,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
     CANCEL_CHECK_INTERVAL = 1
     LOAD_STRATEGY = LoadStrategy.if_available
     WANDB_USERNAME = "eai-ai2"  # nosec
-    WANDB_PROJECT = "v0-sweep"
+    WANDB_PROJECT = "helios_debug"
     PERMANENT_SAVE_INTERVAL = 5000
     EPHERMERAL_SAVE_INTERVAL = 250
 
@@ -362,33 +363,16 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
     garbage_collector_callback = GarbageCollectorCallback(gc_interval=1)
     logger.warning("WANDB Distribution Uploads are disabled for Debugging")
     EVAL_TASKS = {
-        "m-eurosat": DownstreamTaskConfig(
-            dataset="m-eurosat",
-            batch_size=128,
-            num_workers=8,
-            pooling_type=PoolingType.MEAN,
-            norm_stats_from_pretrained=True,
-            eval_interval=Duration.epochs(5),
-        ),
-        "breizhcrops": DownstreamTaskConfig(
-            dataset="breizhcrops",
-            batch_size=128,
-            num_workers=8,
-            pooling_type=PoolingType.MEAN,
-            norm_stats_from_pretrained=True,
-            eval_interval=Duration.epochs(50),
-            patch_size=1,
-        ),
-        "pastis": DownstreamTaskConfig(
-            dataset="pastis",
-            batch_size=8,
-            num_workers=2,
-            pooling_type=PoolingType.MEAN,
-            norm_stats_from_pretrained=True,
-            probe_lr=0.1,
-            eval_interval=Duration.epochs(50),
-            input_modalities=["sentinel2"],
-        ),
+        # "pastis-sentinel1": DownstreamTaskConfig(
+        #     dataset="pastis",
+        #     batch_size=8,
+        #     num_workers=2,
+        #     pooling_type=PoolingType.MEAN,
+        #     norm_stats_from_pretrained=True,
+        #     probe_lr=0.1,
+        #     eval_interval=Duration.epochs(50),
+        #     input_modalities=["sentinel1"],
+        # ),
         "sickle-sentinel1": DownstreamTaskConfig(
             dataset="sickle",
             batch_size=8,
@@ -396,7 +380,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
             probe_lr=0.01,
-            eval_interval=Duration.epochs(10),
+            eval_interval=Duration.steps(2),
             input_modalities=["sentinel1"],
         ),
         "sickle-landsat": DownstreamTaskConfig(
@@ -406,17 +390,18 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
             probe_lr=0.01,
-            eval_interval=Duration.epochs(10),
+            eval_interval=Duration.steps(2),
             input_modalities=["landsat8"],
         ),
-        "mados": DownstreamTaskConfig(
-            dataset="mados",
-            batch_size=128,
-            num_workers=8,
+        "sickle-landsat-sentinel1": DownstreamTaskConfig(
+            dataset="sickle",
+            batch_size=8,
+            num_workers=2,
             pooling_type=PoolingType.MEAN,
-            norm_stats_from_pretrained=False,
-            probe_lr=0.1,
-            eval_interval=Duration.epochs(10),
+            norm_stats_from_pretrained=True,
+            probe_lr=0.01,
+            eval_interval=Duration.steps(2),
+            input_modalities=["landsat8", "sentinel1"],
         ),
         "sen1floods11": DownstreamTaskConfig(
             dataset="sen1floods11",
@@ -425,7 +410,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
             probe_lr=0.1,
-            eval_interval=Duration.epochs(10),
+            eval_interval=Duration.steps(2),
         ),
     }
     # Let us not use garbage collector fallback
