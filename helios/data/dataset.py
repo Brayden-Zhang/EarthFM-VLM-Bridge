@@ -333,8 +333,7 @@ class HeliosSample(NamedTuple):
         start_h = np.random.choice(self.height - sampled_hw + 1)
         start_w = np.random.choice(self.width - sampled_hw + 1)
 
-        # If current_length > max_t, we can start from a random valid timestep
-        # Otherwise, we start from the first timestep
+        # The timestamps are edge padded and we always want to start from a valid timestep
         if current_length > max_t:
             start_t = np.random.choice(current_length - max_t + 1)
         else:
