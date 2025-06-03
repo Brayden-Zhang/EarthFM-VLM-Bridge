@@ -118,7 +118,11 @@ class MaskedHeliosSample(NamedTuple):
     @property
     def height(self) -> int:
         """Get the height of the data."""
-        height_width_time_modalities = ["sentinel2_l2a", "sentinel1", "worldcover"]
+        height_width_time_modalities = [
+            "sentinel2_l2a",
+            Modality.SENTINEL1.name,
+            "worldcover",
+        ]
         for modality in height_width_time_modalities:
             x = getattr(self, modality)
             if x is not None:
@@ -128,7 +132,11 @@ class MaskedHeliosSample(NamedTuple):
     @property
     def width(self) -> int:
         """Get the width of the data."""
-        height_width_time_modalities = ["sentinel2_l2a", "sentinel1", "worldcover"]
+        height_width_time_modalities = [
+            "sentinel2_l2a",
+            Modality.SENTINEL1.name,
+            "worldcover",
+        ]
         for modality in height_width_time_modalities:
             x = getattr(self, modality)
             if x is not None:

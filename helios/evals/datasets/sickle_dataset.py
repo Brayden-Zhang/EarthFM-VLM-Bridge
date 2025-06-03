@@ -488,6 +488,12 @@ def process_sickle(
 class SICKLEDataset(Dataset):
     """SICKLE dataset class."""
 
+    allowed_modalities = [
+        Modality.LANDSAT.name,
+        Modality.SENTINEL1.name,
+        Modality.SENTINEL2_L2A.name,
+    ]
+
     def __init__(
         self,
         path_to_splits: Path = SICKLE_DIR,
@@ -505,16 +511,15 @@ class SICKLEDataset(Dataset):
             partition: Partition to use
             norm_stats_from_pretrained: Whether to use normalization stats from pretrained model
             norm_method: Normalization method to use, only when norm_stats_from_pretrained is False
-            input_modalities: List of modalities to use, must be a subset of ["landsat8", "sentinel1", "sentinel2"]
+            input_modalities: List of modalities to use, must be a subset of ["landsat", "sentinel1", "sentinel2_l2a"]
         """
         assert split in ["train", "valid"]
         split = "val" if split == "valid" else split
 
         assert len(input_modalities) > 0, "input_modalities must be set"
         assert all(
-            modality in ["landsat8", "sentinel1", "sentinel2"]
-            for modality in input_modalities
-        ), "input_modalities must be a subset of ['landsat8', 'sentinel1', 'sentinel2']"
+            modality in self.allowed_modalities for modality in input_modalities
+        ), f"input_modalities must be a subset of {self.allowed_modalities}"
 
         self.input_modalities = input_modalities
 
@@ -607,12 +612,12 @@ class SICKLEDataset(Dataset):
         # Build sample dict based on requested modalities
         sample_dict = {"timestamps": timestamps}
 
-        if "landsat8" in self.input_modalities:
-            sample_dict["landsat"] = torch.tensor(l8_image).float()
-        if "sentinel1" in self.input_modalities:
-            sample_dict["sentinel1"] = torch.tensor(s1_image).float()
-        if "sentinel2" in self.input_modalities:
-            sample_dict["sentinel2_l2a"] = torch.tensor(s2_image).float()
+        if Modality.LANDSAT.name in self.input_modalities:
+            sample_dict[Modality.LANDSAT.name] = torch.tensor(l8_image).float()
+        if Modality.SENTINEL1.name in self.input_modalities:
+            sample_dict[Modality.SENTINEL1.name] = torch.tensor(s1_image).float()
+        if Modality.SENTINEL2_L2A.name in self.input_modalities:
+            sample_dict[Modality.SENTINEL2_L2A.name] = torch.tensor(s2_image).float()
 
         if not sample_dict:
             raise ValueError(f"No valid modalities found in: {self.input_modalities}")

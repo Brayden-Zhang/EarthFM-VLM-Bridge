@@ -388,7 +388,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             norm_stats_from_pretrained=True,
             probe_lr=0.1,
             eval_interval=Duration.epochs(50),
-            input_modalities=["sentinel2"],
+            input_modalities=[Modality.SENTINEL2_L2A.name],
             epochs=50,
         ),
         "pastis_sentinel1": DownstreamTaskConfig(
@@ -400,7 +400,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             norm_stats_from_pretrained=True,
             probe_lr=0.1,
             eval_interval=Duration.epochs(50),
-            input_modalities=["sentinel1"],
+            input_modalities=[Modality.SENTINEL1.name],
             epochs=50,
         ),
         "sickle_sentinel1": DownstreamTaskConfig(
@@ -412,7 +412,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             norm_stats_from_pretrained=True,
             probe_lr=0.0004,
             eval_interval=Duration.epochs(10),
-            input_modalities=["sentinel1"],
+            input_modalities=[Modality.SENTINEL1.name],
             epochs=50,
         ),
         "sickle_landsat": DownstreamTaskConfig(
@@ -424,7 +424,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             norm_stats_from_pretrained=True,
             probe_lr=0.01,
             eval_interval=Duration.epochs(10),
-            input_modalities=["landsat8"],
+            input_modalities=[Modality.LANDSAT.name],
             epochs=50,
         ),
         "pastis_r": DownstreamTaskConfig(
@@ -436,7 +436,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             norm_stats_from_pretrained=True,
             probe_lr=0.1,
             eval_interval=Duration.epochs(20),
-            input_modalities=["sentinel1", "sentinel2"],
+            input_modalities=[Modality.SENTINEL1.name, Modality.SENTINEL2_L2A.name],
             epochs=50,
         ),
         "mados": DownstreamTaskConfig(

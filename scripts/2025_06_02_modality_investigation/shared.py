@@ -395,7 +395,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             norm_stats_from_pretrained=True,
             probe_lr=0.01,
             eval_interval=Duration.epochs(5),
-            input_modalities=["landsat8"],
+            input_modalities=[Modality.LANDSAT.name],
         ),
         "sickle_landsat_sentinel1": DownstreamTaskConfig(
             dataset="sickle",
@@ -406,7 +406,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             norm_stats_from_pretrained=True,
             probe_lr=0.002,
             eval_interval=Duration.epochs(5),
-            input_modalities=["landsat8", "sentinel1"],
+            input_modalities=[Modality.LANDSAT.name, "sentinel1"],
         ),
         "sen1floods11": DownstreamTaskConfig(
             dataset="sen1floods11",

@@ -19,6 +19,7 @@ from olmo_core.train.common import Duration, LoadStrategy
 from olmo_core.train.config import TrainerConfig
 from upath import UPath
 
+from helios.data.constants import Modality
 from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig
 from helios.internal.common import build_common_components
@@ -264,7 +265,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             norm_stats_from_pretrained=True,
             probe_lr=0.1,
             eval_interval=Duration.epochs(20),
-            input_modalities=["landsat8"],
+            input_modalities=[Modality.LANDSAT.name],
         ),
         "sickle-r": DownstreamTaskConfig(
             dataset="sickle",
@@ -274,7 +275,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             norm_stats_from_pretrained=True,
             probe_lr=0.1,
             eval_interval=Duration.epochs(20),
-            input_modalities=["landsat8", "sentinel1", "sentinel2"],
+            input_modalities=[Modality.LANDSAT.name, "sentinel1", "sentinel2"],
         ),
     }
     trainer_config = (
