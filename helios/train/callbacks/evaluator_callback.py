@@ -50,9 +50,11 @@ class DownstreamEvaluator:
             dataset: Dataset to evaluate on.
             trainer: Trainer object.
             eval_interval: Interval to evaluate on.
-            batch_size: Batch size.
+            embedding_batch_size: Batch size for embedding.
+            probe_batch_size: Batch size for probe.
             num_workers: Number of workers.
             patch_size: Patch size.
+            epochs: Number of epochs for linear probing.
             pooling_type: Pooling type.
             norm_stats_from_pretrained: Whether to use normalized stats from pretrained model.
             device: Device to evaluate on.
@@ -74,6 +76,7 @@ class DownstreamEvaluator:
         self.patch_size = patch_size
         self.input_modalities = input_modalities
         self.epochs = epochs
+
     def _get_data_loader(self, split: str) -> DataLoader:
         """Get the data loader for the given split."""
         return DataLoader(
@@ -111,7 +114,9 @@ class DownstreamEvaluator:
         train_embeddings, train_labels = self._get_embeddings(train_loader)
         logger.info(f"Getting test embeddings for {self.dataset}...")
         test_embeddings, test_labels = self._get_embeddings(val_loader)
-        logger.info(f"Time to get embeddings for {self.dataset}: {time.time() - start_time:.2f}s")
+        logger.info(
+            f"Time to get embeddings for {self.dataset}: {time.time() - start_time:.2f}s"
+        )
 
         logger.info(
             f"train embeddings shape for {self.dataset}: {train_embeddings.shape}"
@@ -236,7 +241,7 @@ class DownstreamTaskConfig:
     probe_lr: float | None = None
     patch_size: int = 4
     probe_batch_size: int = 32
-    epochs: int = 50 # Number of training epochs for linear probing task
+    epochs: int = 50  # Number of training epochs for linear probing task
     eval_interval: Duration = field(default_factory=lambda: Duration.epochs(1))
 
 

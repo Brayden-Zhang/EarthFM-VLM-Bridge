@@ -45,7 +45,7 @@ def train_and_eval_probe(
     grid_size: int,
     batch_size: int,
     epochs: int = 50,
-    eval_interval: int = 1
+    eval_interval: int = 1,
 ) -> float:
     """Run a linear probe on the Helios model."""
     if config.task_type != TaskType.SEGMENTATION:
@@ -60,7 +60,7 @@ def train_and_eval_probe(
     logits_per_patch = int(config.num_classes * output_patch_size * output_patch_size)
     probe = nn.Sequential(nn.Linear(in_features, logits_per_patch)).to(device)
     num_eval_groups = math.ceil(epochs / eval_interval)
-    data_loader= None
+    data_loader = None
     eval_mious = []
     for i in range(num_eval_groups):
         start_epoch = i * eval_interval
@@ -72,7 +72,9 @@ def train_and_eval_probe(
                 TensorDataset(train_embeddings, train_labels),
                 batch_size=batch_size,
                 shuffle=True,
-            ) if data_loader is None else data_loader,
+            )
+            if data_loader is None
+            else data_loader,
             lr=lr,
             epochs=end_epoch,
             total_epochs=epochs,
@@ -116,8 +118,6 @@ def train_probe(
     device: torch.device,
 ) -> nn.Module:
     """Train a linear probe on a segmentation task."""
-    logits_per_patch = int(num_classes * patch_size * patch_size)
-
     opt = torch.optim.AdamW(probe.parameters(), lr=lr)
 
     probe = probe.train()
@@ -157,7 +157,7 @@ def train_probe(
                 optimizer=opt,
                 epoch=epoch + (i / len(data_loader)),
                 total_epochs=total_epochs,
-                warmup_epochs=0, #1, #int(total_epochs * 0.1),
+                warmup_epochs=0,  # 1, #int(total_epochs * 0.1),
                 max_lr=lr,
                 min_lr=1.0e-5,
             )
