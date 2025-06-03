@@ -179,6 +179,10 @@ class TokensAndMasks(NamedTuple):
             # 1s for online encoder, 0s elsewhere
             mask = (mask == MaskValue.ONLINE_ENCODER.value).long()
             x_for_pooling = x * mask.unsqueeze(-1)
+            # # logging if anything in x_for_pooling is nan or inf
+            # logger.info(f"x_for_pooling: {x_for_pooling}")
+            # logger.info(f"x_for_pooling nan: {torch.isnan(x_for_pooling)}")
+            # logger.info(f"x_for_pooling inf: {torch.isinf(x_for_pooling)}")
             if pooling_type == PoolingType.MAX:
                 x_for_pooling = x_for_pooling.masked_fill(
                     ~mask.bool().unsqueeze(-1), -float("inf")

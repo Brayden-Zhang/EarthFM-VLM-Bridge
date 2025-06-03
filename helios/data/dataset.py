@@ -128,18 +128,6 @@ class HeliosSample(NamedTuple):
         """
         return [modality for modality in self.as_dict(ignore_nones=True).keys()]
 
-    # @property
-    # def valid_modalities(self) -> list[str]:
-    #     """Get the modalities present in a batch.
-
-    #     A modality is valid if it is not completely filled with MISSING_VALUE.
-    #     """
-    #     # return [
-    #     #     modality
-    #     #     for modality in self.modalities
-    #     #     if not torch.all(torch.eq(self.as_dict(ignore_nones=True)[modality], MISSING_VALUE))
-    #     # ]
-
     def to_device(self, device: torch.device) -> "HeliosSample":
         """Move all tensors to the specified device.
 

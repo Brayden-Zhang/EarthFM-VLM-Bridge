@@ -559,8 +559,8 @@ class InfoNCELoss(Loss):
         """Compute InfoNCE between predictions and targets.
 
         Args:
-            predictions: Model predictions (B, D).
-            targets: Ground truth targets (B, D).
+            predictions: Model predictions.
+            targets: Ground truth targets.
             **kwargs: Additional keyword arguments.
 
         Returns:
@@ -572,9 +572,20 @@ class InfoNCELoss(Loss):
         # online_encodings_b = predictions.pool_unmasked_tokens(
         #     PoolingType.MEAN, spatial_pooling=False
         # )
+
+        # Remove cases when any one of predictions or targets is nan or inf
+        # Those cases will have no effect on the loss
+        valid_mask = (
+            torch.all(torch.isfinite(predictions), dim=-1)
+            & torch.all(torch.isfinite(targets), dim=-1)
+            & ~torch.any(torch.isnan(predictions), dim=-1)
+            & ~torch.any(torch.isnan(targets), dim=-1)
+        )
+        predictions = predictions[valid_mask]
+        targets = targets[valid_mask]
+
         predictions = F.normalize(predictions, p=2, dim=-1)
         targets = F.normalize(targets, p=2, dim=-1)
-
         logits = predictions @ targets.transpose(-2, -1)
 
         # Positive keys are the entries on the diagonal
