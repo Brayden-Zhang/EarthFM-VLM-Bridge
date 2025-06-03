@@ -362,23 +362,23 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
     garbage_collector_callback = GarbageCollectorCallback(gc_interval=1)
     logger.warning("WANDB Distribution Uploads are disabled for Debugging")
     EVAL_TASKS = {
-        # "m-eurosat": DownstreamTaskConfig(
-        #     dataset="m-eurosat",
-        #     batch_size=128,
-        #     num_workers=8,
-        #     pooling_type=PoolingType.MEAN,
-        #     norm_stats_from_pretrained=True,
-        #     eval_interval=Duration.epochs(5),
-        # ),
-        # "breizhcrops": DownstreamTaskConfig(
-        #     dataset="breizhcrops",
-        #     batch_size=128,
-        #     num_workers=8,
-        #     pooling_type=PoolingType.MEAN,
-        #     norm_stats_from_pretrained=True,
-        #     eval_interval=Duration.epochs(50),
-        #     patch_size=1,
-        # ),
+        "m-eurosat": DownstreamTaskConfig(
+            dataset="m-eurosat",
+            embedding_batch_size=128,
+            num_workers=8,
+            pooling_type=PoolingType.MEAN,
+            norm_stats_from_pretrained=True,
+            eval_interval=Duration.epochs(5),
+        ),
+        "breizhcrops": DownstreamTaskConfig(
+            dataset="breizhcrops",
+            embedding_batch_size=128,
+            num_workers=8,
+            pooling_type=PoolingType.MEAN,
+            norm_stats_from_pretrained=True,
+            eval_interval=Duration.epochs(50),
+            patch_size=1,
+        ),
         "pastis": DownstreamTaskConfig(
             dataset="pastis",
             embedding_batch_size=32,
