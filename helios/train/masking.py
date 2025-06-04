@@ -874,7 +874,7 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
                             forced_mask_value = MaskValue.DECODER.value
                         else:
                             continue
-                        logger.info(
+                        logger.debug(
                             f"Setting {modality} bandset {bandset_idx} to {forced_mask_value}"
                         )
                         not_missing_mask = (
