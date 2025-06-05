@@ -284,7 +284,10 @@ class ConvertToH5py:
                 image = convert_to_db(image)
 
             if modality.is_spatial:
-                image = image[sublock_index*128:(sublock_index+1)*128, ...]
+                # Calculate row and column indices for 2x2 grid
+                row = (sublock_index // 2) * 128
+                col = (sublock_index % 2) * 128
+                image = image[row:row+128, col:col+128, ...]
             sample_dict[modality.name] = image
 
         # w+b as sometimes metadata needs to be read as well for different chunking/compression settings
