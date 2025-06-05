@@ -135,14 +135,27 @@ class ConvertToH5py:
         self, index_sample_tuple: tuple[int, SampleInformation]
     ) -> None:
         """Process a sample into an h5 file."""
-        i, sample = index_sample_tuple
-        h5_file_path = self._get_h5_file_path(i)
+        i, sublock_index, sample = index_sample_tuple
+        h5_file_path = self._get_h5_file_path(i, sublock_index)
         if h5_file_path.exists():
             return
-        self._create_h5_file(sample, h5_file_path)
+        self._create_h5_file(sample, h5_file_path, sublock_index)
 
     def create_h5_dataset(self, samples: list[SampleInformation]) -> None:
         """Create a dataset of the samples in h5 format in a shared weka directory under the given fingerprint."""
+
+        # Create 4 times as many samples each with 128x128 tiles
+        # I want to make a list of tuples of the form (index, sample)
+        # where index is the sublock of the 256x256 tile
+        # and sample is the sample that corresponds to the sublock
+        # I want to do this in parallel
+
+        # First, create the list of tuples
+        tuples = []
+        for sample in samples:
+            for j in range(4):
+                tuples.append((j, sample))
+        samples = tuples
         total_sample_indices = len(samples)
 
         if self.multiprocessed_h5_creation:
@@ -158,9 +171,9 @@ class ConvertToH5py:
                     )
                 )
         else:
-            for i, sample in enumerate(samples):
+            for i, (sublock_index, sample) in enumerate(samples):
                 logger.info(f"Processing sample {i}")
-                self.process_sample_into_h5((i, sample))
+                self.process_sample_into_h5((i, sublock_index, sample))
 
     def save_sample_metadata(self, samples: list[SampleInformation]) -> None:
         """Save metadata about which samples contain which modalities."""
@@ -246,7 +259,7 @@ class ConvertToH5py:
         return missing_timesteps_masks_data
 
     def _create_h5_file(
-        self, sample: SampleInformation, h5_file_path: UPath
+        self, sample: SampleInformation, h5_file_path: UPath, sublock_index: int
     ) -> dict[str, Any]:
         """Create the h5 file."""
         sample_dict = {}
@@ -269,6 +282,9 @@ class ConvertToH5py:
             # Convert Sentinel1 data to dB
             if modality == Modality.SENTINEL1:
                 image = convert_to_db(image)
+
+            if modality.is_spatial:
+                image = image[sublock_index*128:(sublock_index+1)*128, ...]
             sample_dict[modality.name] = image
 
         # w+b as sometimes metadata needs to be read as well for different chunking/compression settings
