@@ -6,7 +6,7 @@ LP_LRs = [1e-4, 5e-4, 1e-3, 5e-3, 1e-2, 5e-2, 1e-1, 5e-1]
 
 # v0.1_base_latent_mim_contrastive_random
 base_cmd = (
-    "python scripts/v0_sweep/contrastive_latent_mim.py launch v0.1_base_latent_mim_contrastive_random_all_evals_{lr} ai2/titan-cirrascale "
+    "python scripts/v0_sweep/contrastive_latent_mim.py launch v0.1_base_latent_mim_contrastive_random_test_new_evals_pr_{lr} ai2/titan-cirrascale "
     "--model.decoder_config.depth=4 --common.launch.num_gpus=1 "
     "--train_module.masking_config.strategy_config.type=random "
     "--model.reconstructor_config=null --train_module.mae_loss_config=null "
