@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
+from sklearn.metrics import accuracy_score
 from torch.utils.data import DataLoader, TensorDataset
 
 from helios.evals.datasets.configs import EvalDatasetConfig, TaskType
@@ -47,8 +48,6 @@ def train_and_eval_probe(
     epochs: int = 50,
 ) -> float:
     """Run a linear probe on the Helios model."""
-    if config.task_type != TaskType.SEGMENTATION:
-        raise RuntimeError("Unsupported task type for linear probe.")
     if train_embeddings.shape[-1] != test_embeddings.shape[-1]:
         raise ValueError("Embedding dims don't match.")
     in_features = train_embeddings.shape[-1]
@@ -69,6 +68,7 @@ def train_and_eval_probe(
         num_classes=config.num_classes,
         patch_size=output_patch_size,
         device=device,
+        task_type=config.task_type,
     )
     eval_miou = evaluate_probe(
         data_loader=DataLoader(
@@ -80,6 +80,7 @@ def train_and_eval_probe(
         num_classes=config.num_classes,
         patch_size=output_patch_size,
         device=device,
+        task_type=config.task_type,
     )
     return eval_miou
 
@@ -92,10 +93,16 @@ def train_probe(
     num_classes: int,
     patch_size: int,
     device: torch.device,
+    task_type: TaskType,
 ) -> nn.Module:
     """Train a linear probe on a segmentation task."""
-    logits_per_patch = int(num_classes * patch_size * patch_size)
-    probe = nn.Sequential(nn.Linear(in_features, logits_per_patch)).to(device)
+    if task_type == TaskType.SEGMENTATION:
+        logits_per_patch = int(num_classes * patch_size * patch_size)
+        probe = nn.Sequential(nn.Linear(in_features, logits_per_patch)).to(device)
+    else:
+        probe = nn.Sequential(
+            nn.BatchNorm1d(in_features), nn.Linear(in_features, num_classes)
+        ).to(device)
 
     opt = torch.optim.AdamW(probe.parameters(), lr=lr)
 
@@ -109,24 +116,26 @@ def train_probe(
             batch_emb = batch_emb.to(device)
 
             with torch.amp.autocast(device_type=device.type, dtype=torch.bfloat16):
-                logits = probe(batch_emb)  # (bsz, num_patches, logits_per_patch)
-
-                logits = rearrange(
-                    logits,
-                    "b h w (c i j) -> b c (h i) (w j)",
-                    h=spatial_patches_per_dim,
-                    w=spatial_patches_per_dim,
-                    c=num_classes,
-                    i=patch_size,
-                    j=patch_size,
-                )
-                if logits.shape[-2] != batch_labels.shape[-2]:
-                    logits = F.interpolate(
+                logits = probe(
+                    batch_emb
+                )  # (bsz, num_patches, logits_per_patch) or (bsz, n_cls)
+                if task_type == TaskType.SEGMENTATION:
+                    logits = rearrange(
                         logits,
-                        size=(batch_labels.shape[-2], batch_labels.shape[-1]),
-                        mode="bilinear",
-                        align_corners=True,
-                    )  # (bsz, num_classes, H, W)
+                        "b h w (c i j) -> b c (h i) (w j)",
+                        h=spatial_patches_per_dim,
+                        w=spatial_patches_per_dim,
+                        c=num_classes,
+                        i=patch_size,
+                        j=patch_size,
+                    )
+                    if logits.shape[-2] != batch_labels.shape[-2]:
+                        logits = F.interpolate(
+                            logits,
+                            size=(batch_labels.shape[-2], batch_labels.shape[-1]),
+                            mode="bilinear",
+                            align_corners=True,
+                        )  # (bsz, num_classes, H, W)
                 loss = loss_function(logits, batch_labels.to(device))
 
             loss.backward()
@@ -151,8 +160,9 @@ def evaluate_probe(
     num_classes: int,
     patch_size: int,
     device: torch.device,
+    task_type: TaskType,
 ) -> float:
-    """Evaluate a trained linear probe on a segmentation task."""
+    """Evaluate a trained linear probe on a segmentation or classification task."""
     probe = probe.eval()
 
     all_preds = []
@@ -160,27 +170,28 @@ def evaluate_probe(
     with torch.no_grad():
         for batch in data_loader:
             batch_emb, batch_labels = batch  # (bsz, num_patches, dim), (bsz, H, W)
-            spatial_patches_per_dim = batch_emb.shape[1]
             batch_emb = batch_emb.to(device)
 
             with torch.amp.autocast(device_type=device.type, dtype=torch.bfloat16):
                 logits = probe(batch_emb)  # (bsz, num_patches, logits_per_patch)
-                logits = rearrange(
-                    logits,
-                    "b h w (c i j) -> b c (h i) (w j)",
-                    h=spatial_patches_per_dim,
-                    w=spatial_patches_per_dim,
-                    c=num_classes,
-                    i=patch_size,
-                    j=patch_size,
-                )
-                if logits.shape[-2] != batch_labels.shape[-2]:
-                    logits = F.interpolate(
+                if task_type == TaskType.SEGMENTATION:
+                    spatial_patches_per_dim = batch_emb.shape[1]
+                    logits = rearrange(
                         logits,
-                        size=(batch_labels.shape[-2], batch_labels.shape[-1]),
-                        mode="bilinear",
-                        align_corners=True,
-                    )  # (bsz, num_classes, H, W)
+                        "b h w (c i j) -> b c (h i) (w j)",
+                        h=spatial_patches_per_dim,
+                        w=spatial_patches_per_dim,
+                        c=num_classes,
+                        i=patch_size,
+                        j=patch_size,
+                    )
+                    if logits.shape[-2] != batch_labels.shape[-2]:
+                        logits = F.interpolate(
+                            logits,
+                            size=(batch_labels.shape[-2], batch_labels.shape[-1]),
+                            mode="bilinear",
+                            align_corners=True,
+                        )  # (bsz, num_classes, H, W)
 
             preds = torch.argmax(logits, dim=1).cpu()
             all_preds.append(preds)
@@ -188,5 +199,10 @@ def evaluate_probe(
 
     all_preds = torch.cat(all_preds)
     all_labels = torch.cat(all_labels)
-    miou = mean_iou(all_preds, all_labels, num_classes=num_classes, ignore_label=-1)
-    return miou
+    if task_type == TaskType.SEGMENTATION:
+        metric = mean_iou(
+            all_preds, all_labels, num_classes=num_classes, ignore_label=-1
+        )
+    else:
+        metric = accuracy_score(all_labels, all_preds)
+    return metric
