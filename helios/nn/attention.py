@@ -198,10 +198,11 @@ class Attention(nn.Module):
                 max_seqlen=max_seqlen,
                 max_seqlen_q=max_seqlen_q,
                 max_seqlen_k=max_seqlen_k,
-                dropout_p=self.attn_drop.p,
+                dropout_p=self.attn_drop.p if self.training else 0.0,
                 softmax_scale=self.scale,
                 causal=False,
             )
+            torch.cuda.synchronize()
             if torch.isnan(x).any():
                 raise ValueError("x is nan")
             # Output is (B, Nq, H, D), transpose back to (B, H, Nq, D)
