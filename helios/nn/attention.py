@@ -6,7 +6,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
-# from olmo_core.nn.attention.flash_attn_api import dispatch_flash_attn
 from torch.distributed.fsdp import fully_shard
 from torch.jit import Final
 from logging import getLogger
@@ -33,6 +32,10 @@ def dispatch_flash_attn(
     softmax_scale: Optional[float] = None,
     causal: bool = False,
 ) -> torch.Tensor:
+    """Dispatch flash attention.
+
+    Modeled after olmo core but doesnt flatten internally
+    """
     if flash_attn is None:
         raise RuntimeError("flash-attn is required!")
 
@@ -51,17 +54,12 @@ def dispatch_flash_attn(
 
     if varlen:
         assert q.ndim == 3, "q must be pre-packed"
-        # logger.info(f"q shape: {q.shape} k shape: {k.shape} v shape: {v.shape}")
-        # # lgo using varlen
         logger.debug(f"using varlen")
 
         return flash_attn.flash_attn_varlen_func(
             q,
             k,
             v,
-            # _flatten_batch_dim(q),
-            # _flatten_batch_dim(k),
-            # _flatten_batch_dim(v),
             cu_seqlens_q,
             cu_seqlens_k,
             max_seqlen_q,
@@ -107,6 +105,7 @@ class Attention(nn.Module):
         proj_drop: float = 0.0,
         norm_layer: nn.Module = nn.LayerNorm,
         cross_attn: bool = False,
+        use_flash_attn: bool = False,
     ) -> None:
         """Initialize the attention module.
 
@@ -119,7 +118,7 @@ class Attention(nn.Module):
             proj_drop: Output projection dropout rate
             norm_layer: Normalization layer
             cross_attn: Enable cross-attention
-            flash_attn: Use flash attention
+            use_flash_attn: Use flash attention
         """
         super().__init__()
         assert dim % num_heads == 0, "dim should be divisible by num_heads"
@@ -128,6 +127,7 @@ class Attention(nn.Module):
         self.scale = self.head_dim**-0.5
 
         self.cross_attn = cross_attn
+        self.use_flash_attn = use_flash_attn
         self.fast_attn = hasattr(torch.nn.functional, "scaled_dot_product_attention")
         self.q = nn.Linear(dim, dim, bias=qkv_bias)
         self.k = nn.Linear(dim, dim, bias=qkv_bias)
@@ -152,7 +152,6 @@ class Attention(nn.Module):
         max_seqlen_q: int | None = None,
         max_seqlen_k: int | None = None,
         attn_mask: torch.Tensor | None = None,
-        flash_attn = True
     ) -> torch.Tensor:
         """Compute scaled dot product attention.
 
@@ -166,7 +165,7 @@ class Attention(nn.Module):
         Returns:
             Output tensor of shape (B, H, N, D)
         """
-        if flash_attn:
+        if self.use_flash_attn:
             x = dispatch_flash_attn(
                 q,
                 k,
@@ -218,7 +217,6 @@ class Attention(nn.Module):
         max_seqlen_q: int | None = None,
         max_seqlen_k: int | None = None,
         attn_mask: torch.Tensor | None = None,
-        flash_attn: bool = True,
     ) -> torch.Tensor:
         """Forward pass.
 
@@ -242,7 +240,7 @@ class Attention(nn.Module):
             assert self.cross_attn
             k = self.k(y)
             v = self.v(y)
-        if not flash_attn:
+        if not self.use_flash_attn:
             q = rearrange(q, "b n (h d) -> b h n d", h=self.num_heads)
             k = rearrange(k, "b n (h d) -> b h n d", h=self.num_heads)
             v = rearrange(v, "b n (h d) -> b h n d", h=self.num_heads)
@@ -268,7 +266,6 @@ class Attention(nn.Module):
             max_seqlen_q=max_seqlen_q,
             max_seqlen_k=max_seqlen_k,
             attn_mask=attn_mask,
-            flash_attn=flash_attn,
         )
         x = x.transpose(1, 2).reshape(original_shape)
         x = self.proj(x)
@@ -442,6 +439,7 @@ class Block(nn.Module):
         act_layer: nn.Module = nn.GELU,
         norm_layer: nn.Module = nn.LayerNorm,
         cross_attn: bool = False,
+        use_flash_attn: bool = False,
     ) -> None:
         """Initialize the Transformer block.
 
@@ -470,6 +468,7 @@ class Block(nn.Module):
             proj_drop=drop,
             norm_layer=norm_layer,
             cross_attn=cross_attn,
+            use_flash_attn=use_flash_attn,
         )
         self.ls1 = (
             LayerScale(dim, init_values=init_values) if init_values else nn.Identity()
@@ -509,8 +508,6 @@ class Block(nn.Module):
         Returns:
             Output tensor of shape (B, N, C)
         """
-        # I need a good checking the cumulative lengths setting
-        flash_attn = True
         x = x + self.drop_path(
             self.ls1(
                 self.attn(
@@ -523,7 +520,6 @@ class Block(nn.Module):
                     max_seqlen_q=max_seqlen_q,
                     max_seqlen_k=max_seqlen_k,
                     attn_mask=attn_mask,
-                    flash_attn=flash_attn,
                 )
             )
         )

@@ -545,9 +545,7 @@ class HeliosTrainModule(TrainModule):
         if isinstance(total_norm, DTensor):
             # Will reach here if any non-PP parallelism is used.
             # If only using PP, total_norm will be a local tensor.
-            logger.info(f"Total norm is a DTensor {total_norm}")
             total_norm = total_norm.full_tensor()
-            logger.info(f"Total norm is a local tensor {total_norm}")
 
         torch.nn.utils.clip_grads_with_norm_(
             parameters, max_grad_norm, total_norm, foreach=foreach

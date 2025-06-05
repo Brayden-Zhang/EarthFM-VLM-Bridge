@@ -794,9 +794,9 @@ class FlexiHeliosBase(nn.Module):
         mlp_ratio: float,
         depth: int,
         drop_path: float,
-        use_flash_attn: bool = False,
         supported_modalities: list[ModalitySpec],
         random_channel_embs: bool = False,
+        use_flash_attn: bool = False,
     ) -> None:
         """Initialize the FlexiHeliosBase class."""
         super().__init__()
@@ -1203,9 +1203,8 @@ class Encoder(FlexiHeliosBase):
             # still linear projections
             exited_tokens, _, _ = self.remove_masked_tokens(exited_tokens, bool_mask)
         cu_seqlens = get_cumulative_sequence_lengths(seq_lengths)
-        flash_attn = True
         # Pack x tokens
-        if flash_attn:
+        if self.use_flash_attn:
             og_shape = tokens.shape
             tokens = self.pack_tokens(tokens, new_mask)
 
@@ -1234,7 +1233,7 @@ class Encoder(FlexiHeliosBase):
                 attn_mask=new_mask,
             )
 
-        if flash_attn:
+        if self.use_flash_attn:
             tokens = self.unpack_tokens(tokens, new_mask, og_shape)
 
 
@@ -1542,8 +1541,7 @@ class Predictor(FlexiHeliosBase):
         cu_seqlens_x = get_cumulative_sequence_lengths(seqlens_x)
         cu_seqlens_y = get_cumulative_sequence_lengths(seqlens_y)
         # Pack x tokens
-        flash_attn = True
-        if flash_attn:
+        if self.use_flash_attn:
             og_shape_x = x.shape
             x = self.pack_tokens(x, x_mask.bool())
             og_shape_y = y.shape
@@ -1553,14 +1551,14 @@ class Predictor(FlexiHeliosBase):
             # note that we are not taking the inverse of the mask, since split_x_y gives us
             # true values for values we want to take part in attention
             x = blk(x=x, y=y,
-                attn_mask=y_mask.bool() if not flash_attn else None, # only for flash attn though this should not be left in
+                attn_mask=y_mask.bool() if not self.use_flash_attn else None, # only for flash attn though this should not be left in
                 cu_seqlens_q=cu_seqlens_x,
                 cu_seqlens_k=cu_seqlens_y,
                 max_seqlen_q=max_length_of_x,
                 max_seqlen_k=max_length_of_y)
 
 
-        if flash_attn:
+        if self.use_flash_attn:
             x = self.unpack_tokens(x, x_mask.bool(), og_shape_x)
             y = self.unpack_tokens(y, y_mask.bool(), og_shape_y)
 
