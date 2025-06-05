@@ -1,5 +1,7 @@
 """Script to check the token budget for a given sample."""
 
+import argparse
+
 import pandas as pd
 import torch
 
@@ -29,7 +31,7 @@ def create_dummy_sample(modalities: list[str], H: int, W: int, T: int) -> Helios
         shape.append(modality_spec.num_bands)
 
         # Adjust for unbatched sample shape expectations.
-        # subset() expects unbatched data. For example (H, W, T, C) or (H, W, C)
+        # subset() expects unbatched data, e.g., (H, W, T, C) or (H, W, C)
         # For space-only, the time dim is squeezed out if it is 1.
         if modality_spec.is_space_only_varying:
             shape = (H, W, modality_spec.num_bands)
@@ -41,6 +43,24 @@ def create_dummy_sample(modalities: list[str], H: int, W: int, T: int) -> Helios
 
 def main():
     """Main function to run the analysis."""
+    parser = argparse.ArgumentParser(
+        description="Check token budget for a given sample."
+    )
+    parser.add_argument("--h_w_p_min", type=int, default=4, help="Min value for h_w_p.")
+    parser.add_argument(
+        "--h_w_p_max", type=int, default=17, help="Max value for h_w_p."
+    )
+    parser.add_argument(
+        "--token_budget_min", type=int, default=1000, help="Min token budget."
+    )
+    parser.add_argument(
+        "--token_budget_max", type=int, default=20001, help="Max token budget."
+    )
+    parser.add_argument(
+        "--token_budget_step", type=int, default=500, help="Token budget step."
+    )
+    args = parser.parse_args()
+
     # Modalities to include in the dummy sample.
     # A mix of spacetime and space-only varying modalities.
     modalities_to_test = [
@@ -56,8 +76,10 @@ def main():
     H, W, T = 256, 256, 12
     sample = create_dummy_sample(modalities_to_test, H, W, T)
 
-    h_w_p_values = list(range(4, 17))
-    token_budgets = list(range(1000, 20001, 500))
+    h_w_p_values = list(range(args.h_w_p_min, args.h_w_p_max))
+    token_budgets = list(
+        range(args.token_budget_min, args.token_budget_max, args.token_budget_step)
+    )
 
     results = {}
     for h_w_p in h_w_p_values:
