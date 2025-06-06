@@ -489,7 +489,11 @@ def process_sickle(
 class SICKLEDataset(Dataset):
     """SICKLE dataset class."""
 
-    allowed_modalities = [Modality.LANDSAT, Modality.SENTINEL1, Modality.SENTINEL2_L2A]
+    allowed_modalities = [
+        Modality.LANDSAT.name,
+        Modality.SENTINEL1.name,
+        Modality.SENTINEL2_L2A.name,
+    ]
 
     def __init__(
         self,
