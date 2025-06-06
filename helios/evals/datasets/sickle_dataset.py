@@ -637,11 +637,11 @@ class SICKLEDataset(Dataset):
         # Build sample dict based on requested modalities
         sample_dict = {"timestamps": timestamps}
 
-        if Modality.LANDSAT in self.input_modalities:
+        if Modality.LANDSAT.name in self.input_modalities:
             sample_dict[Modality.LANDSAT.name] = torch.tensor(l8_image).float()
-        if Modality.SENTINEL1 in self.input_modalities:
+        if Modality.SENTINEL1.name in self.input_modalities:
             sample_dict[Modality.SENTINEL1.name] = torch.tensor(s1_image).float()
-        if Modality.SENTINEL2_L2A in self.input_modalities:
+        if Modality.SENTINEL2_L2A.name in self.input_modalities:
             sample_dict[Modality.SENTINEL2_L2A.name] = torch.tensor(s2_image).float()
 
         if not sample_dict:
