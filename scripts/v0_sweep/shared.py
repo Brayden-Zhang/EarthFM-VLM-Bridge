@@ -514,6 +514,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             norm_stats_from_pretrained=True,
             eval_interval=Duration.epochs(50),
             patch_size=1,
+            eval_mode="linear_probe",
         ),
     }
     # Let us not use garbage collector fallback
