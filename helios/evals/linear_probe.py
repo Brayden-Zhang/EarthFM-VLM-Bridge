@@ -1,5 +1,8 @@
 """Train and evaluate a linear probe."""
 
+import math
+from logging import getLogger
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -10,6 +13,8 @@ from torch.utils.data import DataLoader, TensorDataset
 from helios.evals.datasets.configs import EvalDatasetConfig, TaskType
 from helios.evals.metrics import mean_iou
 from helios.evals.utils import adjust_learning_rate
+
+logger = getLogger(__name__)
 
 PROBING_LRs = {
     "LP": [
@@ -44,66 +49,93 @@ def train_and_eval_probe(
     patch_size: int,
     batch_size: int,
     epochs: int = 50,
+    eval_interval: int = 1,
 ) -> float:
     """Run a linear probe on the Helios model."""
     if train_embeddings.shape[-1] != test_embeddings.shape[-1]:
         raise ValueError("Embedding dims don't match.")
     in_features = train_embeddings.shape[-1]
 
-    probe = train_probe(
-        data_loader=DataLoader(
-            TensorDataset(train_embeddings, train_labels),
-            batch_size=batch_size,
-            shuffle=True,
-        ),
-        lr=lr,
-        epochs=epochs,
-        in_features=in_features,
-        num_classes=config.num_classes,
-        patch_size=patch_size,
-        device=device,
-        task_type=config.task_type,
-    )
-    eval_miou = evaluate_probe(
-        data_loader=DataLoader(
-            TensorDataset(test_embeddings, test_labels),
-            batch_size=batch_size,
-            shuffle=False,
-        ),
-        probe=probe,
-        num_classes=config.num_classes,
-        patch_size=patch_size,
-        device=device,
-        task_type=config.task_type,
-    )
-    return eval_miou
+    if config.task_type == TaskType.SEGMENTATION:
+        logits_per_patch = int(config.num_classes * patch_size * patch_size)
+        probe = nn.Sequential(nn.Linear(in_features, logits_per_patch)).to(device)
+    else:
+        probe = nn.Sequential(
+            nn.BatchNorm1d(in_features), nn.Linear(in_features, config.num_classes)
+        ).to(device)
+
+    num_times_to_run_eval = math.ceil(epochs / eval_interval)
+    data_loader = None
+    eval_mious = []
+    for i in range(num_times_to_run_eval):
+        start_epoch = i * eval_interval
+        end_epoch = min(start_epoch + eval_interval, epochs)
+
+        probe, data_loader = train_probe(
+            task_type=config.task_type,
+            probe=probe,
+            data_loader=(
+                DataLoader(
+                    TensorDataset(train_embeddings, train_labels),
+                    batch_size=batch_size,
+                    shuffle=True,
+                )
+                if data_loader is None
+                else data_loader
+            ),
+            lr=lr,
+            epochs=end_epoch,
+            total_epochs=epochs,
+            current_epoch=start_epoch,
+            num_classes=config.num_classes,
+            patch_size=patch_size,
+            device=device,
+        )
+        eval_miou = evaluate_probe(
+            data_loader=DataLoader(
+                TensorDataset(test_embeddings, test_labels),
+                batch_size=batch_size,
+                shuffle=False,
+            ),
+            probe=probe,
+            num_classes=config.num_classes,
+            patch_size=patch_size,
+            device=device,
+            task_type=config.task_type,
+        )
+        eval_mious.append(eval_miou)
+    for i in range(len(eval_mious)):
+        logger.debug(f"Epoch {(i + 1) * eval_interval}, MIoU: {eval_mious[i]}")
+    max_miou = max(eval_mious)
+    max_epoch = (eval_mious.index(max_miou) + 1) * eval_interval
+    logger.debug(f"Max MIoU: {max_miou} at epoch {max_epoch}")
+    final_miou = eval_mious[-1]
+    if final_miou < max_miou:
+        logger.warning(
+            f"Final MIoU: {final_miou} at epoch {epochs} is less than max MIoU: {max_miou} at epoch {max_epoch}"
+        )
+    return final_miou
 
 
 def train_probe(
     data_loader: DataLoader,
+    probe: nn.Module,
     lr: float,
+    current_epoch: int,
     epochs: int,
-    in_features: int,
+    total_epochs: int,
     num_classes: int,
     patch_size: int,
     device: torch.device,
     task_type: TaskType,
 ) -> nn.Module:
     """Train a linear probe on a segmentation task."""
-    if task_type == TaskType.SEGMENTATION:
-        logits_per_patch = int(num_classes * patch_size * patch_size)
-        probe = nn.Sequential(nn.Linear(in_features, logits_per_patch)).to(device)
-    else:
-        probe = nn.Sequential(
-            nn.BatchNorm1d(in_features), nn.Linear(in_features, num_classes)
-        ).to(device)
-
     opt = torch.optim.AdamW(probe.parameters(), lr=lr)
 
     probe = probe.train()
     loss_function = nn.CrossEntropyLoss(ignore_index=-1)  # for MADOS, but ok for others
-
-    for epoch in range(epochs):
+    start_epoch = current_epoch
+    for epoch in range(start_epoch, epochs):
         for i, batch in enumerate(data_loader):
             batch_emb, batch_labels = batch  # (bsz, t_h, t_w, dim), (bsz, H, W)
             spatial_patches_per_dim = batch_emb.shape[1]
@@ -131,13 +163,14 @@ def train_probe(
                             align_corners=True,
                         )  # (bsz, num_classes, H, W)
                 loss = loss_function(logits, batch_labels.to(device))
+                print(f"Epoch {epoch}, Step {i}, Loss: {loss.item()}")
 
             loss.backward()
             adjust_learning_rate(
                 optimizer=opt,
                 epoch=epoch + (i / len(data_loader)),
-                total_epochs=epochs,
-                warmup_epochs=int(epochs * 0.1),
+                total_epochs=total_epochs,
+                warmup_epochs=int(total_epochs * 0.1),
                 max_lr=lr,
                 min_lr=1.0e-5,
             )
@@ -145,7 +178,7 @@ def train_probe(
             opt.step()
             opt.zero_grad()
 
-    return probe
+    return probe, data_loader
 
 
 def evaluate_probe(
