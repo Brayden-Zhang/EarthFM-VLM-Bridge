@@ -16,8 +16,7 @@ from olmo_core.config import Config
 from tqdm import tqdm
 from upath import UPath
 
-from helios.data.constants import Modality, ModalitySpec, TimeSpan
-from helios.data.constants import IMAGE_TILE_SIZE
+from helios.data.constants import IMAGE_TILE_SIZE, Modality, ModalitySpec, TimeSpan
 from helios.data.utils import convert_to_db
 from helios.dataset.parse import parse_helios_dataset
 from helios.dataset.sample import (
@@ -100,6 +99,7 @@ class ConvertToH5py:
                          True: auto-chunk (chunks will match dataset shape).
                          tuple: specify a chunk shape. If tuple rank differs from data rank,
                                 it's adjusted (padded with full dimension sizes or truncated).
+            tile_size: The size of the tile to split the image into.
         """
         self.tile_path = tile_path
         self.supported_modalities = supported_modalities
@@ -111,8 +111,13 @@ class ConvertToH5py:
         self.chunk_options = chunk_options
         self.h5py_dir: UPath | None = None
         if IMAGE_TILE_SIZE % tile_size != 0:
-            raise ValueError(f"Tile size {tile_size} must be a factor of {IMAGE_TILE_SIZE}")
+            raise ValueError(
+                f"Tile size {tile_size} must be a factor of {IMAGE_TILE_SIZE}"
+            )
         self.tile_size = tile_size
+        # Tile_size_split_factor is the factor by which the tile size is split into subtiles
+        self.num_subtiles = (IMAGE_TILE_SIZE // tile_size) ** 2
+
     @property
     def compression_settings_suffix(self) -> str:
         """String representation of the compression settings.
@@ -138,7 +143,7 @@ class ConvertToH5py:
         return samples
 
     def process_sample_into_h5(
-        self, index_sample_tuple: tuple[int, SampleInformation]
+        self, index_sample_tuple: tuple[int, tuple[int, SampleInformation]]
     ) -> None:
         """Process a sample into an h5 file."""
         i, (sublock_index, sample) = index_sample_tuple
@@ -147,9 +152,8 @@ class ConvertToH5py:
             return
         self._create_h5_file(sample, h5_file_path, sublock_index)
 
-    def create_h5_dataset(self, samples: list[SampleInformation]) -> None:
+    def create_h5_dataset(self, samples: list[tuple[int, SampleInformation]]) -> None:
         """Create a dataset of the samples in h5 format in a shared weka directory under the given fingerprint."""
-
         total_sample_indices = len(samples)
 
         if self.multiprocessed_h5_creation:
@@ -169,7 +173,9 @@ class ConvertToH5py:
                 logger.info(f"Processing sample {i}")
                 self.process_sample_into_h5((i, (sublock_index, sample)))
 
-    def save_sample_metadata(self, samples: list[SampleInformation]) -> None:
+    def save_sample_metadata(
+        self, samples: list[tuple[int, SampleInformation]]
+    ) -> None:
         """Save metadata about which samples contain which modalities."""
         if self.h5py_dir is None:
             raise ValueError("h5py_dir is not set")
@@ -212,10 +218,12 @@ class ConvertToH5py:
             raise ValueError("h5py_dir is not set")
         return self.h5py_dir / self.latlon_distribution_fname
 
-    def save_latlon_distribution(self, samples: list[SampleInformation]) -> None:
+    def save_latlon_distribution(
+        self, samples: list[tuple[int, SampleInformation]]
+    ) -> None:
         """Save the latlon distribution to a file."""
         logger.info(f"Saving latlon distribution to {self.latlon_distribution_path}")
-        latlons = np.array([sample.get_latlon() for _,sample in samples])
+        latlons = np.array([sample.get_latlon() for _, sample in samples])
         with self.latlon_distribution_path.open("wb") as f:
             np.save(f, latlons)
 
@@ -279,11 +287,13 @@ class ConvertToH5py:
 
             if modality.is_spatial:
                 # Calculate row and column indices for 2x2 grid
-                row = (sublock_index // 2) * self.tile_size
-                col = (sublock_index % 2) * self.tile_size
+                row = (sublock_index // self.num_subtiles) * self.tile_size
+                col = (sublock_index % self.num_subtiles) * self.tile_size
                 logger.info(f"Sublock index: {sublock_index}, row: {row}, col: {col}")
                 logger.info(f"Image shape: {image.shape}")
-                image = image[row:row+self.tile_size, col:col+self.tile_size, ...]
+                image = image[
+                    row : row + self.tile_size, col : col + self.tile_size, ...
+                ]
                 logger.info(f"Image shape after slicing: {image.shape}")
             sample_dict[modality.name] = image
 
@@ -322,10 +332,11 @@ class ConvertToH5py:
 
                         # Apply chunking based on self.chunk_options
                         if self.chunk_options is True:  # auto-chunk
-                            create_kwargs["chunks"] = True # need to configure
-                        elif isinstance(
-                            self.chunk_options, tuple
-                        ) and self.chunk_options is not None:  # Specific chunk shape
+                            create_kwargs["chunks"] = True  # need to configure
+                        elif (
+                            isinstance(self.chunk_options, tuple)
+                            and self.chunk_options is not None
+                        ):  # Specific chunk shape
                             num_data_dims = len(data_item.shape)
                             final_chunks_list = []
                             for i in range(num_data_dims):
@@ -337,13 +348,17 @@ class ConvertToH5py:
                             logger.info(f"Final chunks list: {final_chunks_list}")
                             create_kwargs["chunks"] = tuple(final_chunks_list)
                         else:
-                            logger.info(f"Chunk options: using chunk size {data_item.shape}")
+                            logger.info(
+                                f"Chunk options: using chunk size {data_item.shape}"
+                            )
                             create_kwargs["chunks"] = (
                                 data_item.shape
                             )  # use the dataset item shape as the chunk so it effectively does no chunking
 
                     # Create the dataset per item
-                    logger.info(f"Creating dataset for {item_name} with kwargs: {create_kwargs}")
+                    logger.info(
+                        f"Creating dataset for {item_name} with kwargs: {create_kwargs}"
+                    )
                     h5file.create_dataset(item_name, data=data_item, **create_kwargs)
 
                 # Store missing timesteps masks in a dedicated group
@@ -498,7 +513,7 @@ class ConvertToH5py:
         with settings_path.open("w") as f:
             json.dump(settings, f, indent=2)
 
-    def prepare_h5_dataset(self, samples: list[SampleInformation]) -> None:
+    def prepare_h5_dataset(self, samples: list[tuple[int, SampleInformation]]) -> None:
         """Prepare the h5 dataset."""
         self.set_h5py_dir(len(samples))
         self.save_compression_settings()  # Save settings before creating data
@@ -510,18 +525,8 @@ class ConvertToH5py:
     def run(self) -> None:
         """Run the conversion."""
         samples = self.get_and_filter_samples()
-
-        # Create 4 times as many samples each with 128x128 tiles
-        # I want to make a list of tuples of the form (index, sample)
-        # where index is the sublock of the 256x256 tile
-        # and sample is the sample that corresponds to the sublock
-        # I want to do this in parallel
-
-        # First, create the list of tuples
-        num_subtiles = IMAGE_TILE_SIZE // self.tile_size
         tuples = []
         for sample in samples:
-            for j in range(num_subtiles):
+            for j in range(self.num_subtiles):
                 tuples.append((j, sample))
-        samples = tuples
-        self.prepare_h5_dataset(samples)
+        self.prepare_h5_dataset(tuples)
