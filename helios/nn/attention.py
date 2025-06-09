@@ -231,7 +231,7 @@ class Attention(nn.Module):
         """Forward pass.
 
         Args:
-            x: Input tensor of shape (B, N, C)
+            x: Input tensor of shape (B, N, C) or (B* N , C) if packed
             y: Second input for cross-attention. Defaults to None.
             attn_mask: Attention mask. Defaults to None.
             cu_seqlens: Optional cumulative sequence lengths for the input tensor needed for varlen flash attention
@@ -242,7 +242,7 @@ class Attention(nn.Module):
             max_seqlen_k: Optional maximum sequence length for the key tensor, needed for cross varlen flash attention
 
         Returns:
-            Output tensor of shape (B, N, C)
+            Output tensor of shape (B, N, C) or (B* N , C) if packed
         """
         original_shape = x.shape
 
@@ -268,8 +268,6 @@ class Attention(nn.Module):
         # logger.info(f"q shape: {q.shape} k shape: {k.shape} v shape: {v.shape}")
 
         q, k = self.q_norm(q), self.k_norm(k)
-
-        # pack q, k, v using the attention_mask (which now should be treated as a key padding mask)
         x = self.sdpa(
             q,
             k,

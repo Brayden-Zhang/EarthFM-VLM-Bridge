@@ -1574,12 +1574,6 @@ class Predictor(FlexiHeliosBase):
             max_length_of_tokens_to_decode,
             max_length_of_unmasked_tokens,
         ) = self.split_x_y(all_tokens, mask)
-        cu_seqlens_tokens_to_decode = get_cumulative_sequence_lengths(
-            seqlens_tokens_to_decode
-        )
-        cu_seqlens_unmasked_tokens = get_cumulative_sequence_lengths(
-            seqlens_unmasked_tokens
-        )
         # Pack x tokens
         if self.use_flash_attn:
             og_shape_tokens_to_decode = tokens_to_decode.shape
@@ -1590,6 +1584,15 @@ class Predictor(FlexiHeliosBase):
             unmasked_tokens = self.pack_tokens(
                 unmasked_tokens, unmasked_tokens_mask.bool()
             )
+            cu_seqlens_tokens_to_decode = get_cumulative_sequence_lengths(
+                seqlens_tokens_to_decode
+            )
+            cu_seqlens_unmasked_tokens = get_cumulative_sequence_lengths(
+                seqlens_unmasked_tokens
+            )
+        else:
+            cu_seqlens_tokens_to_decode = None
+            cu_seqlens_unmasked_tokens = None
 
         for blk in self.blocks:
             # note that we are not taking the inverse of the mask, since split_x_y gives us
@@ -1598,7 +1601,7 @@ class Predictor(FlexiHeliosBase):
                 x=tokens_to_decode,
                 y=unmasked_tokens,
                 attn_mask=(
-                    tokens_to_decode_mask.bool() if not self.use_flash_attn else None
+                    unmasked_tokens_mask.bool() if not self.use_flash_attn else None
                 ),  # only for flash attn though this should not be left in
                 cu_seqlens_q=cu_seqlens_tokens_to_decode,
                 cu_seqlens_k=cu_seqlens_unmasked_tokens,
