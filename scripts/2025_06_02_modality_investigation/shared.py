@@ -59,7 +59,7 @@ MIN_PATCH_SIZE = 1
 MAX_SEQUENCE_LENGTH = 12
 
 TRAINING_MODALITIES = [
-    Modality.SENTINEL2_L2A.name,
+    # Modality.SENTINEL2_L2A.name,
     Modality.SENTINEL1.name,
     Modality.WORLDCOVER.name,
     Modality.SRTM.name,
@@ -219,11 +219,7 @@ def build_train_module_config(model: str = "galileo") -> HeliosTrainModuleConfig
             f"All modalities must be in token_exit_cfg_a: {TRAINING_MODALITIES}"
         )
     token_exit_cfg_zero = {modality: 0 for modality in TRAINING_MODALITIES}
-    dp_config = DataParallelConfig(
-        name=DataParallelType.fsdp,
-        param_dtype=DType.bfloat16,
-        reduce_dtype=DType.float32,
-    )
+    dp_config = DataParallelConfig(name=DataParallelType.fsdp)
 
     # TODO: would need a scheduler config and registry to be able to change this with overrides
     scheduler = CosWithWarmup()
@@ -241,8 +237,9 @@ def build_train_module_config(model: str = "galileo") -> HeliosTrainModuleConfig
             rank_microbatch_size=RANK_MICROBATCH_SIZE,
             token_exit_cfg_a=token_exit_cfg_galileo,
             token_exit_cfg_b=token_exit_cfg_zero,
-            autocast_precision=None,  # DType.bfloat16,
+            autocast_precision=DType.bfloat16,
             max_grad_norm=1.0,
+            ema_decay=[1.0, 1.0],
             dp_config=dp_config,
             scheduler=scheduler,
         )
@@ -255,8 +252,7 @@ def build_train_module_config(model: str = "galileo") -> HeliosTrainModuleConfig
             mae_loss_config=mae_loss_config,
             rank_microbatch_size=RANK_MICROBATCH_SIZE,
             token_exit_cfg=token_exit_cfg_zero,
-            autocast_precision=None,  # DType.bfloat16,
-            # compile_model=True,
+            autocast_precision=DType.bfloat16,
             max_grad_norm=1.0,
             dp_config=dp_config,
             scheduler=scheduler,
@@ -270,7 +266,7 @@ def build_train_module_config(model: str = "galileo") -> HeliosTrainModuleConfig
             mae_loss_config=mae_loss_config,
             rank_microbatch_size=RANK_MICROBATCH_SIZE,
             token_exit_cfg=token_exit_cfg_zero,
-            autocast_precision=None,  # DType.bfloat16,
+            autocast_precision=DType.bfloat16,
             contrastive_config=contrastive_config,
             max_grad_norm=1.0,
             dp_config=dp_config,
@@ -296,7 +292,7 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
     GLOBAL_BATCH_SIZE = 512
     PREFETCH_FACTOR = 4
     TOKEN_BUDGET = 1500
-    SAMPLE_HW_P_LIST = list(range(5, 24))
+    SAMPLE_HW_P_LIST = list(range(5, 13))
     # GBS * PREFETCH_FACTOR * NUM_WORKERS is the total number of instances that can be put into prefetch queue
 
     dataloader_config = HeliosDataLoaderConfig(
@@ -352,7 +348,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
     CANCEL_CHECK_INTERVAL = 1
     LOAD_STRATEGY = LoadStrategy.if_available
     WANDB_USERNAME = "eai-ai2"  # nosec
-    WANDB_PROJECT = "v0-sweep-evals"
+    WANDB_PROJECT = "2025_06_02_modality_investigation"
     PERMANENT_SAVE_INTERVAL = 5000
     EPHERMERAL_SAVE_INTERVAL = 250
 
@@ -367,47 +363,50 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
     garbage_collector_callback = GarbageCollectorCallback(gc_interval=1)
     logger.warning("WANDB Distribution Uploads are disabled for Debugging")
     EVAL_TASKS = {
-        "m-eurosat": DownstreamTaskConfig(
-            dataset="m-eurosat",
-            embedding_batch_size=128,
+        "sickle_sentinel1": DownstreamTaskConfig(
+            dataset="sickle",
+            embedding_batch_size=32,
+            probe_batch_size=16,
             num_workers=8,
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
+            probe_lr=0.01,
             eval_interval=Duration.epochs(5),
+            input_modalities=["sentinel1"],
         ),
-        "m-bigearthnet": DownstreamTaskConfig(
-            dataset="m-bigearthnet",
-            embedding_batch_size=64,
+        "pastis_sentinel1": DownstreamTaskConfig(
+            dataset="pastis",
+            embedding_batch_size=32,
+            probe_batch_size=16,
             num_workers=8,
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
+            probe_lr=0.01,
             eval_interval=Duration.epochs(5),
+            input_modalities=["sentinel1"],
+            epochs=50,
         ),
-        "m-so2sat": DownstreamTaskConfig(
-            dataset="m-so2sat",
-            embedding_batch_size=128,
+        "sickle_landsat": DownstreamTaskConfig(
+            dataset="sickle",
+            embedding_batch_size=32,
+            probe_batch_size=32,
             num_workers=8,
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
+            probe_lr=0.01,
             eval_interval=Duration.epochs(5),
+            input_modalities=[Modality.LANDSAT.name],
         ),
-        "m-brick-kiln": DownstreamTaskConfig(
-            dataset="m-brick-kiln",
-            embedding_batch_size=128,
+        "sickle_landsat_sentinel1": DownstreamTaskConfig(
+            dataset="sickle",
+            embedding_batch_size=32,
+            probe_batch_size=8,
             num_workers=8,
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
+            probe_lr=0.002,
             eval_interval=Duration.epochs(5),
-        ),
-        "mados": DownstreamTaskConfig(
-            dataset="mados",
-            embedding_batch_size=128,
-            probe_batch_size=128,
-            num_workers=8,
-            pooling_type=PoolingType.MEAN,
-            norm_stats_from_pretrained=False,
-            probe_lr=0.1,
-            eval_interval=Duration.epochs(10),
+            input_modalities=[Modality.LANDSAT.name, "sentinel1"],
         ),
         "sen1floods11": DownstreamTaskConfig(
             dataset="sen1floods11",
@@ -417,112 +416,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
             probe_lr=0.1,
-            eval_interval=Duration.epochs(10),
-        ),
-        "sickle_sentinel1": DownstreamTaskConfig(
-            dataset="sickle",
-            embedding_batch_size=32,
-            probe_batch_size=16,
-            num_workers=2,
-            pooling_type=PoolingType.MEAN,
-            norm_stats_from_pretrained=True,
-            probe_lr=0.01,
-            eval_interval=Duration.epochs(10),
-            input_modalities=[Modality.SENTINEL1.name],
-            epochs=50,
-        ),
-        "sickle_landsat": DownstreamTaskConfig(
-            dataset="sickle",
-            embedding_batch_size=32,
-            probe_batch_size=16,
-            num_workers=2,
-            pooling_type=PoolingType.MEAN,
-            norm_stats_from_pretrained=True,
-            probe_lr=0.01,
-            eval_interval=Duration.epochs(10),
-            input_modalities=[Modality.LANDSAT.name],
-            epochs=50,
-        ),
-        "sickle_sentinel1_landsat": DownstreamTaskConfig(
-            dataset="sickle",
-            embedding_batch_size=32,
-            probe_batch_size=16,
-            num_workers=2,
-            pooling_type=PoolingType.MEAN,
-            norm_stats_from_pretrained=True,
-            probe_lr=0.002,
-            eval_interval=Duration.epochs(10),
-            input_modalities=[Modality.SENTINEL1.name, Modality.LANDSAT.name],
-            epochs=50,
-        ),
-        "m_sa_crop_type": DownstreamTaskConfig(
-            dataset="m-sa-crop-type",
-            embedding_batch_size=32,
-            probe_batch_size=8,
-            num_workers=2,
-            pooling_type=PoolingType.MEAN,
-            norm_stats_from_pretrained=True,
-            probe_lr=0.1,
-            eval_interval=Duration.epochs(10),
-        ),
-        "m_cashew_plant": DownstreamTaskConfig(
-            dataset="m-cashew-plant",
-            embedding_batch_size=32,
-            probe_batch_size=8,
-            num_workers=2,
-            pooling_type=PoolingType.MEAN,
-            norm_stats_from_pretrained=True,
-            probe_lr=0.1,
-            eval_interval=Duration.epochs(10),
-        ),
-        "pastis_sentinel2": DownstreamTaskConfig(
-            dataset="pastis",
-            embedding_batch_size=32,
-            probe_batch_size=8,
-            num_workers=2,
-            pooling_type=PoolingType.MEAN,
-            norm_stats_from_pretrained=True,
-            probe_lr=0.1,
-            eval_interval=Duration.epochs(50),
-            input_modalities=[Modality.SENTINEL2_L2A.name],
-            epochs=50,
-        ),
-        "pastis_sentinel1": DownstreamTaskConfig(
-            dataset="pastis",
-            embedding_batch_size=32,
-            probe_batch_size=8,
-            num_workers=2,
-            pooling_type=PoolingType.MEAN,
-            norm_stats_from_pretrained=True,
-            probe_lr=0.1,
-            eval_interval=Duration.epochs(50),
-            input_modalities=[Modality.SENTINEL1.name],
-            epochs=50,
-        ),
-        "pastis_sentinel1_sentinel2": DownstreamTaskConfig(
-            dataset="pastis",
-            embedding_batch_size=32,
-            probe_batch_size=8,
-            num_workers=2,
-            pooling_type=PoolingType.MEAN,
-            norm_stats_from_pretrained=True,
-            probe_lr=0.1,
-            eval_interval=Duration.epochs(20),
-            input_modalities=[Modality.SENTINEL1.name, Modality.SENTINEL2_L2A.name],
-            epochs=50,
-        ),
-        "breizhcrops": DownstreamTaskConfig(
-            dataset="breizhcrops",
-            embedding_batch_size=128,
-            probe_batch_size=128,
-            num_workers=8,
-            pooling_type=PoolingType.MEAN,
-            norm_stats_from_pretrained=True,
-            eval_interval=Duration.epochs(50),
-            patch_size=1,
-            eval_mode="linear_probe",
-            probe_lr=0.1,
-            epochs=50,
+            eval_interval=Duration.epochs(5),
         ),
     }
     # Let us not use garbage collector fallback
@@ -544,8 +438,6 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             "downstream_evaluator",
             DownstreamEvaluatorCallbackConfig(
                 tasks=EVAL_TASKS,
-                eval_on_startup=True,
-                cancel_after_first_eval=True,
             ),
         )
         .with_callback("garbage_collector", garbage_collector_callback)
