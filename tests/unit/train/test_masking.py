@@ -826,17 +826,15 @@ def test_space_cross_modality_masking(set_random_seeds: None) -> None:
     )
 
     strategy = ModalityCrossSpaceMaskingStrategy(
-        max_unmasking_bandsets=20,
-        min_encoding_bandsets=2,
-        max_encoding_bandsets=3,
         encode_ratio=0.1,
         decode_ratio=0.75,
+        allow_encoding_decoding_same_bandset=False,
     )
     masked_sample = strategy.apply_mask(batch, patch_size=patch_size)
     logger.info(f"masked_sample: {masked_sample}")
     # Check that the worldcover mask has the expected values
     # Check that latlon mask has the expected values
-    expected_latlon_mask = torch.tensor([[0], [0], [0], [0]])
+    expected_latlon_mask = torch.tensor([[0], [2], [2], [0]])
     expected_worldcover_mask = torch.tensor(
         [
             [
@@ -893,17 +891,15 @@ def test_space_cross_modality_masking_with_missing_data(set_random_seeds: None) 
     )
 
     strategy = ModalityCrossSpaceMaskingStrategy(
-        max_unmasking_bandsets=20,
-        min_encoding_bandsets=2,
-        max_encoding_bandsets=3,
         encode_ratio=0.1,
         decode_ratio=0.75,
+        allow_encoding_decoding_same_bandset=False,
     )
     masked_sample = strategy.apply_mask(batch, patch_size=patch_size)
     logger.info(f"masked_sample: {masked_sample}")
     # Check that the worldcover mask has the expected values
     # Check that latlon mask has the expected values
-    expected_latlon_mask = torch.tensor([[0], [0], [0], [0]])
+    expected_latlon_mask = torch.tensor([[0], [2], [2], [0]])
 
     # Assert that the masks match the expected values
     assert (masked_sample.worldcover_mask == MaskValue.MISSING.value).all()  # type: ignore
