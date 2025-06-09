@@ -761,7 +761,6 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
         self.strategy = strategy
         self.min_encoding_bandsets = min_encoding_bandsets
         self.max_encoding_bandsets = max_encoding_bandsets
-        self.generator = np.random.default_rng(0)
 
     def get_sample_present_modalities(
         self, batch: MaskedHeliosSample
@@ -809,10 +808,10 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
                 encoded_bandset_idxs = all_modalities_bandsets
                 decoded_bandset_idxs = []
             else:
-                num_encoded_bandsets = self.generator.integers(
+                num_encoded_bandsets = np.random.randint(
                     2, len(all_modalities_bandsets)
                 )
-                encoded_idxs = self.generator.choice(
+                encoded_idxs = np.random.choice(
                     len(all_modalities_bandsets),
                     size=num_encoded_bandsets,
                     replace=False,
