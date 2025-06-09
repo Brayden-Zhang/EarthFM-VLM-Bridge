@@ -545,7 +545,9 @@ class HeliosTrainModule(TrainModule):
         if isinstance(total_norm, DTensor):
             # Will reach here if any non-PP parallelism is used.
             # If only using PP, total_norm will be a local tensor.
+            logger.info(f"Total norm is a DTensor {total_norm}")
             total_norm = total_norm.full_tensor()
+            logger.info(f"Total norm is a local tensor {total_norm}")
 
         torch.nn.utils.clip_grads_with_norm_(
             parameters, max_grad_norm, total_norm, foreach=foreach
@@ -572,7 +574,6 @@ class HeliosTrainModule(TrainModule):
             ):
                 if isinstance(p.data, DTensor):
                     # get the local shard, update it in place
-                    # what if the target encoder and the encoder split parameters differently?
                     p_local = p.data.to_local()
                     tp_local = tp.data.to_local()
                     tp_local.mul_(cur_ema_value).add_(
