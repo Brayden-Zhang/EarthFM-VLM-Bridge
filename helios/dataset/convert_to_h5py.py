@@ -518,20 +518,20 @@ class ConvertToH5py:
         with settings_path.open("w") as f:
             json.dump(settings, f, indent=2)
 
-    def prepare_h5_dataset(self, samples: list[tuple[int, SampleInformation]]) -> None:
+    def prepare_h5_dataset(self, samples: list[SampleInformation]) -> None:
         """Prepare the h5 dataset."""
-        self.set_h5py_dir(len(samples))
-        self.save_compression_settings()  # Save settings before creating data
-        self.save_sample_metadata(samples)
-        self.save_latlon_distribution(samples)
-        logger.info("Attempting to create H5 files may take some time...")
-        self.create_h5_dataset(samples)
-
-    def run(self) -> None:
-        """Run the conversion."""
-        samples = self.get_and_filter_samples()
         tuples = []
         for sample in samples:
             for j in range(self.num_subtiles):
                 tuples.append((j, sample))
-        self.prepare_h5_dataset(tuples)
+        self.set_h5py_dir(len(tuples))
+        self.save_compression_settings()  # Save settings before creating data
+        self.save_sample_metadata(tuples)
+        self.save_latlon_distribution(tuples)
+        logger.info("Attempting to create H5 files may take some time...")
+        self.create_h5_dataset(tuples)
+
+    def run(self) -> None:
+        """Run the conversion."""
+        samples = self.get_and_filter_samples()
+        self.prepare_h5_dataset(samples)
