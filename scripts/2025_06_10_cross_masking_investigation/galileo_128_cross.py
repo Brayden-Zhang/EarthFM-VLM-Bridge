@@ -25,8 +25,6 @@ from helios.data.concat import HeliosConcatDatasetConfig
 from helios.data.constants import Modality
 from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig
-from helios.helios.nn.galileo import GalileoConfig
-from helios.helios.train.train_module.galileo import GalileoTrainModuleConfig
 from helios.internal.common import build_common_components
 from helios.internal.experiment import CommonComponents, HeliosVisualizeConfig, main
 from helios.internal.utils import MODEL_SIZE_ARGS
@@ -35,6 +33,7 @@ from helios.nn.flexihelios import (
     PoolingType,
     PredictorConfig,
 )
+from helios.nn.galileo import GalileoConfig
 from helios.train.callbacks import (
     DownstreamEvaluatorCallbackConfig,
     HeliosSpeedMonitorCallback,
@@ -43,6 +42,7 @@ from helios.train.callbacks import (
 from helios.train.callbacks.evaluator_callback import DownstreamTaskConfig
 from helios.train.loss import LossConfig
 from helios.train.masking import MaskingConfig
+from helios.train.train_module.galileo import GalileoTrainModuleConfig
 
 logger = logging.getLogger(__name__)
 
