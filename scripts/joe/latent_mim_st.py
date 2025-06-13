@@ -87,7 +87,7 @@ def build_train_module_config(
     return ContrastiveLatentMIMTrainModuleConfig(
         optim_config=AdamWConfig(lr=0.0001, weight_decay=0.02),
         warmup_duration=Duration.steps(4000),
-        rank_microbatch_size=32,  # Can be 256 on titan, needs to be <= 64 (i think) on jupiter
+        rank_microbatch_size=16,  # Can be 256 on titan, needs to be <= 64 (i think) on jupiter
         contrastive_config=LossConfig(
             loss_config={
                 "type": "InfoNCE",
