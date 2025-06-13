@@ -96,7 +96,7 @@ def build_train_module_config(
         ),
         masking_config=MaskingConfig(
             strategy_config={
-                "type": "space_time",
+                "type": "random",
                 "encode_ratio": 0.1,
                 "decode_ratio": 0.75,
             }
