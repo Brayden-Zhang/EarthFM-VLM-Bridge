@@ -8,4 +8,5 @@
 #python scripts/joe/latent_mim_large.py launch latent_mim_large.001_ ai2/jupiter-cirrascale-2 --launch.priority=urgent --common.launch.num_gpus=8 --train_module.optim_config.lr=0.001
 #python scripts/joe/latent_mim_large.py launch latent_mim_large.0004_ ai2/jupiter-cirrascale-2 --launch.priority=urgent --common.launch.num_gpus=8 --train_module.optim_config.lr=0.0004
 #python scripts/joe/latent_mim.py launch latent_mim_lr_poly ai2/jupiter-cirrascale-2 --launch.priority=urgent --common.launch.num_gpus=2
-python scripts/joe/latent_mim.py launch latent_mim_lr0.001_poly ai2/jupiter-cirrascale-2 --launch.priority=urgent --common.launch.num_gpus=2 --train_module.optim_config.lr=0.001
+#python scripts/joe/latent_mim.py launch latent_mim_lr0.001_poly ai2/jupiter-cirrascale-2 --launch.priority=urgent --common.launch.num_gpus=2 --train_module.optim_config.lr=0.001
+python scripts/joe/latent_mim.py launch latent_mim_easy ai2/jupiter-cirrascale-2 --launch.priority=urgent --common.launch.num_gpus=2
