@@ -87,20 +87,20 @@ def build_train_module_config(
     """Build the train module config for an experiment."""
     return GalileoTrainModuleConfig(
         optim_config=AdamWConfig(lr=0.0001, weight_decay=0.02),
-        warmup_duration=Duration.steps(4000),
+        warmup_duration=Duration.steps(15000),
         rank_microbatch_size=64,  # Can be 256 on titan, needs to be <= 64 (i think) on jupiter
         masking_config_a=MaskingConfig(
             strategy_config={
                 "type": "space_time",
                 "encode_ratio": 0.1,
-                "decode_ratio": 0.9,
+                "decode_ratio": 0.75,
             }
         ),
         masking_config_b=MaskingConfig(
             strategy_config={
                 "type": "random",
                 "encode_ratio": 0.1,
-                "decode_ratio": 0.9,
+                "decode_ratio": 0.75,
             }
         ),
         loss_config_a=LossConfig(
