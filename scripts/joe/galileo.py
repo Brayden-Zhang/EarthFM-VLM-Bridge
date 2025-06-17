@@ -132,7 +132,6 @@ def build_train_module_config(
         max_grad_norm=1.0,
         scheduler=ConstantWithWarmup(),
         ema_decay=(1.0, 1.0),
-        find_unused_parameters=False,
         dp_config=DataParallelConfig(
             name=DataParallelType.ddp,
             # param_dtype=DType.bfloat16,

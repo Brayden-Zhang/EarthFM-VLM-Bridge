@@ -258,7 +258,7 @@ class HeliosTrainModule(TrainModule):
                 self.model.apply_ddp(
                     dp_mesh=dp_mesh,
                     compile_enabled=compile_model,
-                    find_unused_parameters=find_unused_parameters,
+                    find_unused_parameters=False,
                 )
                 logger.info("Applied DDP to the model")
             else:
