@@ -330,7 +330,6 @@ class HeliosDataLoader(DataLoaderBase):
                         max_tokens_per_instance=1500,
                         sampled_hw_p=6,
                         current_length=12,
-                        missing_timesteps_mask={"sentinel2_l2a": [True] * 12},
                     ),
                 )
             ]

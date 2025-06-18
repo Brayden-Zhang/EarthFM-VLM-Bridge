@@ -294,22 +294,12 @@ class HeliosSample(NamedTuple):
             raise ValueError("Can't find good start_t")
         return start_t
 
-    def _get_start_ts(self, missing_timesteps: dict[str, Any], max_t: int) -> int:
-        start_ts = set()
-        for modality in missing_timesteps:
-            valid_timesteps = np.flatnonzero(missing_timesteps[modality])
-            for t in valid_timesteps:
-                start_ts.update(range(max(0, t - max_t + 1), t + 1))
-
-        return sorted(list(start_ts))
-
     def subset(
         self,
         patch_size: int,
         max_tokens_per_instance: int,
         sampled_hw_p: int,
         current_length: int,
-        missing_timesteps_mask: dict[str, Any],
     ) -> "HeliosSample":
         """Subset a HelioSample that is unbatched ie no batch dimension.
 
@@ -342,11 +332,8 @@ class HeliosSample(NamedTuple):
         start_w = np.random.choice(self.width - sampled_hw + 1)
 
         # The timestamps are edge padded and we always want to start from a valid timestep
-        start_ts = self._get_start_ts(missing_timesteps_mask, max_t)
         if current_length > max_t:
-            valid = [i for i in start_ts if i < current_length - max_t + 1]
-            # logger.warning(valid)
-            start_t = np.random.choice(valid)
+            start_t = np.random.choice(current_length - max_t + 1)
         else:
             start_t = 0
         # logger.warning(start_t)
@@ -718,7 +705,6 @@ class HeliosDataset(Dataset):
         sample: HeliosSample,
         args: GetItemArgs,
         current_length: int,
-        missing_timesteps_mask: dict[str, Any],
     ) -> HeliosSample:
         """Apply the subset to the sample.
 
@@ -736,7 +722,6 @@ class HeliosDataset(Dataset):
                 max_tokens_per_instance=args.token_budget,
                 sampled_hw_p=args.sampled_hw_p,
                 current_length=current_length,
-                missing_timesteps_mask=missing_timesteps_mask,
             )
         else:
             sample_subset = sample
@@ -806,6 +791,8 @@ class HeliosDataset(Dataset):
                 else:
                     # To preserve backwards compatibility, we set missing_timesteps_masks to an empty dict if it doesn't exist in file
                     missing_timesteps_masks = {}
+        # What was the missing_timesteps masks
+        # set up a locally working version of this that works no matter what
         return sample_dict, missing_timesteps_masks
 
     def _get_h5_file_path(self, index: int) -> UPath:
@@ -821,15 +808,27 @@ class HeliosDataset(Dataset):
         h5_file_path = self._get_h5_file_path(index)
 
         sample_dict, missing_timesteps_masks = self.read_h5_file(h5_file_path)
+        # get first present timestep
+        first_valid_timestep = MAX_SEQUENCE_LENGTH
+        for modality, timestep_mask in missing_timesteps_masks.items():
+            valid_timesteps = np.where(timestep_mask)[0]
+            if len(valid_timesteps) > 0:
+                first_valid_timestep = min(first_valid_timestep, valid_timesteps[0])
+        timestamps = sample_dict["timestamps"]
+        if first_valid_timestep >= MAX_SEQUENCE_LENGTH:
+            raise ValueError(
+                f"No valid timesteps found for {h5_file_path} with args: {args} missing_timesteps_masks: {missing_timesteps_masks}"
+            )
+        timestamps = timestamps[first_valid_timestep:]
+        sample_dict["timestamps"] = timestamps
         sample_dict, current_length = self._pad_timestamps(sample_dict)
         # fill sample currently takes like .08 seconds which may bottleneck smaller models
         sample, missing_modalities = self.fill_sample_with_missing_values(
             sample_dict, missing_timesteps_masks
         )
-
-        subset_sample = self.apply_subset(
-            sample, args, current_length, missing_timesteps_masks
-        )
+        # Everything is filled to 12 here always so we never run into the too long issue before
+        # We just pick the lowest that is correct and then repad to the correct length
+        subset_sample = self.apply_subset(sample, args, current_length)
 
         data = [
             subset_sample.sentinel1,
