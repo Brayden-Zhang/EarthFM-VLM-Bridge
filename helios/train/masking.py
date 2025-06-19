@@ -381,6 +381,15 @@ class TimeMaskingStrategy(MaskingStrategy):
         mask = torch.stack(masks)
         return mask
 
+    def _create_temporal_mask_with_missing_values(
+        self,
+        shape: torch.Size,
+        valid_timesteps: torch.Tensor,
+        device: torch.device | None = None,
+    ) -> MaskedHeliosSample:
+        # pick the encode decode and target from the valid timesteps
+        pass
+
     def apply_mask(
         self, batch: HeliosSample, patch_size: int | None = None, **kwargs: Any
     ) -> MaskedHeliosSample:
@@ -400,10 +409,9 @@ class TimeMaskingStrategy(MaskingStrategy):
             raise ValueError("patch_size must be provided for time masking")
         output_dict: dict[str, ArrayTensor | None] = {}
         temporal_mask = None
-        # we need to pick timesteps such that every sample has at least one encoded timestep
-        # is this possible across the batch to guarantee that every sample has at least one encoded timestep?
-        # If not we should just do random masking
-        # the other option here is to do missing masking first and th
+        timesteps_with_at_least_one_modality = (
+            batch.timesteps_with_at_least_one_modality
+        )
         for modality_name in batch.modalities:
             instance = getattr(batch, modality_name)
             if instance is None:
@@ -428,6 +436,8 @@ class TimeMaskingStrategy(MaskingStrategy):
                     mask = self._create_random_mask(modality, shape, patch_size, device)
                 else:
                     if temporal_mask is None:
+                        # if there are timesteps that we wouldn't want to pick we should call a seprate mask creation function
+
                         temporal_mask = self._create_temporal_mask(shape, device)
                     b_s = modality.num_band_sets
                     b, h, w = list(shape[:-2]) + [1] * (3 - len(shape[:-2]))

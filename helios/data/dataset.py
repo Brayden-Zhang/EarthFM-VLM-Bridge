@@ -239,23 +239,26 @@ class HeliosSample(NamedTuple):
     @property
     def timesteps_with_at_least_one_modality(self) -> list[list[int]]:
         """Get timesteps with at least one modality present."""
-        timesteps_with_at_least_one_modality = []
-        for i in range(self.batch_size):
-            timesteps_with_at_least_one_modality = []
-            for modality in self.modalities:
-                modality_spec = Modality.get(modality)
-                if modality_spec.is_multitemporal:
-                    data = getattr(self, modality)[i]
-                    # time is seocnd to last dim I want to check for which indices in that dimension all the values are missing
-                    missing_timesteps = np.where(
-                        (data == MISSING_VALUE).all(dim=-2)
-                    )[0]
-                    timesteps_with_at_least_one_modality.extend(missing_timesteps)
-                else:
-                    timesteps_with_at_least_one_modality.append([0])
-
+        # assuming these are torch tensors
+        # assumes we have a batch dimension
+        per_modality_present_masks = []
+        for modality in self.modalities:
+            modality_spec = Modality.get(modality)
+            if modality_spec.is_multitemporal:
+                data = getattr(self, modality)
+                # Get all timestamps that are present for all samples with dim T
+                present_mask = (data != MISSING_VALUE).all(dim=(0, 1, 2, 4))
+                per_modality_present_masks.append(present_mask)
+        # Now we want to find the timesteps that at least 1 modality is present for all samples
+        # at least one means we need any across the timesteps
+        modality_timestep_present_mask = torch.stack(
+            per_modality_present_masks, dim=1
+        ).any(dim=1)
+        at_least_one_modality_present_mask = modality_timestep_present_mask.any(dim=0)
+        timesteps_with_at_least_one_modality = torch.where(
+            at_least_one_modality_present_mask
+        )[0]
         return timesteps_with_at_least_one_modality
-
 
     def get_expected_shape(self, attribute: str) -> tuple[int, ...]:
         """Get the expected shape of an attribute."""
