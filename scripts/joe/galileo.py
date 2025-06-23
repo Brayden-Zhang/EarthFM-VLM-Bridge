@@ -2,8 +2,7 @@
 
 import logging
 
-from olmo_core.config import DType
-from olmo_core.config import Config
+from olmo_core.config import Config, DType
 from olmo_core.distributed.parallel.data_parallel import (
     DataParallelConfig,
     DataParallelType,
@@ -92,7 +91,7 @@ def build_train_module_config(
         rank_microbatch_size=64,  # Can be 256 on titan, needs to be <= 64 (i think) on jupiter
         masking_config_a=MaskingConfig(
             strategy_config={
-                "type": "time",
+                "type": "space_time",
                 "encode_ratio": 0.1,
                 "decode_ratio": 0.75,
             }
