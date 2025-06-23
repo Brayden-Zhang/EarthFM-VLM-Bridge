@@ -1195,6 +1195,42 @@ class RandomMaskingStrategy(MaskingStrategy):
         return MaskedHeliosSample(**output_dict)
 
 
+@MASKING_STRATEGY_REGISTRY.register("modality_cross_random")
+class ModalityCrossRandomMaskingStrategy(ModalityCrossMaskingStrategy):
+    """Randomly select a modality and apply random masking to it."""
+
+    def __init__(
+        self,
+        encode_ratio: float = 0.5,
+        decode_ratio: float = 0.5,
+        allow_encoding_decoding_same_bandset: bool = False,
+        min_encoded_bandsets: int = 1,
+        max_encoded_bandsets: int | None = None,
+        min_decoded_bandsets: int | None = None,
+        max_decoded_bandsets: int | None = None,
+        only_decode_modalities: list[str] = [],
+    ) -> None:
+        """Initialize the masking strategy."""
+        random_strategy = RandomMaskingStrategy(encode_ratio, decode_ratio)
+        super().__init__(
+            strategy=random_strategy,
+            encode_ratio=encode_ratio,
+            decode_ratio=decode_ratio,
+            allow_encoding_decoding_same_bandset=allow_encoding_decoding_same_bandset,
+            min_encoded_bandsets=min_encoded_bandsets,
+            max_encoded_bandsets=max_encoded_bandsets,
+            min_decoded_bandsets=min_decoded_bandsets,
+            max_decoded_bandsets=max_decoded_bandsets,
+            only_decode_modalities=only_decode_modalities,
+        )
+
+    def overide_random_mask_condition(self, modality_spec: ModalitySpec) -> bool:
+        """Override the random mask for the given modality by the encoding and decoding bandsets."""
+        # For random masking, we want to use the encoding and decoding bandsets
+        # to determine the mask for all modalities
+        return False
+
+
 @MASKING_STRATEGY_REGISTRY.register("random_increasing")
 class RandomIncreasingMaskingStrategy(RandomMaskingStrategy):
     """Gradually increase the masked tokens (reduce encode ratio)."""
