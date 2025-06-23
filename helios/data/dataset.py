@@ -237,7 +237,7 @@ class HeliosSample(NamedTuple):
 
     # this is just a draft of something we could do
     @property
-    def timesteps_with_at_least_one_modality(self) -> list[list[int]]:
+    def timesteps_with_at_least_one_modality(self) -> torch.Tensor:
         """Get timesteps with at least one modality present."""
         # assuming these are torch tensors
         # assumes we have a batch dimension

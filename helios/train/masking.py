@@ -355,16 +355,22 @@ class TimeMaskingStrategy(MaskingStrategy):
     def _create_temporal_mask(
         self,
         shape: torch.Size,
+        timesteps_with_at_least_one_modality: torch.Tensor,
         device: torch.device | None = None,
     ) -> ArrayTensor:
         b = shape[0]
         t = shape[-2]
         assert t >= 3
-        encode_times = max(int(self.encode_ratio * t), 1)
-        decode_times = max(int(self.decode_ratio * t), 1)
-        target_times = t - encode_times - decode_times
+        # timesteps withat least one modality are the only ones we can put as either encoder and decoder randomly pick from those instead
+        # can we relax the all sample contraint here as we are doing per sample stuff anyways
+        present_t = timesteps_with_at_least_one_modality.shape[0] # across all samples
 
-        flat_mask = torch.cat(
+        encode_times = max(int(self.encode_ratio * present_t), 1)
+        decode_times = max(int(self.decode_ratio * present_t), 1)
+        target_times = present_t - encode_times - decode_times
+
+        # Create mask values only for the encodable timesteps
+        encodable_mask_values = torch.cat(
             [
                 torch.full(
                     (encode_times,), MaskValue.ONLINE_ENCODER.value, device=device
@@ -376,8 +382,16 @@ class TimeMaskingStrategy(MaskingStrategy):
             ]
         )
 
-        # numpy to for permuted function
-        masks = [flat_mask[torch.randperm(t, device=device)] for i in range(b)]
+        # Create masks for each sample in the batch
+        masks = [
+            torch.full((t,), MaskValue.TARGET_ENCODER_ONLY.value, device=device)
+            .index_put_(
+                (timesteps_with_at_least_one_modality,),
+                encodable_mask_values[torch.randperm(present_t, device=device)]
+            )
+            for _ in range(b)
+        ]
+
         mask = torch.stack(masks)
         return mask
 
