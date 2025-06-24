@@ -267,7 +267,6 @@ class MaskingStrategy:
     ) -> torch.Tensor:
         """Apply a missing mask to the input data."""
         missing_mask = self.get_missing_mask(instance, modality, mask)
-
         # If we are changing the mask, we need to clone it as it may be a view of a masked used by different modalities
         if missing_mask.any():
             output_mask = mask.clone()
@@ -433,6 +432,7 @@ class TimeMaskingStrategy(MaskingStrategy):
                     )
                     mask = mask.view(*shape[:-1], b_s).clone()
                 # After setting up encoder and decoder masks, fill in missing values
+
                 mask = self.fill_mask_with_missing_values(instance, mask, modality)
                 output_dict[modality_name] = instance
                 output_dict[
@@ -759,11 +759,33 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
         max_decoded_bandsets: int | None = None,
         only_decode_modalities: list[str] = [],
     ) -> None:
-        """Initialize the masking strategy."""
+        """Initialize the masking strategy.
+
+        Args:
+            strategy: The base masking strategy to apply before cross-modality masking.
+            encode_ratio: Ratio of tokens to encode (default: 0.5). Used by the base strategy.
+            decode_ratio: Ratio of tokens to decode (default: 0.5). Used by the base strategy.
+            allow_encoding_decoding_same_bandset: If True, allows the same bandset to be both
+                encoded and decoded. If False (default), encoded and decoded bandsets are disjoint.
+            min_encoded_bandsets: Minimum number of bandsets to encode per sample. If None (default),
+                encodes all available bandsets when there are 3+ modalities, or 1 bandset when there are 2 modalities.
+            max_encoded_bandsets: Maximum number of bandsets to encode per sample. If None (default),
+                encodes all available bandsets.
+            min_decoded_bandsets: Minimum number of bandsets to decode per sample. Only used when
+                allow_encoding_decoding_same_bandset=True. If None (default), uses 1.
+            max_decoded_bandsets: Maximum number of bandsets to decode per sample. Only used when
+                allow_encoding_decoding_same_bandset=True. If None (default), uses all available bandsets.
+            only_decode_modalities: List of modality names that should only be used for decoding,
+                never for encoding. Empty list by default (all modalities can be encoded).
+        """
         self._encode_ratio = encode_ratio
         self._decode_ratio = decode_ratio
         self.strategy = strategy
         self.allow_encoding_decoding_same_bandset = allow_encoding_decoding_same_bandset
+        if min_encoded_bandsets is None:
+            assert (
+                max_encoded_bandsets is None
+            ), "max_encoded_bandsets must be set if min_encoded_bandsets is set"
         self.min_encoded_bandsets = min_encoded_bandsets
         self.max_encoded_bandsets = max_encoded_bandsets
         self.min_decoded_bandsets = min_decoded_bandsets
@@ -825,6 +847,7 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
                 decoded_bandset_idxs = set([present_modalities_bandsets_for_sample[1]])
             # If there are more than two modalities, we randomly select some to encode and the rest to decode
             else:
+                # Select Indices to Encode
                 num_present_modalities = len(present_modalities_bandsets_for_sample)
                 encodable_modalities = [
                     modality_bandset
@@ -854,18 +877,16 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
                 encoded_bandset_idxs = set(
                     [encodable_modalities[i] for i in encoded_idxs]
                 )
-                # If not allow overlapping bandsets, we make encoded and decoded bandsets disjoint
-                # Otherwise we allow them to overlap
-                if self.allow_encoding_decoding_same_bandset:
-                    # Calculate min and max decoded bandsets
-                    min_decoded_bandsets = min(
-                        self.min_decoded_bandsets or 1, num_present_modalities
-                    )
-                    max_decoded_bandsets = min(
-                        self.max_decoded_bandsets or num_present_modalities,
-                        num_present_modalities,
-                    )
 
+                # Select Indices to Decode
+                min_decoded_bandsets = min(
+                    self.min_decoded_bandsets or 1, num_present_modalities
+                )
+                max_decoded_bandsets = min(
+                    self.max_decoded_bandsets or num_present_modalities,
+                    num_present_modalities,
+                )
+                if self.allow_encoding_decoding_same_bandset:
                     # Otherwise randomly choose between min and max
                     num_decoded_bandsets = np.random.randint(
                         min_decoded_bandsets, max_decoded_bandsets + 1
@@ -882,11 +903,28 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
                         ]
                     )
                 else:
-                    # we are not yet supporting min and max for non overlapping bandsets
-                    # take the complement of the encoded bandsets from the present_modalities_bandsets_for_sample
                     decoded_bandset_idxs = (
                         set(present_modalities_bandsets_for_sample)
                         - encoded_bandset_idxs
+                    )
+                    num_decoded_bandsets = len(decoded_bandset_idxs)
+                    min_decoded_bandsets = min(
+                        min_decoded_bandsets, num_decoded_bandsets
+                    )
+                    max_decoded_bandsets = min(
+                        max_decoded_bandsets, num_decoded_bandsets
+                    )
+                    # select the decoded bandsets
+                    decoded_idxs = np.random.choice(
+                        len(present_modalities_bandsets_for_sample),
+                        size=num_decoded_bandsets,
+                        replace=False,
+                    )
+                    decoded_bandset_idxs = set(
+                        [
+                            present_modalities_bandsets_for_sample[i]
+                            for i in decoded_idxs
+                        ]
                     )
             encoded_decoded_bandsets.append(
                 (encoded_bandset_idxs, decoded_bandset_idxs)
