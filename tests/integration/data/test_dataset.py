@@ -237,5 +237,5 @@ class TestHeliosDataset:
             getattr(subset_sample, modality) for modality in dataset.training_modalities
         ]
         data = np.concatenate([d.flatten() for d in data])
-        assert not all(data == MISSING_VALUE)
-        assert False
+        # want to make sure we subset to timesteps with actual data
+        assert (data != MISSING_VALUE).sum() > 0  # type: ignore
