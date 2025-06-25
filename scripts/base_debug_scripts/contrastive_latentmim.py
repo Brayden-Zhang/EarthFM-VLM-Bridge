@@ -10,6 +10,7 @@ from olmo_core.distributed.parallel.data_parallel import (
 from olmo_core.optim import AdamWConfig
 from olmo_core.optim.scheduler import CosWithWarmup
 from olmo_core.train.callbacks import (
+    BeakerCallback,
     ConfigSaverCallback,
     GarbageCollectorCallback,
     GPUMemoryMonitorCallback,
@@ -42,6 +43,7 @@ logger = logging.getLogger(__name__)
 
 MAX_PATCH_SIZE = 8
 MIN_PATCH_SIZE = 1
+USE_SMALL_DATASET = False
 
 
 def build_model_config(common: CommonComponents) -> LatentMIMConfig:
@@ -150,8 +152,12 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
 
 def build_dataset_config(common: CommonComponents) -> HeliosDatasetConfig:
     """Build the dataset config for an experiment."""
+    if USE_SMALL_DATASET:
+        dataset_url = "/weka/dfive-default/helios/dataset/presto/h5py_data_w_missing_timesteps_128_x_4_zstd_3/landsat_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/469892"
+    else:
+        dataset_url = "/weka/dfive-default/helios/dataset/presto/h5py_data_w_missing_timesteps_zstd_3/landsat_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/117473/"
     return HeliosDatasetConfig(
-        h5py_dir="/weka/dfive-default/helios/dataset/presto/h5py_data_w_missing_timesteps_zstd_3/landsat_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/117473/",
+        h5py_dir=dataset_url,
         training_modalities=common.training_modalities,
         dtype="float32",
         # cache_dir="/helios_cache/osm_sampling",
@@ -320,6 +326,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             ),
         )
         .with_callback("garbage_collector", garbage_collector_callback)
+        .with_callback("beaker", BeakerCallback())
     )
     return trainer_config
 

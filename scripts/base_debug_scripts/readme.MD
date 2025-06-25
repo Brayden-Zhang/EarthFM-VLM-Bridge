@@ -7,4 +7,4 @@ For faster Training use more gpus bigger batch size potentially more workers unt
 
 IF You want to share the runs with others please set the wandb project use override `--trainer.wandb.project=helios-train`
 
-To alternate between different debug scripts, please delete other test run checkpoints in `local_output` or change `LOAD_STRATEGY` to `"never"` in `build_trainer_config.py`.
+If debugging different architectures or datasets, please remove checkpoints in `./local_output/checkpoints/<user>/test_run` (for sessions) or `/weka/dfive-default/helios/checkpoints/<user>/test_run` (for batch jobs).

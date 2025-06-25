@@ -45,6 +45,7 @@ from helios.train.train_module.mae import MAETrainModuleConfig
 logger = logging.getLogger(__name__)
 MAX_PATCH_SIZE = 16  # NOTE: actual patch_size <= max_patch_size
 MIN_PATCH_SIZE = 4
+USE_SMALL_DATASET = False
 
 MAE_MODALITIES = [
     Modality.SENTINEL2_L2A.name,
@@ -148,7 +149,11 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
     GLOBAL_BATCH_SIZE = 128
     PREFETCH_FACTOR = 4
     TOKEN_BUDGET = 1500
-    SAMPLE_HW_P_LIST = list(range(5, 13))
+    if USE_SMALL_DATASET:
+        # max_patch_size=16, max sampled_hw_p=8 gives us 8*16=128 pixels max
+        SAMPLE_HW_P_LIST = list(range(3, 9))
+    else:
+        SAMPLE_HW_P_LIST = list(range(5, 13))
 
     dataloader_config = HeliosDataLoaderConfig(
         global_batch_size=GLOBAL_BATCH_SIZE,
@@ -166,8 +171,12 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
 
 def build_dataset_config(common: CommonComponents) -> HeliosDatasetConfig:
     """Build the dataset config for an experiment."""
+    if USE_SMALL_DATASET:
+        dataset_url = "/weka/dfive-default/helios/dataset/presto/h5py_data_w_missing_timesteps_128_x_4_zstd_3/landsat_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/469892"
+    else:
+        dataset_url = "/weka/dfive-default/helios/dataset/presto/h5py_data_w_missing_timesteps_zstd_3/landsat_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/117473/"
     return HeliosDatasetConfig(
-        h5py_dir="/weka/dfive-default/helios/dataset/presto/h5py_data_w_missing_timesteps_zstd_3/landsat_openstreetmap_raster_sentinel1_sentinel2_l2a_srtm_worldcover/117473/",
+        h5py_dir=dataset_url,
         training_modalities=common.training_modalities,
         dtype="float32",
         # cache_dir="/helios_cache/osm_sampling",
