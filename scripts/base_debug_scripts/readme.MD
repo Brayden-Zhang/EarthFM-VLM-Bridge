@@ -6,3 +6,5 @@ These settings should do about 20 minute per epoch on 1 GPU with batch size 128 
 For faster Training use more gpus bigger batch size potentially more workers until you are saturated
 
 IF You want to share the runs with others please set the wandb project use override `--trainer.wandb.project=helios-train`
+
+To alternate between different debug scripts, please delete other test run checkpoints in `local_output` or change `LOAD_STRATEGY` to `"never"` in `build_trainer_config.py`.
