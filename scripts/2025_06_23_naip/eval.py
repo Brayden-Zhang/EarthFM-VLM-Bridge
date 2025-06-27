@@ -150,7 +150,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
         "m_sa_crop_type": DownstreamTaskConfig(
             dataset="m-sa-crop-type",
             embedding_batch_size=32,
-            probe_batch_size=8,
+            probe_batch_size=32,
             num_workers=2,
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
