@@ -1,8 +1,17 @@
 """Launch script for evaluation.
+
 The eval.sh calls this script with all the different checkpoints we had for this same
 model architecture related to fixed modality masking.
 """
 
+from latent_mim_128_cross import (
+    build_common_components,
+    build_dataloader_config,
+    build_dataset_config,
+    build_model_config,
+    build_train_module_config,
+    build_visualize_config,
+)
 from olmo_core.train.callbacks import (
     BeakerCallback,
     CheckpointerCallback,
@@ -13,14 +22,6 @@ from olmo_core.train.callbacks import (
 from olmo_core.train.checkpoint import CheckpointerConfig
 from olmo_core.train.common import Duration, LoadStrategy
 from olmo_core.train.config import TrainerConfig
-from latent_mim_128_cross import (
-    build_dataloader_config,
-    build_dataset_config,
-    build_model_config,
-    build_train_module_config,
-    build_visualize_config,
-    build_common_components,
-)
 
 from helios.data.constants import Modality
 from helios.internal.experiment import (
@@ -45,7 +46,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
     CANCEL_CHECK_INTERVAL = 1
     LOAD_STRATEGY = LoadStrategy.if_available
     WANDB_USERNAME = "eai-ai2"  # nosec
-    WANDB_PROJECT = "2025_06_23_naip_eval"
+    WANDB_PROJECT = "2025_06_26_cross_masking_eval"
     PERMANENT_SAVE_INTERVAL = 5000
     EPHERMERAL_SAVE_INTERVAL = 250
     checkpointer_config = CheckpointerConfig(work_dir=common.save_folder)
