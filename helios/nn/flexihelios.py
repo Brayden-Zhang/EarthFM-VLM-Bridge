@@ -1171,6 +1171,7 @@ class Encoder(FlexiHeliosBase):
             tokens: Tokens with removed tokens added
             mask: Mask with removed tokens added
         """
+        print(x.shape)
         assert (
             x.shape[1] > 0
         ), "x must have at least one token we should not mask all tokens"
