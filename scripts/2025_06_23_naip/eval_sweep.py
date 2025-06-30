@@ -19,7 +19,7 @@ lr_args = [
     "--trainer.callbacks.downstream_evaluator.tasks.sen1floods11.probe_lr={lr}",
     "--trainer.callbacks.downstream_evaluator.tasks.pastis_sentinel2.probe_lr={lr}",
     "--trainer.callbacks.downstream_evaluator.tasks.pastis_sentinel1.probe_lr={lr}",
-    "--trainer.callbacks.downstream_evaluator.tasks.pastis_sentinel1_sentinel2.probe_lr={lr}",
+    # "--trainer.callbacks.downstream_evaluator.tasks.pastis_sentinel1_sentinel2.probe_lr={lr}",
 ]
 
 dataset_paritions = [
@@ -39,7 +39,7 @@ dataset_partition_args = [
     "--trainer.callbacks.downstream_evaluator.tasks.sen1floods11.partition={dataset_partition}",
     "--trainer.callbacks.downstream_evaluator.tasks.pastis_sentinel2.partition={dataset_partition}",
     "--trainer.callbacks.downstream_evaluator.tasks.pastis_sentinel1.partition={dataset_partition}",
-    "--trainer.callbacks.downstream_evaluator.tasks.pastis_sentinel1_sentinel2.partition={dataset_partition}",
+    # "--trainer.callbacks.downstream_evaluator.tasks.pastis_sentinel1_sentinel2.partition={dataset_partition}",
 ]
 for probe_lr in LP_LRs:
     for dataset_partition in dataset_paritions:
