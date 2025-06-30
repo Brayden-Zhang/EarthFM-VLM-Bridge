@@ -10,7 +10,7 @@ METRICS = [
     "m-so2sat",
     "m-brick-kiln",
     "m-bigearthnet",
-    "m_sa_crop_type",
+    # "m_sa_crop_type",
     "m_cashew_plant",
     "sickle_sentinel1",
     "sickle_landsat",
