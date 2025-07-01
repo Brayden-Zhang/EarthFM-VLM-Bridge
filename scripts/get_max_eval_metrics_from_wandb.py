@@ -10,7 +10,7 @@ METRICS = [
     "m-so2sat",
     "m-brick-kiln",
     "m-bigearthnet",
-    # "m_sa_crop_type",
+    "m_sa_crop_type",
     "m_cashew_plant",
     "sickle_sentinel1",
     "sickle_landsat",
@@ -70,5 +70,13 @@ if __name__ == "__main__":
 
     metrics = get_max_metrics(project_name, run_prefix)
     for metric in METRICS:
-        k = f"eval/{metric}"
-        print(f"{metric} {metrics[k]}")
+        try:
+            k = f"eval/{metric}"
+            print(f"{metric} {metrics[k]}")
+        except KeyError:
+            try:
+                metric = metric.replace("-", "_")
+                k = f"eval/{metric}"
+                print(f"{metric} {metrics[k]}")
+            except KeyError:
+                print(f"Metric {metric} not found")
