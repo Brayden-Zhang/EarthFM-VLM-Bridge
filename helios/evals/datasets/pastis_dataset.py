@@ -380,10 +380,14 @@ class PASTISRDataset(Dataset):
                 PASTIS_DIR_PARTITION / f"{partition}_partition.json"
             ) as json_file:
                 subset_indices = json.load(json_file)
-
+            print(f"subset_indices: {len(subset_indices)}")
             self.months = self.months[subset_indices]
+            print(f"months shape: {self.months.shape}")
             self.labels = self.labels[subset_indices]
+            print(f"labels shape: {self.labels.shape}")
             self.indices = subset_indices
+        else:
+            self.indices = list(range(len(self.months)))
 
     @staticmethod
     def _get_norm_stats(
@@ -404,12 +408,12 @@ class PASTISRDataset(Dataset):
 
     def __getitem__(self, idx: int) -> tuple[MaskedHeliosSample, torch.Tensor]:
         """Return a single PASTIS data instance."""
-        idx = self.indices[idx]
-        s2_image = torch.load(self.s2_images_dir / f"{idx}.pt")
+        image_idx = self.indices[idx]
+        s2_image = torch.load(self.s2_images_dir / f"{image_idx}.pt")
         s2_image = einops.rearrange(s2_image, "t c h w -> h w t c")  # (64, 64, 12, 13)
         s2_image = s2_image[:, :, :, EVAL_TO_HELIOS_S2_BANDS]
 
-        s1_image = torch.load(self.s1_images_dir / f"{idx}.pt")
+        s1_image = torch.load(self.s1_images_dir / f"{image_idx}.pt")
         s1_image = einops.rearrange(s1_image, "t c h w -> h w t c")  # (64, 64, 12, 2)
         s1_image = s1_image[:, :, :, EVAL_TO_HELIOS_S1_BANDS]
 
