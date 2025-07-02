@@ -16,6 +16,69 @@ from helios.evals.utils import adjust_learning_rate
 
 logger = getLogger(__name__)
 
+class AttnPoolClassifier(nn.Module):
+    def __init__(self, in_dim, out_dim):
+        super().__init__()
+        assert in_dim % 64 == 0
+        self.query_token = nn.Parameter(torch.empty(in_dim))
+        self.num_heads = in_dim // 64
+        self.kv = nn.Linear(in_dim, in_dim * 2)
+        self.linear = nn.Linear(in_dim, out_dim)
+        self.init_weights()
+
+    def init_weights(self):
+        nn.init.trunc_normal_(self.query_token, std=0.02)
+        nn.init.trunc_normal_(self.kv.weight, std=0.02)
+        nn.init.zeros_(self.kv.bias)
+        nn.init.trunc_normal_(self.linear.weight, std=0.02)
+        nn.init.zeros_(self.linear.bias)
+
+    def forward(self, feat_tokens):
+        B, H, W, N, D = feat_tokens.shape
+        # logger.info(f"feat_tokens shape: {feat_tokens.shape}")
+        feat_tokens = rearrange(feat_tokens, "b h w n d -> (b h w) n d")
+        # logger.info(f"feat_tokens shape: {feat_tokens.shape}")
+        collapsed_dim = B * H * W
+        q = self.query_token.expand(collapsed_dim, 1, -1)
+        # logger.info(f"q shape: {q.shape}")
+        q = q.reshape(collapsed_dim, 1, self.num_heads, D // self.num_heads)  # [B, 1, head, D_head]
+        # logger.info(f"q shape: {q.shape}")
+        q = q.permute(0, 2, 1, 3)  # [B, head, 1, D_head]
+        # logger.info(f"q shape: {q.shape}")
+
+        kv = self.kv(feat_tokens).reshape(collapsed_dim, N, 2, self.num_heads, D // self.num_heads)  # [B, N, 2, head, D_head]
+        # logger.info(f"kv shape: {kv.shape}")
+        kv = kv.permute(2, 0, 3, 1, 4)  # [2, B, head, N, D_head]
+        # logger.info(f"kv shape: {kv.shape}")
+        k, v = torch.unbind(kv, dim=0)  # 2 * [B, head, N, D_head]
+        # logger.info(f"k shape: {k.shape}")
+        # logger.info(f"v shape: {v.shape}")
+        # log if q k v are contiguous or not
+        q = q.contiguous()
+        k = k.contiguous()
+        v = v.contiguous()
+        # logger.info(f"q contiguous: {q.is_contiguous()}")
+        # logger.info(f"k contiguous: {k.is_contiguous()}")
+        # logger.info(f"v contiguous: {v.is_contiguous()}")
+        # Flash attention Fails for seq length of 3
+        seq_len = q.shape[-2]
+        use_flash = seq_len >= 4      #   guard tiny-seq bug
+        with torch.backends.cuda.sdp_kernel(
+                enable_flash=use_flash,
+                enable_mem_efficient=True,
+                enable_math=True):
+            x = F.scaled_dot_product_attention(q, k, v)  # [B, head, 1, D_head]
+        # Compute attention scores
+        # attn_scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(D // self.num_heads)
+        # attn_weights = F.softmax(attn_scores, dim=-1)
+        # x = torch.matmul(attn_weights, v)  # [B, head, 1, D_head]
+        # logger.info(f"x shape: {x.shape}")
+        x = x.reshape(B, H, W, D)
+        # reshape this ffor linear code
+
+        return self.linear(x)
+
+
 # First lets do attentive probing across channel
 def train_and_eval_probe(
     config: EvalDatasetConfig,
@@ -37,9 +100,10 @@ def train_and_eval_probe(
 
     if config.task_type == TaskType.SEGMENTATION:
         logits_per_patch = int(config.num_classes * patch_size * patch_size)
-        probe = nn.Sequential(
-            nn.Linear(in_features, logits_per_patch),
-        ).to(device)
+        probe = AttnPoolClassifier(in_dim=in_features, out_dim=logits_per_patch).to(device)
+        # probe = nn.Sequential(
+        #     nn.Linear(in_features, logits_per_patch),
+        # ).to(device)
     else:
         probe = nn.Sequential(
             nn.BatchNorm1d(in_features), nn.Linear(in_features, config.num_classes)
@@ -98,39 +162,6 @@ def train_and_eval_probe(
         )
     return final_miou
 
-class AttnPoolClassifier(nn.Module):
-    def __init__(self, in_dim, out_dim):
-        super().__init__()
-        assert in_dim % 64 == 0
-        self.query_token = nn.Parameter(torch.empty(in_dim))
-        self.num_heads = in_dim // 64
-        self.kv = nn.Linear(in_dim, in_dim * 2)
-        self.linear = nn.Linear(in_dim, out_dim)
-        self.init_weights()
-
-    def init_weights(self):
-        nn.init.trunc_normal_(self.query_token, std=0.02)
-        nn.init.trunc_normal_(self.kv.weight, std=0.02)
-        nn.init.zeros_(self.kv.bias)
-        nn.init.trunc_normal_(self.linear.weight, std=0.02)
-        nn.init.zeros_(self.linear.bias)
-
-    def forward(self, feat_tokens):
-        B, N, D = feat_tokens.shape
-
-        q = self.query_token.expand(B, 1, -1)
-        q = q.reshape(B, 1, self.num_heads, D // self.num_heads)  # [B, 1, head, D_head]
-        q = q.permute(0, 2, 1, 3)  # [B, head, 1, D_head]
-
-        kv = self.kv(feat_tokens).reshape(B, N, 2, self.num_heads, D // self.num_heads)  # [B, N, 2, head, D_head]
-        kv = kv.permute(2, 0, 3, 1, 4)  # [2, B, head, N, D_head]
-        k, v = torch.unbind(kv, dim=0)  # 2 * [B, head, N, D_head]
-
-        x = F.scaled_dot_product_attention(q, k, v)  # [B, head, 1, D_head]
-        x = x.reshape(B, D)  # [B, D]
-
-        return self.linear(x)
-
 def train_probe(
     data_loader: DataLoader,
     probe: nn.Module,
@@ -156,10 +187,12 @@ def train_probe(
             batch_emb = batch_emb.to(device)
 
             with torch.amp.autocast(device_type=device.type, dtype=torch.bfloat16):
+                # logger.info(f"Batch emb shape: {batch_emb.shape}")
                 logits = probe(
                     batch_emb
                 )  # (bsz, num_patches, logits_per_patch) or (bsz, n_cls)
                 if task_type == TaskType.SEGMENTATION:
+                    # logger.info(f"Logits shape: {logits.shape}")
                     logits = rearrange(
                         logits,
                         "b h w (c i j) -> b c (h i) (w j)",
@@ -169,6 +202,7 @@ def train_probe(
                         i=patch_size,
                         j=patch_size,
                     )
+                    # logger.info(f"Logits shape: {logits.shape}")
                     if logits.shape[-2] != batch_labels.shape[-2]:
                         logits = F.interpolate(
                             logits,
@@ -177,7 +211,7 @@ def train_probe(
                             align_corners=True,
                         )  # (bsz, num_classes, H, W)
                 loss = loss_function(logits, batch_labels.to(device))
-                logger.info(f"Epoch {epoch}, Step {i}, Loss: {loss.item()}")
+                # logger.info(f"Epoch {epoch}, Step {i}, Loss: {loss.item()}")
 
             loss.backward()
             adjust_learning_rate(
@@ -186,7 +220,7 @@ def train_probe(
                 total_epochs=total_epochs,
                 warmup_epochs=int(total_epochs * 0.1),
                 max_lr=lr,
-                min_lr=1.0e-5,
+                min_lr=lr*.1,# 1.0e-5, # maybe this is too low and should just be 10x smaller
             )
 
             opt.step()

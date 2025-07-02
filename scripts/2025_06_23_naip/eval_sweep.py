@@ -66,7 +66,7 @@ for probe_lr in LP_LRs:
             "launch",
             f"v0.2_base_latent_mim_128_alldata_random_fixed_modality_0.5_eval_{probe_lr}",
             "ai2/titan-cirrascale",
-            "--trainer.load_path=/weka/dfive-default/helios/checkpoints/favyen/v0.2_base_latent_mim_128_alldata_random_fixed_modality_0.5/step320000",
+            "--trainer.load_path=/weka/dfive-default/helios/checkpoints/favyen/v0.2_base_latent_mim_128_alldata_random_fixed_modality_0.5/step320000", #best
             "--common.training_modalities=[sentinel2_l2a,sentinel1,worldcover,latlon,srtm,landsat,openstreetmap_raster]",
         ]
         + [arg.format(lr=probe_lr) for arg in lr_args],

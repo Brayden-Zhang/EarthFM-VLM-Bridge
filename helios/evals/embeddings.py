@@ -51,7 +51,7 @@ def get_embeddings(
             # B, H, W, T, C, D Embeddings and I want to attentively pool across C, D
             # I may also want to take max across C?
             averaged_embeddings = batch_embeddings.pool_unmasked_tokens(
-                pooling_type, spatial_pooling=spatial_pool
+                pooling_type, spatial_pooling=spatial_pool, concat_features=True
             )
             embeddings.append(averaged_embeddings.cpu())
             labels.append(label)
