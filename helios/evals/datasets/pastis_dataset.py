@@ -381,11 +381,8 @@ class PASTISRDataset(Dataset):
                 PASTIS_DIR_PARTITION / f"{partition}_partition.json"
             ) as json_file:
                 subset_indices = json.load(json_file)
-            print(f"subset_indices: {len(subset_indices)}")
             self.months = self.months[subset_indices]
-            print(f"months shape: {self.months.shape}")
             self.labels = self.labels[subset_indices]
-            print(f"labels shape: {self.labels.shape}")
             self.indices = subset_indices
         else:
             self.indices = list(range(len(self.months)))
