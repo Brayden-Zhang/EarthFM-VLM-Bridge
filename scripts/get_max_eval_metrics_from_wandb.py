@@ -138,7 +138,6 @@ if __name__ == "__main__":
     # of the run (as long as no other run shares the same prefix).
     run_prefix = sys.argv[2]
 
-
     # Check if user wants partition-based aggregation
     if len(sys.argv) > 3 and sys.argv[3] == "--per-partition":
         print("Getting max metrics per dataset partition (excluding default)...")
@@ -177,4 +176,3 @@ if __name__ == "__main__":
                     print(f"{metric} {metrics[k]}")
                 except KeyError:
                     print(f"Metric {metric} not found")
-
