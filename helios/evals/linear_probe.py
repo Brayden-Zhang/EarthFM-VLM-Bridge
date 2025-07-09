@@ -1,7 +1,7 @@
 """Train and evaluate a linear probe."""
 
 import math
-from enum import Enum
+from enum import StrEnum
 from logging import getLogger
 
 import torch
@@ -18,7 +18,7 @@ from helios.evals.utils import adjust_learning_rate
 logger = getLogger(__name__)
 
 
-class ProbeType(Enum):
+class ProbeType(StrEnum):
     """Enumeration of probe types for linear probing."""
 
     ATTNPOOL = "attnpool"
@@ -120,6 +120,8 @@ def train_and_eval_probe(
             probe = nn.Sequential(
                 nn.Linear(in_features, logits_per_patch),
             ).to(device)
+        else:
+            raise ValueError(f"Probe type {probe_type} not supported for segmentation.")
     else:
         if probe_type == ProbeType.LINEAR:
             probe = nn.Sequential(
