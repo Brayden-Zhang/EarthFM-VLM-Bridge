@@ -19,10 +19,12 @@ from .constants import (
     EVAL_S2_BAND_NAMES,
     EVAL_TO_HELIOS_S1_BANDS,
     EVAL_TO_HELIOS_S2_BANDS,
+    EVAL_TO_HELIOS_SRTM_BANDS,
 )
 from .cropharvest_package.bands import BANDS
 from .cropharvest_package.datasets import CropHarvest
 from .cropharvest_package.utils import memoized
+from .normalize import normalize_bands
 
 logger = logging.getLogger("__main__")
 
@@ -103,6 +105,9 @@ S1_INPUT_TO_OUTPUT_BAND_MAPPING = [
     BANDS.index(_s1helios2ch_name(b)) for b in EVAL_S1_BAND_NAMES
 ]
 
+# we don't support slope
+SRTM_TO_OUTPUT_BAND_MAPPING = [BANDS.index("elevation")]
+
 
 @memoized
 def _get_eval_datasets(root: Path = CROPHARVEST_DIR) -> list:
@@ -125,7 +130,7 @@ class CropHarvestDataset(Dataset):
 
     """
     TODO:
-      Add SRTM to eval constants (but we might not train it?)
+      Add partitions
     """
 
     def __init__(
@@ -197,6 +202,7 @@ class CropHarvestDataset(Dataset):
         self.norm_stats_from_pretrained = norm_stats_from_pretrained
         # We will always need the normalized to normalize latlons
         self.normalizer_computed = Normalizer(Strategy.COMPUTED)
+        self.norm_method = norm_method
 
     @staticmethod
     def _normalize_from_ch_stats(array: np.ndarray) -> np.ndarray:
@@ -213,7 +219,7 @@ class CropHarvestDataset(Dataset):
         latlon = self.normalizer_computed.normalize(Modality.LATLON, self.latlons[idx])
 
         if not self.norm_stats_from_pretrained:
-            x = self._normalize_from_ch_stats(x)
+            x = normalize_bands(x, X_MEAN, X_STD, method=self.norm_method)
 
         x_hw = repeat(x, "t c -> h w t c", w=1, h=1)
 
@@ -222,6 +228,11 @@ class CropHarvestDataset(Dataset):
         ]
         s1 = x_hw[:, :, : self.timesteps, S1_INPUT_TO_OUTPUT_BAND_MAPPING][
             :, :, :, EVAL_TO_HELIOS_S1_BANDS
+        ]
+
+        # srtm is only one timestep
+        srtm = x_hw[:, :, :1, SRTM_TO_OUTPUT_BAND_MAPPING][
+            :, :, :, EVAL_TO_HELIOS_SRTM_BANDS
         ]
 
         months = torch.tensor(
@@ -239,12 +250,14 @@ class CropHarvestDataset(Dataset):
         if self.norm_stats_from_pretrained:
             s2 = self.normalizer_computed.normalize(Modality.SENTINEL2_L2A, s2)
             s1 = self.normalizer_computed.normalize(Modality.SENTINEL1, s1)
+            srtm = self.normalizer_computed.normalize(Modality.SRTM, srtm)
 
         return MaskedHeliosSample.from_heliossample(
             HeliosSample(
                 sentinel1=torch.tensor(s1).float(),
                 sentinel2_l2a=torch.tensor(s2).float(),
                 latlon=torch.tensor(latlon).float(),
+                srtm=srtm,
                 timestamps=timestamp,
             )
         ), y
