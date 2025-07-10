@@ -88,7 +88,23 @@ class AttnPoolLinearProbe(nn.Module):
         attn_weights = F.softmax(attn_scores, dim=-1)
         x = torch.matmul(attn_weights, v)  # [B, head, 1, D_head]
         x = x.reshape(B, H, W, D)
-        return self.linear(x), attn_weights
+        return {"logits": self.linear(x), "attn_weights": attn_weights}
+
+class LinearProbe(nn.Module):
+    """Linear Probe for classification tasks."""
+
+    def __init__(self, in_dim: int, out_dim: int, use_batchnorm: bool = False) -> None:
+        """Initialize the linear probe."""
+        super().__init__()
+        self.linear = nn.Linear(in_dim, out_dim)
+        if use_batchnorm:
+            self.batchnorm = nn.BatchNorm1d(in_dim)
+        else:
+            self.batchnorm = nn.Identity()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass for linear probe."""
+        return {"logits": self.linear(self.batchnorm(x))}
 
 
 def train_and_eval_probe(
@@ -118,15 +134,15 @@ def train_and_eval_probe(
                 in_dim=in_features, out_dim=logits_per_patch
             ).to(device)
         elif probe_type == ProbeType.LINEAR:
-            probe = nn.Sequential(
-                nn.Linear(in_features, logits_per_patch),
+            probe = LinearProbe(
+                in_dim=in_features, out_dim=logits_per_patch, use_batchnorm=False
             ).to(device)
         else:
             raise ValueError(f"Probe type {probe_type} not supported for segmentation.")
     else:
         if probe_type == ProbeType.LINEAR:
-            probe = nn.Sequential(
-                nn.BatchNorm1d(in_features), nn.Linear(in_features, config.num_classes)
+            probe = LinearProbe(
+                in_dim=in_features, out_dim=config.num_classes, use_batchnorm=True
             ).to(device)
         else:
             raise ValueError(
@@ -171,6 +187,7 @@ def train_and_eval_probe(
             patch_size=patch_size,
             device=device,
             task_type=config.task_type,
+            probe_type=probe_type,
         )
         logger.info(f"Epoch {end_epoch}, MIoU: {eval_miou}")
         eval_mious.append(eval_miou)
@@ -212,11 +229,10 @@ def train_probe(
             batch_emb = batch_emb.to(device)
 
             with torch.amp.autocast(device_type=device.type, dtype=torch.bfloat16):
-                logits = probe(
+                outputs = probe(
                     batch_emb
                 )  # (bsz, num_patches, logits_per_patch) or (bsz, n_cls)
-                if isinstance(logits, tuple):
-                    logits, _ = logits
+                logits = outputs["logits"]
                 if task_type == TaskType.SEGMENTATION:
                     logits = rearrange(
                         logits,
@@ -273,9 +289,8 @@ def evaluate_probe(
             batch_emb = batch_emb.to(device)
 
             with torch.amp.autocast(device_type=device.type, dtype=torch.bfloat16):
-                logits = probe(batch_emb)  # (bsz, num_patches, logits_per_patch)
-                if isinstance(logits, tuple):
-                    logits, attn_weights = logits
+                outputs = probe(batch_emb)  # (bsz, num_patches, logits_per_patch)
+                logits = outputs["logits"]
                 if task_type == TaskType.SEGMENTATION:
                     spatial_patches_per_dim = batch_emb.shape[1]
                     logits = rearrange(
@@ -298,8 +313,8 @@ def evaluate_probe(
             preds = torch.argmax(logits, dim=1).cpu()
             all_preds.append(preds)
             all_labels.append(batch_labels)
-            if not isinstance(probe, nn.Sequential):
-                all_attn_weights.append(attn_weights)
+            if probe_type == ProbeType.ATTNPOOL:
+                all_attn_weights.append(outputs["attn_weights"])
 
     if probe_type == ProbeType.ATTNPOOL:
         all_attn_weights_tensor = torch.cat(all_attn_weights)
