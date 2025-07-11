@@ -166,7 +166,7 @@ class CropHarvestDataset(Dataset):
 
         _download_cropharvest_data(cropharvest_dir)
 
-        evaluation_datasets = _get_eval_datasets()
+        evaluation_datasets = _get_eval_datasets(cropharvest_dir)
         evaluation_datasets = [d for d in evaluation_datasets if country in d.id]
         assert len(evaluation_datasets) == 1
         self.dataset: CropHarvest = evaluation_datasets[0]
@@ -270,7 +270,7 @@ class CropHarvestDataset(Dataset):
 
         # for s2, we need to impute missing bands
         s2 = self._impute_bands(
-            [s2[:, :, :, idx] for idx in s2.shape[-1]],
+            [s2[:, :, :, idx] for idx in range(s2.shape[-1])],
             S2_EVAL_BANDS_BEFORE_IMPUTATION,
             self.config.imputes,
         )
@@ -312,5 +312,4 @@ class CropHarvestDataset(Dataset):
             input_dict[Modality.SENTINEL1.name] = torch.tensor(s2).float()
         if Modality.SRTM.name in self.input_modalities:
             input_dict[Modality.SRTM.name] = torch.tensor(s2).float()
-
         return MaskedHeliosSample.from_heliossample(HeliosSample(**input_dict)), y

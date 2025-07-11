@@ -9,14 +9,13 @@ from helios.evals.datasets import CropHarvestDataset
 from helios.evals.datasets.utils import eval_collate_fn
 from helios.nn.flexihelios import Encoder
 
-CROPHARVEST_TEST_DIR = Path(__file__).parents[2] / "cropharvest"
+CROPHARVEST_TEST_DIR = Path(__file__).parents[3] / "cropharvest"
 
 
 def test_cropharvest_dataset_maybe() -> None:
     """Test forward pass from CropHarvest data."""
     if not CROPHARVEST_TEST_DIR.exists():
         return None
-
     for norm_stats_from_pretrained in [True, False]:
         supported_modalities = [Modality.SENTINEL2_L2A]
         ds = CropHarvestDataset(
@@ -26,6 +25,7 @@ def test_cropharvest_dataset_maybe() -> None:
             partition="default",
             norm_stats_from_pretrained=norm_stats_from_pretrained,
             timesteps=12,
+            input_modalities=[x.name for x in supported_modalities],
         )
         d = DataLoader(
             dataset=ds,
@@ -46,4 +46,4 @@ def test_cropharvest_dataset_maybe() -> None:
         )
 
         batch, _ = next(iter(d))
-        _ = encoder(batch, patch_size=4)
+        _ = encoder(batch, patch_size=1)
