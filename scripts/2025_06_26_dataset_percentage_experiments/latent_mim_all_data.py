@@ -137,6 +137,7 @@ def build_dataloader_config(common: CommonComponents) -> HeliosDataLoaderConfig:
         max_patch_size=MAX_PATCH_SIZE,
         work_dir=common.save_folder,
         seed=3622,
+        num_dataset_repeats_per_epoch=int(0.25 / common.dataset_percentage),
     )
 
 
