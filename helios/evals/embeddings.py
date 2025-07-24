@@ -10,8 +10,20 @@ from helios.nn.flexihelios import Encoder, PoolingType, TokensAndMasks
 from helios.train.masking import MaskedHeliosSample
 from einops import rearrange
 import torch.nn.functional as F
+from torchvision import transforms
 
 logger = logging.getLogger(__name__)
+
+# Use timm's names
+IMAGENET_DEFAULT_MEAN = (0.485, 0.456, 0.406)
+IMAGENET_DEFAULT_STD = (0.229, 0.224, 0.225)
+
+
+def make_normalize_transform(
+    mean = IMAGENET_DEFAULT_MEAN,
+    std = IMAGENET_DEFAULT_STD,
+) -> transforms.Normalize:
+    return transforms.Normalize(mean=mean, std=std)
 
 
 def get_embeddings(
@@ -29,6 +41,8 @@ def get_embeddings(
     torchhub_id = "dinov2_vitb14"
     model = torch.hub.load("facebookresearch/dinov2", torchhub_id)
     model = model.eval()
+    # move model to GPU
+    model = model.to(device="cuda")
     device = next(model.parameters()).device
     total_samples = len(data_loader)
     with torch.no_grad():
@@ -59,16 +73,24 @@ def get_embeddings(
 
                 s2_data = rearrange(s2_data, "b h w t c -> b (c t) h w")
                 s2_data = s2_data[:, [3,2,1], :, :]
+                # normalize the data
+                normalize_transform = make_normalize_transform()
+                s2_data = normalize_transform(s2_data)
+                logger.info(f"s2_data: {s2_data.shape}")
+                # probably need to apply the dinov2 style normalization
                 # Resize the image to 224x224
                 s2_data = F.interpolate(s2_data, size=(224, 224), mode="bilinear", align_corners=False)
-                batch_embeddings = model.forward_features(s2_data)
+                batch_embeddings = model.forward_features(s2_data)["x_norm_clstoken"]
+                # dict_keys(['x_norm_clstoken', 'x_norm_regtokens', 'x_norm_patchtokens', 'x_prenorm', 'masks'])
             spatial_pool = True if task_type == TaskType.SEGMENTATION else False
             # Concat features across modalities in space averaged across time
-            averaged_embeddings = batch_embeddings.pool_unmasked_tokens(
-                pooling_type,
-                spatial_pooling=spatial_pool,
-                concat_features=concat_features,
-            )
+            # averaged_embeddings = batch_embeddings.pool_unmasked_tokens(
+            #     pooling_type,
+            #     spatial_pooling=spatial_pool,
+            #     concat_features=concat_features,
+            # )
+            logger.info(f"batch_embeddings: {batch_embeddings.shape}")
+            averaged_embeddings = batch_embeddings
             embeddings.append(averaged_embeddings.cpu())
             labels.append(label)
             logger.debug(f"Processed {i} / {total_samples}")
