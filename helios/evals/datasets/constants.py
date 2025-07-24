@@ -68,7 +68,6 @@ EVAL_TO_HELIOS_S2_BANDS = [
     _eval_s2_band_index_from_helios_name(b, EVAL_S2_BAND_NAMES)
     for b in Modality.SENTINEL2_L2A.band_order
 ]
-print(f"EVAL_TO_HELIOS_S2_BANDS: {EVAL_TO_HELIOS_S2_BANDS}")
 
 EVAL_TO_HELIOS_S2_L2A_BANDS = [
     _eval_s2_band_index_from_helios_name(b, EVAL_S2_L2A_BAND_NAMES)

@@ -84,7 +84,6 @@ def get_embeddings(
                     image_size = ((original_height // 14) - 1) * 14
                     s2_data = F.interpolate(s2_data, size=(image_size, image_size), mode="bilinear", align_corners=False)
                 if apply_imagenet_normalization:
-                    print("Applying imagenet normalization")
                     # normalize the data
                     normalize_transform = make_normalize_transform()
                     s2_data = normalize_transform(s2_data)

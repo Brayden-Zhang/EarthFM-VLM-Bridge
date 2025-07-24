@@ -29,6 +29,7 @@ lr_args = " ".join(
 
 imagenet_args = " ".join(
     [
+        " ",
         "--trainer.callbacks.downstream_evaluator.tasks.m_eurosat.norm_method=no_norm",
         "--trainer.callbacks.downstream_evaluator.tasks.m_bigearthnet.norm_method=no_norm",
         "--trainer.callbacks.downstream_evaluator.tasks.m_so2sat.norm_method=no_norm",
@@ -48,6 +49,7 @@ imagenet_args = " ".join(
 
 dataset_args = " ".join(
     [
+        " ",
         "--trainer.callbacks.downstream_evaluator.tasks.m_eurosat.norm_stats_from_pretrained=False",
         "--trainer.callbacks.downstream_evaluator.tasks.m_bigearthnet.norm_stats_from_pretrained=False",
         "--trainer.callbacks.downstream_evaluator.tasks.m_so2sat.norm_stats_from_pretrained=False",
@@ -60,6 +62,7 @@ dataset_args = " ".join(
 
 helios_args = " ".join(
     [
+        " ",
         "--trainer.callbacks.downstream_evaluator.tasks.m_eurosat.norm_stats_from_pretrained=True",
         "--trainer.callbacks.downstream_evaluator.tasks.m_bigearthnet.norm_stats_from_pretrained=True",
         "--trainer.callbacks.downstream_evaluator.tasks.m_so2sat.norm_stats_from_pretrained=True",
@@ -70,16 +73,19 @@ helios_args = " ".join(
     ]
 )
 
-for norm_mode in Normalization_MODES:
-    for lr in LP_LRs:
+for lr in LP_LRs:
+    for norm_mode in Normalization_MODES:
         print(f"Running with {norm_mode} normalization and {lr} learning rate")
         run_name = f"dino_v2_eval_norm{norm_mode}_{lr}"
-        lr_args = lr_args.format(lr=lr)
+        args = lr_args.format(lr=lr)
         if norm_mode == "imagenet":
-            lr_args += imagenet_args
+            args += imagenet_args
         elif norm_mode == "dataset":
-            lr_args += dataset_args
+            args += dataset_args
         elif norm_mode == "helios":
-            lr_args += helios_args
-        cmd = f"python3 scripts/dino_v2_evals/dino_v2_eval.py ai2/saturn-cirrascale --launch.priority=high {lr_args} --launch.task_name=eval"
+            args += helios_args
+        # change to launch and saturn when we are ready to launch
+        cmd = f"python3 scripts/dino_v2_evals/dino_v2_eval.py launch {run_name}  ai2/saturn-cirrascale  --launch.priority=high {args} --launch.task_name=eval"
+        print(cmd)
         subprocess.run(cmd, shell=True)  # nosec
+        break
