@@ -9,7 +9,8 @@ import geobench
 import matplotlib.pyplot as plt
 import numpy as np
 import torch.multiprocessing
-from einops import repeat
+from einops import repeat, rearrange
+import torch.nn.functional as F
 from geobench.dataset import Stats
 from torch.utils.data import Dataset
 from upath import UPath
@@ -167,9 +168,17 @@ class GeobenchDataset(Dataset):
         ), f"All datasets must have 13 channels, not {x.shape[-1]}"
         if self.multiply_by_10_000:
             x = x * 10_000
+        s2 = torch.tensor(x).float()
         # Normalize using the downstream task's normalization stats
         if not self.norm_stats_from_pretrained:
-            x = torch.tensor(normalize_bands(x, self.mean, self.std, self.norm_method))
+            logger.info(f"s2 data shape: {s2.shape}")
+            # data is 64, 64, 13
+            s2 = rearrange(s2, " h w c -> c h w").unsqueeze(0)
+            s2 = F.interpolate(s2, size=(224, 224), mode="bilinear", align_corners=False)
+            # I want to interpolate to 224, 224, 13
+            s2 = s2.squeeze(0)
+            s2 = rearrange(s2, "c h w -> h w c")
+            x = torch.tensor(normalize_bands(s2, self.mean, self.std, self.norm_method))
         # check if label is an object or a number
         if not (isinstance(label, int) or isinstance(label, list)):
             label = label.data

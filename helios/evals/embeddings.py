@@ -73,16 +73,17 @@ def get_embeddings(
 
                 s2_data = rearrange(s2_data, "b h w t c -> b (c t) h w")
                 s2_data = s2_data[:, [3,2,1], :, :]
-                # logger.info(f"s2_data: {s2_data.shape}")                # probably need to apply the dinov2 style normalization
+                logger.info(f"s2_data: {s2_data.shape}")                # probably need to apply the dinov2 style normalization
                 # Resize the image to 224x224
                 original_height = s2_data.shape[2]
-                if original_height < 224:
-                    image_size = 224
-                    s2_data = F.interpolate(s2_data, size=(image_size, image_size), mode="bilinear", align_corners=False)
-                else:
-                    # move to nearest multiple of 14
-                    image_size = ((original_height // 14) - 1) * 14
-                    s2_data = F.interpolate(s2_data, size=(image_size, image_size), mode="bilinear", align_corners=False)
+                # TODO: this resizing may need to happen before the normalization for some of the evals
+                # if original_height < 224:
+                #     image_size = 224
+                #     s2_data = F.interpolate(s2_data, size=(image_size, image_size), mode="bilinear", align_corners=False)
+                # else:
+                #     # move to nearest multiple of 14
+                #     image_size = ((original_height // 14) - 1) * 14
+                #     s2_data = F.interpolate(s2_data, size=(image_size, image_size), mode="bilinear", align_corners=False)
                 if apply_imagenet_normalization:
                     # normalize the data
                     normalize_transform = make_normalize_transform()
