@@ -68,14 +68,23 @@ class PanopticonWrapper(nn.Module):
         for i in range(t_dim):
             data_i = rearrange(data[:, :, :, i, :], "b h w c -> b c h w")
 
-            # Resize the image to the Panopticon pre-training input size
-            image_size = 224
-            data_i = F.interpolate(
-                data_i,
-                size=(image_size, image_size),
-                mode="bilinear",
-                align_corners=False
-            )
+            if original_height == 1:
+                # For pixel time series resize to single patch
+                data_i = F.interpolate(
+                    data_i,
+                    size=(self.patch_size, self.patch_size),
+                    mode="bilinear",
+                    align_corners=False
+                )
+            else:
+                # Resize the image to the Panopticon pre-training input size
+                image_size = 224
+                data_i = F.interpolate(
+                    data_i,
+                    size=(image_size, image_size),
+                    mode="bilinear",
+                    align_corners=False
+                )
             data_list.append(data_i)
         return data_list
 
@@ -91,14 +100,20 @@ class PanopticonWrapper(nn.Module):
         """
         # Bands are in the EVAL_TO_HELIOS_S2_BANDS order so we need to use that to pull the information from the yaml files
         if modality == "sentinel2_l2a":
-            modality = "sentinel2"
-        with open(f"./helios/evals/panopticon/sensors/{modality}.yaml", "r") as f:
+            modality_yaml_name = "sentinel2"
+        elif modality == "landsat":
+            modality_yaml_name = "landsat8"
+        else:
+            modality_yaml_name = modality
+        with open(f"./helios/evals/panopticon/sensors/{modality_yaml_name}.yaml", "r") as f:
             sensor_config = yaml.safe_load(f)
         modality_spec = Modality.get(modality)
+        # Data is prepared in helios band order so we need to tell panopticon whcich band it is
         chn_ids = []
         for band in modality_spec.band_order:
-            if band == "B10":
+            if band == "B10" and modality == "sentinel2_l2a":
                 # skipping B10 band for this eval I think because the helios dataloader skips it
+                # is this true for everything or for geobench only?
                 continue
             band = band.upper()
             chn_ids.append(sensor_config["bands"][band]["gaussian"]["mu"])
@@ -166,11 +181,18 @@ class PanopticonWrapper(nn.Module):
             Model embeddings
         """
         # Prepare input
-        panopticon_input = self.prepare_input(masked_helios_sample)
+        per_timestep_panopticon_inputs = self.prepare_input(masked_helios_sample)
         # potentially will need to add a flag for segmentation
-        embeddings = self.model(panopticon_input)
-        logger.info(f"Model output shape: {embeddings.shape}")
-        return embeddings
+        output_features = []
+        for panopticon_input in per_timestep_panopticon_inputs:
+            timestep_output = self.model(panopticon_input)
+            print(f"timestep_output shape: {timestep_output.shape}")
+            output_features.append(timestep_output.unsqueeze(0))
+        # stack in the timestep dimension and take the mean or maybe the max?
+        output_features = torch.cat(output_features, dim=0).mean(dim=0)
+        print(f"output_features shape: {output_features.shape}")
+        # Do we need this to work for both single pixel and full images
+        return output_features
 
     def get_intermediate_layers(self, masked_helios_sample: MaskedHeliosSample, n: list[int], return_class_token: bool = False) -> list[torch.Tensor]:
         """Get intermediate layers from the panopticon model.
@@ -216,7 +238,7 @@ class PanopticonWrapper(nn.Module):
             return tuple(zip(outputs, class_tokens))
         return tuple(outputs)
 
-
+    # TODO: add a Temporal poolin type option
     def forward_features(self, masked_helios_sample: MaskedHeliosSample) -> dict[str, torch.Tensor]:
         """Forward pass through the panopticon model.
 
@@ -235,7 +257,7 @@ class PanopticonWrapper(nn.Module):
             timestep_output = rearrange(timestep_output, "b (h w) d -> b h w d", h=height, w=height)
             output_features.append(timestep_output.unsqueeze(0))
         # stack in the timestep dimension and take the mean or maybe the max?
-        output_features = torch.cat(output_features, dim=0).max(dim=0)
+        output_features = torch.cat(output_features, dim=0).mean(dim=0)
         return output_features
 
 

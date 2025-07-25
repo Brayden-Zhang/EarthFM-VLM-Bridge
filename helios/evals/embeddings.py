@@ -81,6 +81,7 @@ def get_embeddings(
                     print(f"shape of batch_embeddings: {batch_embeddings.shape}")
                 else:
                     batch_embeddings = model(masked_helios_sample)
+                    print(f"shape of batch_embeddings: {batch_embeddings.shape}")
                 # cls_token = batch_embeddings_dict['x_norm_clstoken']
                 # batch_embeddings = (cls_token + batch_embeddings) / 2
 

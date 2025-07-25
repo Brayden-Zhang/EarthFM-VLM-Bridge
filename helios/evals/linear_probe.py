@@ -127,7 +127,7 @@ def train_and_eval_probe(
     if train_embeddings.shape[-1] != test_embeddings.shape[-1]:
         raise ValueError("Embedding dims don't match.")
     in_features = train_embeddings.shape[-1]
-
+    print(f"task type {config.task_type}")
     if config.task_type == TaskType.SEGMENTATION:
         logits_per_patch = int(config.num_classes * patch_size * patch_size)
         if probe_type == ProbeType.ATTNPOOL:
@@ -230,6 +230,7 @@ def train_probe(
             batch_emb = batch_emb.to(device)
 
             with torch.amp.autocast(device_type=device.type, dtype=torch.bfloat16):
+                print(f"batch_emb shape: {batch_emb.shape}")
                 outputs = probe(
                     batch_emb
                 )  # (bsz, num_patches, logits_per_patch) or (bsz, n_cls)
