@@ -66,8 +66,6 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             pooling_type=PoolingType.MEAN,
             norm_stats_from_pretrained=True,
             eval_interval=Duration.epochs(1),
-            eval_mode="linear_probe",
-            probe_lr=0.1,
         ),
         "m-eurosat": DownstreamTaskConfig(
             dataset="m-eurosat",
