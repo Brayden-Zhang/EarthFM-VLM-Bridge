@@ -28,7 +28,7 @@ from helios.data.dataset import HeliosDatasetConfig
 from helios.internal.common import build_common_components
 from helios.internal.experiment import CommonComponents, HeliosVisualizeConfig, main
 from helios.internal.utils import MODEL_SIZE_ARGS
-from helios.evals.dinov2.dinov2 import DINOv2Config
+from helios.evals.panopticon.panopticon import PanopticonConfig
 from helios.nn.latent_mim import LatentMIMConfig
 from helios.train.callbacks import (
     DownstreamEvaluatorCallbackConfig,
@@ -48,7 +48,7 @@ MIN_PATCH_SIZE = 1
 
 def build_model_config(common: CommonComponents) -> LatentMIMConfig:
     """Build the model config for an experiment."""
-    model_config = DINOv2Config()
+    model_config = PanopticonConfig()
     return model_config
 
 
