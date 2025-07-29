@@ -29,7 +29,7 @@ def make_normalize_transform(
 HELIOS_SENTINEL2_RGB_BANDS = [3, 2, 1]
 HELIOS_LANDSAT_RGB_BANDS = [4, 3, 2]
 
-class DINOv2Wrapper(nn.Module):
+class DINOv2(nn.Module):
     """Wrapper for the Panopticon model that can ingest MaskedHeliosSample objects."""
 
     def __init__(
@@ -37,7 +37,6 @@ class DINOv2Wrapper(nn.Module):
         torchhub_id: str = "dinov2_vitb14",
         patch_size: int = 14,
         device: str = "cuda",
-        apply_imagenet_normalization: bool = False,
         use_cls_token: bool = False,
     ):
         """Initialize the Panopticon wrapper.
@@ -50,7 +49,6 @@ class DINOv2Wrapper(nn.Module):
         super().__init__()
         self.patch_size = patch_size
         self.device = device
-        self.apply_imagenet_normalization = apply_imagenet_normalization
         self.use_cls_token = use_cls_token
         # Load the panopticon model
         self._load_model(torchhub_id)
@@ -77,7 +75,7 @@ class DINOv2Wrapper(nn.Module):
         self.model = self.model.to(device=self.device)
         logger.info(f"Loaded panopticon model {torchhub_id} on device {self.device}")
 
-    def _process_modality_data(self, data: torch.Tensor, modality: str) -> list[torch.Tensor]:
+    def _process_modality_data(self, data: torch.Tensor, modality: str, apply_imagenet_normalization: bool = False) -> list[torch.Tensor]:
         """Process individual modality data.
 
         Args:
@@ -125,7 +123,7 @@ class DINOv2Wrapper(nn.Module):
         return data_list
 
 
-    def prepare_input(self, masked_helios_sample: MaskedHeliosSample) -> dict[str, torch.Tensor]:
+    def prepare_input(self, masked_helios_sample: MaskedHeliosSample, apply_imagenet_normalization: bool = False) -> dict[str, torch.Tensor]:
         """Prepare input for the panopticon model from MaskedHeliosSample.
 
         Args:
@@ -147,7 +145,7 @@ class DINOv2Wrapper(nn.Module):
                 continue
 
             # Process the modality data
-            processed_data = self._process_modality_data(data, modality,)
+            processed_data = self._process_modality_data(data, modality, apply_imagenet_normalization)
             for i, data_i in enumerate(processed_data):
                 # start the list if it doesn't exist
                 if i not in input_data_timesteps:
@@ -165,7 +163,7 @@ class DINOv2Wrapper(nn.Module):
             per_timestep_inputs.append(concatenated_imgs)
         return per_timestep_inputs
 
-    def forward(self, masked_helios_sample: MaskedHeliosSample, pooling: PoolingType = PoolingType.MEAN) -> torch.Tensor:
+    def forward(self, masked_helios_sample: MaskedHeliosSample, pooling: PoolingType = PoolingType.MEAN, apply_imagenet_normalization: bool = False) -> torch.Tensor:
         """Forward pass through dinov2 model for classification.
 
         Args:
@@ -175,7 +173,7 @@ class DINOv2Wrapper(nn.Module):
             Model embeddings
         """
         # Prepare input
-        per_timestep_inputs = self.prepare_input(masked_helios_sample)
+        per_timestep_inputs = self.prepare_input(masked_helios_sample, apply_imagenet_normalization)
         # potentially will need to add a flag for segmentation
         output_features = []
         for data in per_timestep_inputs:
@@ -191,7 +189,7 @@ class DINOv2Wrapper(nn.Module):
             output_features = torch.max(torch.cat(output_features, dim=0), dim=0)[0]
         return output_features
 
-    def forward_features(self, masked_helios_sample: MaskedHeliosSample, pooling: PoolingType = PoolingType.MEAN) -> torch.Tensor:
+    def forward_features(self, masked_helios_sample: MaskedHeliosSample, pooling: PoolingType = PoolingType.MEAN, apply_imagenet_normalization: bool = False) -> torch.Tensor:
         """Forward pass through dinov2 model for segmentation.
 
         Args:
@@ -200,7 +198,7 @@ class DINOv2Wrapper(nn.Module):
         Returns:
         """
         # supports multi-timestep input single timestep output
-        per_timestep_panopticon_inputs = self.prepare_input(masked_helios_sample)
+        per_timestep_panopticon_inputs = self.prepare_input(masked_helios_sample, apply_imagenet_normalization)
         output_features = []
         for panopticon_input in per_timestep_panopticon_inputs:
             timestep_output = self.model.forward_features(panopticon_input)["x_norm_patchtokens"]
@@ -230,9 +228,9 @@ class DINOv2Config(Config):
     device: str = "cpu"
     apply_imagenet_normalization: bool = False
 
-    def build(self) -> DINOv2Wrapper:
-        """Build the DINOv2Wrapper from this config."""
-        return DINOv2Wrapper(
+    def build(self) -> DINOv2:
+        """Build the DINOv2 from this config."""
+        return DINOv2(
             torchhub_id=self.torchhub_id,
             patch_size=self.patch_size,
             device=self.device,

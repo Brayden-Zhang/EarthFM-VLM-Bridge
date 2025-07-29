@@ -11,35 +11,20 @@ from helios.nn.flexihelios import Encoder, PoolingType, TokensAndMasks
 from helios.train.masking import MaskedHeliosSample
 from helios.data.constants import Modality
 from einops import rearrange, repeat
+from helios.evals.eval_wrapper import EvalWrapper
 import torch.nn.functional as F
-from helios.evals.panopticon.panopticon import PanopticonWrapper
-from torchvision import transforms
 
 logger = logging.getLogger(__name__)
 
-# Use timm's names
-IMAGENET_DEFAULT_MEAN = (0.485, 0.456, 0.406)
-IMAGENET_DEFAULT_STD = (0.229, 0.224, 0.225)
-
-
-def make_normalize_transform(
-    mean = IMAGENET_DEFAULT_MEAN,
-    std = IMAGENET_DEFAULT_STD,
-) -> transforms.Normalize:
-    return transforms.Normalize(mean=mean, std=std)
-
 
 def get_embeddings(
-    data_loader: DataLoader,
-    model: EvalWrapper,
-) -> tuple[torch.Tensor, torch.Tensor]:
+    data_loader: DataLoader, model: EvalWrapper) -> tuple[torch.Tensor, torch.Tensor]:
     """Get embeddings from model for the data in data_loader."""
     embeddings = []
     labels = []
-    model = model.eval()
+    model.eval()
     # move model to GPU
-    model = model.to(device="cuda")
-    device = next(model.parameters()).device
+    device = model.device
     total_samples = len(data_loader)
     with torch.no_grad():
         for i, (masked_helios_sample, label) in enumerate(data_loader):

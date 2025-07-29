@@ -20,6 +20,7 @@ from helios.evals.embeddings import get_embeddings
 from helios.evals.knn import run_knn
 from helios.evals.linear_probe import ProbeType, train_and_eval_probe
 from helios.nn.flexihelios import PoolingType
+from helios.evals.eval_wrapper import get_eval_wrapper
 from helios.train.callbacks.wandb import HeliosWandBCallback
 
 logger = logging.getLogger(__name__)
