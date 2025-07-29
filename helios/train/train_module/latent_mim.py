@@ -51,6 +51,7 @@ class LatentMIMTrainModuleConfig(HeliosTrainModuleConfig):
     warmup_duration: Duration = field(default_factory=lambda: Duration.epochs(2))
     ema_decay: tuple[float, float] = (0.996, 1.0)
     max_grad_norm: float = 1.0
+    mixup: float = 0.0
 
     def build(
         self,
@@ -96,6 +97,7 @@ class LatentMIMTrainModule(HeliosTrainModule):
         state_dict_load_opts: Override state dict options for loading.
         token_exit_cfg: The token exit configuration for the model.
         warmup_duration: The warmup duration for the model.
+        mixup: Mixup value to use
     """
 
     def __init__(
@@ -121,6 +123,7 @@ class LatentMIMTrainModule(HeliosTrainModule):
         warmup_duration: Duration = Duration.epochs(2),
         regularizer_config: LossConfig | None = None,
         find_unused_parameters: bool = True,
+        mixup: float = 0.0,
     ):
         """Initialize the training module.
 
@@ -147,6 +150,7 @@ class LatentMIMTrainModule(HeliosTrainModule):
             warmup_duration: The warmup duration for the model.
             regularizer_config: An optional regularizer configuration for the model.
             find_unused_parameters: Whether to find unused parameters in the model, only used for DDP.
+            mixup: Mixup value to use
         """
         super().__init__(
             model=model,
@@ -181,9 +185,26 @@ class LatentMIMTrainModule(HeliosTrainModule):
         if self.mae_loss is not None:
             self.total_loss_name = f"{self.total_loss_name}+{self.mae_loss.name}"
 
+        self.mixup = mixup
+
     def loss_fn(self, pred: Any, targets: Any) -> torch.Tensor:
         """Compute the loss between the predicted and target tensors."""
         return self.base_loss.compute(pred, targets)
+
+    def apply_mixup(
+        self, microbatch: HeliosSample, other_microbatch: HeliosSample
+    ) -> HeliosSample:
+        """Apply mixup.
+
+        https://arxiv.org/abs/1710.09412
+        """
+        if self.mixup >= 0.5:
+            ts_to_keep = other_microbatch.timestamps
+        else:
+            ts_to_keep = microbatch.timestamps
+        return microbatch.mul_by_float(1 - self.mixup).add(
+            other_microbatch.mul_by_float(self.mixup), ts_to_keep
+        )
 
     def train_batch(
         self, batch: tuple[int, HeliosSample], dry_run: bool = False
@@ -209,12 +230,18 @@ class LatentMIMTrainModule(HeliosTrainModule):
         # Split into micro-batches.
         microbatches = split_batch(batch_data, self.rank_microbatch_size)
         num_microbatches = len(microbatches)
-        for microbatch_idx, microbatch in enumerate(microbatches):
+        for microbatch_idx, org_microbatch in enumerate(microbatches):
             with self._train_microbatch_context(microbatch_idx, num_microbatches):
                 logger.info(
-                    f"Training microbatch {microbatch_idx} of {num_microbatches} with batch size {microbatch.batch_size}"
+                    f"Training microbatch {microbatch_idx} of {num_microbatches} with batch size {org_microbatch.batch_size}"
                 )
-                microbatch = self.transform.apply(microbatch).to_device(self.device)
+                microbatch = self.transform.apply(org_microbatch).to_device(self.device)
+                if self.mixup > 0:
+                    other_microbatch = self.transform.apply(
+                        org_microbatch.rotate()
+                    ).to_device(self.device)
+                    microbatch = self.apply_mixup(microbatch, other_microbatch)
+
                 masked_batch = self.masking_strategy.apply_mask(
                     microbatch, patch_size=patch_size
                 )

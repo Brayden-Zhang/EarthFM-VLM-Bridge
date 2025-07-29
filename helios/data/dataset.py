@@ -414,6 +414,47 @@ class HeliosSample(NamedTuple):
                 new_data_dict[attribute] = modality
         return HeliosSample(**new_data_dict)
 
+    def mul_by_float(self, m: float) -> "HeliosSample":
+        """Multiply a HeliosSample by a float."""
+        if not isinstance(m, float):
+            raise ValueError("Multiplication only supported for floats")
+        return HeliosSample(
+            **{k: cast(ArrayTensor, v) * m for k, v in self.as_dict().items()}
+        )
+
+    def add(
+        self, other: "HeliosSample", timestamps_to_keep: ArrayTensor
+    ) -> "HeliosSample":
+        """Add two HeliosSamples together."""
+        if not isinstance(other, HeliosSample):
+            raise ValueError("Addition only supported for HeliosSamples")
+        summed_dict: dict[str, ArrayTensor] = {}
+        for key, val in self.as_dict(ignore_nones=True).items():
+            assert val is not None  # keep mypy happy. True because ignore_nones=True
+            other_val = getattr(val, key)
+            if other_val is None:
+                raise ValueError(
+                    "Add requires both HeliosSamples to have the same modalities"
+                )
+            summed_dict[key] = val + other_val
+        summed_dict["timestamps"] = timestamps_to_keep
+        return HeliosSample(**summed_dict)
+
+    def rotate(self) -> "HeliosSample":
+        """Rotate the instances by one.
+
+        If previously, we had a batch of three instances [B1, B2, B3],
+        we will now have a batch of three instances [B2, B3, B1].
+        """
+        return HeliosSample(
+            **{
+                k: np.concatenate(
+                    (cast(ArrayTensor, v)[1:], cast(ArrayTensor, v)[:1]), axis=0
+                )
+                for k, v in self.as_dict().items()
+            }
+        )
+
 
 def collate_helios(batch: list[tuple[int, HeliosSample]]) -> tuple[int, HeliosSample]:
     """Collate function that automatically handles any modalities present in the samples."""
