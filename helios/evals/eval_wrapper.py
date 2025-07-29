@@ -31,11 +31,17 @@ class EvalWrapper:
     @property
     def device(self) -> torch.device:
         """Get the device of the model."""
-        model = self.model
-        if hasattr(model, "device"):
-            return model.device
-        else:
-            return next(model.parameters()).device
+        dev = getattr(self.model, "device", None)
+
+        if isinstance(dev, torch.device):
+            return dev
+
+        # DinoV2 returns a string
+        if isinstance(dev, str):
+            return torch.device(dev)
+
+        # For FSDP wrapped models, fall back to device of model parameters
+        return next(self.model.parameters()).device
 
     def __getattr__(self, name: str) -> Any:
         """
@@ -86,7 +92,7 @@ class DINOv2EvalWrapper(EvalWrapper):
             batch_embeddings = self.model.forward_features(masked_helios_sample, pooling=self.pooling_type, apply_imagenet_normalization=self.apply_imagenet_normalization)
         else:
             # should this call model ditectly
-            batch_embeddings = self.model.forward(masked_helios_sample, pooling=self.pooling_type, apply_imagenet_normalization=self.apply_imagenet_normalization)
+            batch_embeddings = self.model(masked_helios_sample, pooling=self.pooling_type, apply_imagenet_normalization=self.apply_imagenet_normalization)
         return batch_embeddings
 
 

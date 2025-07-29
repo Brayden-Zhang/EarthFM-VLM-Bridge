@@ -2,6 +2,7 @@
 
 import logging
 import torch
+import time
 import torch.nn.functional as F
 from einops import rearrange, repeat
 from torchvision import transforms
@@ -30,33 +31,30 @@ HELIOS_SENTINEL2_RGB_BANDS = [3, 2, 1]
 HELIOS_LANDSAT_RGB_BANDS = [4, 3, 2]
 
 class DINOv2(nn.Module):
-    """Wrapper for the Panopticon model that can ingest MaskedHeliosSample objects."""
+    """Wrapper for the dinov2 model that can ingest MaskedHeliosSample objects."""
 
     def __init__(
         self,
         torchhub_id: str = "dinov2_vitb14",
         patch_size: int = 14,
-        device: str = "cuda",
         use_cls_token: bool = False,
     ):
-        """Initialize the Panopticon wrapper.
+        """Initialize the dinov2 wrapper.
 
         Args:
-            torchhub_id: The torch hub model ID for panopticon
+            torchhub_id: The torch hub model ID for dinov2
             patch_size: Patch size for the vision transformer (default 14)
-            device: Device to run the model on
+            use_cls_token: Whether to use the cls token (default False)
         """
         super().__init__()
         self.patch_size = patch_size
-        self.device = device
         self.use_cls_token = use_cls_token
-        # Load the panopticon model
+        # Load the model
         self._load_model(torchhub_id)
 
 
     def _load_model(self, torchhub_id: str):
-        """Load the panopticon model from torch hub."""
-        import time
+        """Load the dinov2 model from torch hub."""
         # Hack to get around https://discuss.pytorch.org/t/torch-hub-load-gives-httperror-rate-limit-exceeded/124769
         torch.hub._validate_not_a_forked_repo = lambda a, b, c: True
         for attempt in range(2):
@@ -67,13 +65,10 @@ class DINOv2(nn.Module):
                 )
                 break
             except Exception as e:
-                logger.warning(f"Error loading panopticon model: {e}. Retrying in 5 seconds...")
+                logger.warning(f"Error loading  model: {e}. Retrying in 5 seconds...")
                 time.sleep(5)
         else:
-            raise RuntimeError(f"Failed to load panopticon model {torchhub_id} after retrying.")
-        self.model = self.model.eval()
-        self.model = self.model.to(device=self.device)
-        logger.info(f"Loaded panopticon model {torchhub_id} on device {self.device}")
+            raise RuntimeError(f"Failed to load dinov2 model {torchhub_id} after retrying.")
 
     def _process_modality_data(self, data: torch.Tensor, modality: str, apply_imagenet_normalization: bool = False) -> list[torch.Tensor]:
         """Process individual modality data.
@@ -84,7 +79,7 @@ class DINOv2(nn.Module):
         Returns:
             Processed tensor of shape [B, C*T, H, W]
         """
-        # Rearrange from "b h w t c -> b (c t) h w" for DinoV2/Panopticon format
+        # Rearrange from "b h w t c -> b (c t) h w" for DinoV2/dinov2 format
         t_dim = data.shape[3]
 
         # Get original dimensions
@@ -107,7 +102,7 @@ class DINOv2(nn.Module):
                     align_corners=False
                 )
             else:
-                # Resize the image to the Panopticon pre-training input size
+                # Resize the image to the dinov2 pre-training input size
                 image_size = 224
                 data_i = F.interpolate(
                     data_i,
@@ -115,7 +110,7 @@ class DINOv2(nn.Module):
                     mode="bilinear",
                     align_corners=False
                 )
-            if self.apply_imagenet_normalization:
+            if apply_imagenet_normalization:
                     # normalize the data
                     normalize_transform = make_normalize_transform()
                     data_i = normalize_transform(data_i)
@@ -124,13 +119,13 @@ class DINOv2(nn.Module):
 
 
     def prepare_input(self, masked_helios_sample: MaskedHeliosSample, apply_imagenet_normalization: bool = False) -> dict[str, torch.Tensor]:
-        """Prepare input for the panopticon model from MaskedHeliosSample.
+        """Prepare input for the dinov2 model from MaskedHeliosSample.
 
         Args:
             masked_helios_sample: Input MaskedHeliosSample object
 
         Returns:
-            Dictionary with 'imgs' and 'chn_ids' keys for panopticon model
+            Dictionary with 'imgs' and 'chn_ids' keys for dinov2 model
         """
         # Process each modality
         input_data_timesteps = {}
@@ -163,6 +158,7 @@ class DINOv2(nn.Module):
             per_timestep_inputs.append(concatenated_imgs)
         return per_timestep_inputs
 
+    # pooling type is on the timesteps only right now
     def forward(self, masked_helios_sample: MaskedHeliosSample, pooling: PoolingType = PoolingType.MEAN, apply_imagenet_normalization: bool = False) -> torch.Tensor:
         """Forward pass through dinov2 model for classification.
 
@@ -198,10 +194,10 @@ class DINOv2(nn.Module):
         Returns:
         """
         # supports multi-timestep input single timestep output
-        per_timestep_panopticon_inputs = self.prepare_input(masked_helios_sample, apply_imagenet_normalization)
+        per_timestep_dinov2_inputs = self.prepare_input(masked_helios_sample, apply_imagenet_normalization)
         output_features = []
-        for panopticon_input in per_timestep_panopticon_inputs:
-            timestep_output = self.model.forward_features(panopticon_input)["x_norm_patchtokens"]
+        for dinov2_input in per_timestep_dinov2_inputs:
+            timestep_output = self.model.forward_features(dinov2_input)["x_norm_patchtokens"]
             num_tokens = timestep_output.shape[1]
             height = int(math.sqrt(num_tokens))
             timestep_output = rearrange(timestep_output, "b (h w) d -> b h w d", h=height, w=height)
@@ -215,9 +211,9 @@ class DINOv2(nn.Module):
 
 
 
-    def __call__(self, masked_helios_sample: MaskedHeliosSample) -> torch.Tensor:
+    def __call__(self, masked_helios_sample: MaskedHeliosSample, pooling: PoolingType = PoolingType.MEAN, apply_imagenet_normalization: bool = False) -> torch.Tensor:
         """Make the wrapper callable."""
-        return self.forward(masked_helios_sample)
+        return self.forward(masked_helios_sample, pooling, apply_imagenet_normalization)
 
 
 @dataclass
@@ -225,14 +221,12 @@ class DINOv2Config(Config):
     """olmo_core style config for DINOv2Wrapper."""
     torchhub_id: str = "dinov2_vitb14"
     patch_size: int = 14
-    device: str = "cpu"
-    apply_imagenet_normalization: bool = False
+    use_cls_token: bool = False
 
     def build(self) -> DINOv2:
         """Build the DINOv2 from this config."""
         return DINOv2(
             torchhub_id=self.torchhub_id,
             patch_size=self.patch_size,
-            device=self.device,
-            apply_imagenet_normalization=self.apply_imagenet_normalization,
+            use_cls_token=self.use_cls_token,
         )

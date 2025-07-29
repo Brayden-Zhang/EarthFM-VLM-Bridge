@@ -111,14 +111,14 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
         #     probe_lr=0.1,
         #     epochs=50,
         # ),
-        # "m_eurosat": DownstreamTaskConfig(
-        #     dataset="m-eurosat",
-        #     embedding_batch_size=128,
-        #     num_workers=0,
-        #     pooling_type=PoolingType.MEAN,
-        #     norm_stats_from_pretrained=False, #True, #False,
-        #     eval_interval=Duration.epochs(5),
-        # ),
+        "m_eurosat": DownstreamTaskConfig(
+            dataset="m-eurosat",
+            embedding_batch_size=128,
+            num_workers=0,
+            pooling_type=PoolingType.MEAN,
+            norm_stats_from_pretrained=False, #True, #False,
+            eval_interval=Duration.epochs(5),
+        ),
         # "m_bigearthnet": DownstreamTaskConfig(
         #     dataset="m-bigearthnet",
         #     embedding_batch_size=64,

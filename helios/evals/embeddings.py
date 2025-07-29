@@ -24,6 +24,8 @@ def get_embeddings(
     labels = []
     model.eval()
     device = model.device
+    model.to(dtype=torch.bfloat16)
+    print(f"Model device: {model.device}")
     total_samples = len(data_loader)
     with torch.no_grad():
         for i, (masked_helios_sample, label) in enumerate(data_loader):
@@ -33,7 +35,7 @@ def get_embeddings(
                     masked_helios_sample_dict[key] = val.to(device=device)
                 else:
                     masked_helios_sample_dict[key] = val.to(
-                        device=device, dtype=torch.bfloat16
+                        device=device,
                     )
 
             masked_helios_sample = MaskedHeliosSample.from_dict(
