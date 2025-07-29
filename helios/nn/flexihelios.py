@@ -682,22 +682,30 @@ class FlexiHeliosCompositeEncodings(nn.Module):
             ),
             requires_grad=False,
         )
-        # M
+        # Month encodings
         month_tab = get_month_encoding_table(self.embedding_dim_per_embedding_type)
         self.month_embed = nn.Embedding.from_pretrained(month_tab, freeze=True)
-        if learnable_channel_embeddings:
-            args = {"requires_grad": True}
+        if not learnable_channel_embeddings and not random_channel_embeddings:
+            self.per_modality_channel_embeddings = nn.ParameterDict()
+            for modality in self.supported_modalities:
+                shape = (len(modality.band_sets), self.embedding_dim_per_embedding_type)
+                channel_embeddings = nn.Parameter(torch.zeros(shape), requires_grad=False)
+                self.per_modality_channel_embeddings[modality.name] = channel_embeddings
         else:
-            args = {"requires_grad": False}
-
-        self.per_modality_channel_embeddings = nn.ParameterDict()
-        for modality in self.supported_modalities:
-            shape = (len(modality.band_sets), self.embedding_dim_per_embedding_type)
-            if random_channel_embeddings:
-                channel_embeddings = nn.Parameter(torch.rand(shape), **args)
+            # Channel embeddings
+            if learnable_channel_embeddings:
+                args = {"requires_grad": True}
             else:
-                channel_embeddings = nn.Parameter(torch.zeros(shape), **args)
-            self.per_modality_channel_embeddings[modality.name] = channel_embeddings
+                args = {"requires_grad": False}
+
+            self.per_modality_channel_embeddings = nn.ParameterDict()
+            for modality in self.supported_modalities:
+                shape = (len(modality.band_sets), self.embedding_dim_per_embedding_type)
+                if random_channel_embeddings:
+                    channel_embeddings = nn.Parameter(torch.rand(shape), **args)
+                else:
+                    channel_embeddings = nn.Parameter(torch.zeros(shape), **args)
+                self.per_modality_channel_embeddings[modality.name] = channel_embeddings
 
         self.apply(self._init_weights)
 
@@ -1747,6 +1755,7 @@ class Predictor(FlexiHeliosBase):
         for modality in modalities_to_process:
             x_modality = getattr(x, modality)
             # Are these normalizations masked correctly?
+            # Does not account for missing tokens
             x_modality = self.input_norm(x_modality)
             x_modality = self.encoder_to_decoder_embed(x_modality)
             masked_modality_name = x.get_masked_modality_name(modality)
