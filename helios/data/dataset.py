@@ -446,14 +446,13 @@ class HeliosSample(NamedTuple):
         If previously, we had a batch of three instances [B1, B2, B3],
         we will now have a batch of three instances [B2, B3, B1].
         """
-        return HeliosSample(
-            **{
-                k: np.concatenate(
-                    (cast(ArrayTensor, v)[1:], cast(ArrayTensor, v)[:1]), axis=0
-                )
-                for k, v in self.as_dict().items()
-            }
-        )
+        output_dict: dict[str, ArrayTensor] = {}
+        for key, v in self.as_dict().items():
+            if isinstance(v, np.ndarray):
+                output_dict[key] = np.concatenate((v[1:], v[:1]), axis=0)
+            elif isinstance(v, torch.Tensor):
+                output_dict[key] = torch.cat((v[1:], v[:1]), dim=0)
+        return HeliosSample(**output_dict)
 
 
 def collate_helios(batch: list[tuple[int, HeliosSample]]) -> tuple[int, HeliosSample]:
