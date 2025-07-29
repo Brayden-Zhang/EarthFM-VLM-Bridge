@@ -269,7 +269,7 @@ class GeobenchDataset(Dataset):
                         self.config.imputes,
                         all_bands=GEOBENCH_L8_BAND_NAMES,
                     ),
-                    dim=-1,
+                    axis=-1,
                 )[:, :, :, EVAL_TO_HELIOS_L8_BANDS]
 
             sample_dict["landsat"] = landsat.float()
