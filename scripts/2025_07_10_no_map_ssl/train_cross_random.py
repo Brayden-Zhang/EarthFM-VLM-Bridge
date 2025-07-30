@@ -35,6 +35,7 @@ from helios.nn.flexihelios import (
     PoolingType,
     PredictorConfig,
 )
+from helios.nn.pooled_modality_predictor import PooledModalityPredictorConfig
 from helios.nn.latent_mim import LatentMIMConfig
 from helios.train.callbacks import (
     DownstreamEvaluatorCallbackConfig,
@@ -63,11 +64,10 @@ def build_model_config(common: CommonComponents) -> LatentMIMConfig:
         mlp_ratio=model_size["mlp_ratio"],
         supported_modality_names=common.training_modalities,
         max_patch_size=MAX_PATCH_SIZE,
-        learnable_channel_embeddings=False,
         drop_path=0.1,
         max_sequence_length=12,
     )
-    decoder_config = PredictorConfig(
+    decoder_config = PooledModalityPredictorConfig(
         encoder_embedding_size=model_size["encoder_embedding_size"],
         decoder_embedding_size=model_size["decoder_embedding_size"],
         depth=model_size["decoder_depth"],
@@ -75,7 +75,6 @@ def build_model_config(common: CommonComponents) -> LatentMIMConfig:
         num_heads=model_size["decoder_num_heads"],
         supported_modality_names=common.training_modalities,
         max_sequence_length=12,
-        learnable_channel_embeddings=False,
     )
     model_config = LatentMIMConfig(
         encoder_config=encoder_config,
@@ -164,8 +163,8 @@ def build_dataset_config(common: CommonComponents) -> HeliosDatasetConfig:
 def build_trainer_config(common: CommonComponents) -> TrainerConfig:
     """Build the trainer config for an experiment."""
     MAX_DURATION = Duration.epochs(75)
-    METRICS_COLLECT_INTERVAL = 10
-    CANCEL_CHECK_INTERVAL = 25
+    METRICS_COLLECT_INTERVAL = 1
+    CANCEL_CHECK_INTERVAL = 1
     LOAD_STRATEGY = LoadStrategy.if_available
     WANDB_USERNAME = "eai-ai2"  # nosec
     WANDB_PROJECT = "2025_07_10_no_map_ssl"
