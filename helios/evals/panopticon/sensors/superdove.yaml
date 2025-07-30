@@ -19,7 +19,7 @@ bands:
   B03:
     name: 'Green I'
     gaussian:
-      mu: 532.719 
+      mu: 532.719
       sigma: 14.4789
     GSD: 3.7
 
@@ -56,5 +56,5 @@ bands:
     name: 'NIR'
     gaussian:
       mu: 864.831
-      sigma: 15.2059 
+      sigma: 15.2059
     GSD: 3.7

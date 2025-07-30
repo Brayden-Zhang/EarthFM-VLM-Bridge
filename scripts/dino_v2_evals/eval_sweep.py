@@ -2,7 +2,6 @@
 
 import subprocess
 
-
 # Evaluation That sweeps over the following:
 # Learning Rate
 # Normalization

@@ -4,8 +4,6 @@ The eval.sh calls this script with all the different checkpoints we had for this
 model architecture related to fixed modality masking.
 """
 
-
-
 from dino_v2 import (
     build_common_components,
     build_dataloader_config,
@@ -38,7 +36,6 @@ from helios.train.callbacks import (
     HeliosSpeedMonitorCallback,
     HeliosWandBCallback,
 )
-from torchvision import transforms
 from helios.train.callbacks.evaluator_callback import DownstreamTaskConfig
 
 
@@ -116,7 +113,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             embedding_batch_size=128,
             num_workers=0,
             pooling_type=PoolingType.MEAN,
-            norm_stats_from_pretrained=False, #True, #False,
+            norm_stats_from_pretrained=False,  # True, #False,
             eval_interval=Duration.epochs(5),
         ),
         "m_bigearthnet": DownstreamTaskConfig(
@@ -140,7 +137,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             embedding_batch_size=128,
             num_workers=4,
             pooling_type=PoolingType.MEAN,
-            norm_stats_from_pretrained=False, #True,
+            norm_stats_from_pretrained=False,  # True,
             eval_interval=Duration.epochs(5),
         ),
         "mados": DownstreamTaskConfig(

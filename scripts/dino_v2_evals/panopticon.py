@@ -2,40 +2,18 @@
 
 import logging
 
-from olmo_core.config import DType
-from olmo_core.distributed.parallel.data_parallel import (
-    DataParallelConfig,
-    DataParallelType,
-)
 from olmo_core.optim import AdamWConfig
 from olmo_core.optim.scheduler import WSD
-from olmo_core.train.callbacks import (
-    BeakerCallback,
-    CheckpointerCallback,
-    ConfigSaverCallback,
-    GarbageCollectorCallback,
-    GPUMemoryMonitorCallback,
-)
-from olmo_core.train.checkpoint import CheckpointerConfig
-from olmo_core.train.common import Duration, LoadStrategy
-from olmo_core.train.config import TrainerConfig
+from olmo_core.train.common import Duration
 from upath import UPath
 
 from helios.data.concat import HeliosConcatDatasetConfig
 from helios.data.constants import Modality
 from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig
-from helios.internal.common import build_common_components
-from helios.internal.experiment import CommonComponents, HeliosVisualizeConfig, main
-from helios.internal.utils import MODEL_SIZE_ARGS
 from helios.evals.panopticon.panopticon import PanopticonConfig
+from helios.internal.experiment import CommonComponents, HeliosVisualizeConfig
 from helios.nn.latent_mim import LatentMIMConfig
-from helios.train.callbacks import (
-    DownstreamEvaluatorCallbackConfig,
-    HeliosSpeedMonitorCallback,
-    HeliosWandBCallback,
-)
-from helios.train.callbacks.evaluator_callback import DownstreamTaskConfig
 from helios.train.loss import LossConfig
 from helios.train.masking import MaskingConfig
 from helios.train.train_module.latent_mim import LatentMIMTrainModuleConfig
@@ -87,7 +65,7 @@ def build_train_module_config(
         max_grad_norm=1.0,
         scheduler=scheduler,
         ema_decay=(1.0, 1.0),
-        dp_config=None, # FSDP is not supported for DINOv2
+        dp_config=None,  # FSDP is not supported for DINOv2
     )
 
 

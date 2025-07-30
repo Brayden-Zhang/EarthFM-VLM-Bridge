@@ -7,4 +7,3 @@ bands:
     gaussian:
       mu: 10400
       sigma: 250
-

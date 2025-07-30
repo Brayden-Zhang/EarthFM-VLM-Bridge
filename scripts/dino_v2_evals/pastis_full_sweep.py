@@ -2,7 +2,6 @@
 
 import subprocess
 
-
 # Evaluation That sweeps over the following:
 # Learning Rate
 # Normalization
@@ -37,8 +36,12 @@ dataset_args = " ".join(
 for lr in LP_LRs:
     for norm_mode in Normalization_MODES:
         for probe_batch_size in PROBE_BATCH_SIZE:
-            print(f"Running with {norm_mode} normalization and {lr} learning rate and {probe_batch_size} probe batch size")
-            run_name = f"1_panopticon_1v2_eval_bs_{probe_batch_size}_norm{norm_mode}_{lr}"
+            print(
+                f"Running with {norm_mode} normalization and {lr} learning rate and {probe_batch_size} probe batch size"
+            )
+            run_name = (
+                f"1_panopticon_1v2_eval_bs_{probe_batch_size}_norm{norm_mode}_{lr}"
+            )
             args = lr_args.format(lr=lr)
             if norm_mode == "dataset":
                 args += dataset_args

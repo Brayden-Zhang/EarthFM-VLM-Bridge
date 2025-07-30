@@ -1,7 +1,8 @@
 """Shared normalization functions for eval sets."""
 
-import numpy as np
 from enum import StrEnum
+
+import numpy as np
 
 from .constants import EVAL_S2_BAND_NAMES
 
@@ -35,6 +36,7 @@ def impute_normalization_stats(band_info: dict, imputes: list[tuple[str, str]]) 
 
     return new_band_info
 
+
 class NormMethod(StrEnum):
     """Normalization methods."""
 
@@ -44,8 +46,12 @@ class NormMethod(StrEnum):
     STANDARDIZE = "standardize"
     NO_NORM = "no_norm"
 
+
 def normalize_bands(
-    image: np.ndarray, means: np.array, stds: np.array, method: NormMethod = NormMethod.NORM_NO_CLIP
+    image: np.ndarray,
+    means: np.array,
+    stds: np.array,
+    method: NormMethod = NormMethod.NORM_NO_CLIP,
 ) -> np.ndarray:
     """Normalize an image with given mean and std arrays, and a normalization method."""
     original_dtype = image.dtype
@@ -73,7 +79,5 @@ def normalize_bands(
             pass
         else:
             valid_methods = [m.value for m in NormMethod]
-            raise ValueError(
-                f"norm type must be one of {valid_methods}, not {method}"
-            )
+            raise ValueError(f"norm type must be one of {valid_methods}, not {method}")
     return image

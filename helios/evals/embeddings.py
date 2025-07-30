@@ -1,24 +1,19 @@
 """Embeddings from models."""
 
 import logging
-import math
-import torch
 
+import torch
 from torch.utils.data import DataLoader
 
-from helios.evals.datasets.configs import TaskType
-from helios.nn.flexihelios import Encoder, PoolingType, TokensAndMasks
-from helios.train.masking import MaskedHeliosSample
-from helios.data.constants import Modality
-from einops import rearrange, repeat
 from helios.evals.eval_wrapper import EvalWrapper
-import torch.nn.functional as F
+from helios.train.masking import MaskedHeliosSample
 
 logger = logging.getLogger(__name__)
 
 
 def get_embeddings(
-    data_loader: DataLoader, model: EvalWrapper) -> tuple[torch.Tensor, torch.Tensor]:
+    data_loader: DataLoader, model: EvalWrapper
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Get embeddings from model for the data in data_loader."""
     embeddings = []
     labels = []

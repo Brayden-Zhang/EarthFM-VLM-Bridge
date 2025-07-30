@@ -2,11 +2,6 @@
 
 import logging
 
-from olmo_core.config import DType
-from olmo_core.distributed.parallel.data_parallel import (
-    DataParallelConfig,
-    DataParallelType,
-)
 from olmo_core.optim import AdamWConfig
 from olmo_core.optim.scheduler import WSD
 from olmo_core.train.callbacks import (
@@ -25,10 +20,9 @@ from helios.data.concat import HeliosConcatDatasetConfig
 from helios.data.constants import Modality
 from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig
+from helios.evals.dinov2.dinov2 import DINOv2Config
 from helios.internal.common import build_common_components
 from helios.internal.experiment import CommonComponents, HeliosVisualizeConfig, main
-from helios.internal.utils import MODEL_SIZE_ARGS
-from helios.evals.dinov2.dinov2 import DINOv2Config
 from helios.nn.latent_mim import LatentMIMConfig
 from helios.train.callbacks import (
     DownstreamEvaluatorCallbackConfig,
@@ -87,7 +81,7 @@ def build_train_module_config(
         max_grad_norm=1.0,
         scheduler=scheduler,
         ema_decay=(1.0, 1.0),
-        dp_config=None, # FSDP is not supported for DINOv2
+        dp_config=None,  # FSDP is not supported for DINOv2
     )
 
 

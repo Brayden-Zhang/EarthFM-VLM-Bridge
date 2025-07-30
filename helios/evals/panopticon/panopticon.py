@@ -1,18 +1,19 @@
 """Wrapper for Running Evals on Panopticon"""
 
 import logging
+import math
+from dataclasses import dataclass
+
 import torch
 import torch.nn.functional as F
-from einops import rearrange, repeat
-from torchvision import transforms
-from torch import nn
 import yaml
-from helios.train.masking import MaskedHeliosSample
-from helios.nn.flexihelios import PoolingType
-from helios.data.constants import Modality
-import math
+from einops import rearrange, repeat
 from olmo_core.config import Config
-from dataclasses import dataclass
+from torch import nn
+
+from helios.data.constants import Modality
+from helios.nn.flexihelios import PoolingType
+from helios.train.masking import MaskedHeliosSample
 
 logger = logging.getLogger(__name__)
 
@@ -36,24 +37,28 @@ class Panopticon(nn.Module):
         # Load the panopticon model
         self._load_model(torchhub_id)
 
-
     def _load_model(self, torchhub_id: str):
         """Load the panopticon model from torch hub."""
         import time
+
         # Hack to get around https://discuss.pytorch.org/t/torch-hub-load-gives-httperror-rate-limit-exceeded/124769
         torch.hub._validate_not_a_forked_repo = lambda a, b, c: True
         for attempt in range(2):
             try:
                 self.model = torch.hub.load(
-                    'panopticon-FM/panopticon',
+                    "panopticon-FM/panopticon",
                     torchhub_id,
                 )
                 break
             except Exception as e:
-                logger.warning(f"Error loading panopticon model: {e}. Retrying in 5 seconds...")
+                logger.warning(
+                    f"Error loading panopticon model: {e}. Retrying in 5 seconds..."
+                )
                 time.sleep(5)
         else:
-            raise RuntimeError(f"Failed to load panopticon model {torchhub_id} after retrying.")
+            raise RuntimeError(
+                f"Failed to load panopticon model {torchhub_id} after retrying."
+            )
 
     def _process_modality_data(self, data: torch.Tensor) -> list[torch.Tensor]:
         """Process individual modality data.
@@ -79,7 +84,7 @@ class Panopticon(nn.Module):
                     data_i,
                     size=(self.patch_size, self.patch_size),
                     mode="bilinear",
-                    align_corners=False
+                    align_corners=False,
                 )
             else:
                 # Resize the image to the Panopticon pre-training input size
@@ -88,12 +93,14 @@ class Panopticon(nn.Module):
                     data_i,
                     size=(image_size, image_size),
                     mode="bilinear",
-                    align_corners=False
+                    align_corners=False,
                 )
             data_list.append(data_i)
         return data_list
 
-    def _create_channel_ids(self, modality: str, batch_size: int, device: torch.device) -> torch.Tensor:
+    def _create_channel_ids(
+        self, modality: str, batch_size: int, device: torch.device
+    ) -> torch.Tensor:
         """Create channel IDs for the panopticon model.
 
         Args:
@@ -110,7 +117,7 @@ class Panopticon(nn.Module):
             modality_yaml_name = "landsat8"
         else:
             modality_yaml_name = modality
-        with open(f"./helios/evals/panopticon/sensors/{modality_yaml_name}.yaml", "r") as f:
+        with open(f"./helios/evals/panopticon/sensors/{modality_yaml_name}.yaml") as f:
             sensor_config = yaml.safe_load(f)
         modality_spec = Modality.get(modality)
         # Data is prepared in helios band order so we need to tell panopticon whcich band it is
@@ -126,7 +133,9 @@ class Panopticon(nn.Module):
         chn_ids = repeat(chn_ids, "c -> b c", b=batch_size)
         return chn_ids
 
-    def prepare_input(self, masked_helios_sample: MaskedHeliosSample) -> dict[str, torch.Tensor]:
+    def prepare_input(
+        self, masked_helios_sample: MaskedHeliosSample
+    ) -> dict[str, torch.Tensor]:
         """Prepare input for the panopticon model from MaskedHeliosSample.
 
         Args:
@@ -174,7 +183,11 @@ class Panopticon(nn.Module):
         # I want to return a list of panopticon inputs, one for each timestep
         return per_timestep_panopticon_inputs
 
-    def forward(self, masked_helios_sample: MaskedHeliosSample, pooling: PoolingType = PoolingType.MEAN) -> torch.Tensor:
+    def forward(
+        self,
+        masked_helios_sample: MaskedHeliosSample,
+        pooling: PoolingType = PoolingType.MEAN,
+    ) -> torch.Tensor:
         """Forward pass through the panopticon model.
 
         Args:
@@ -197,8 +210,11 @@ class Panopticon(nn.Module):
             output_features = torch.max(torch.cat(output_features, dim=0), dim=0)[0]
         return output_features
 
-
-    def forward_features(self, masked_helios_sample: MaskedHeliosSample, pooling: PoolingType = PoolingType.MEAN) -> torch.Tensor:
+    def forward_features(
+        self,
+        masked_helios_sample: MaskedHeliosSample,
+        pooling: PoolingType = PoolingType.MEAN,
+    ) -> torch.Tensor:
         """Forward pass through the panopticon model.
 
         Args:
@@ -209,10 +225,14 @@ class Panopticon(nn.Module):
         per_timestep_panopticon_inputs = self.prepare_input(masked_helios_sample)
         output_features = []
         for panopticon_input in per_timestep_panopticon_inputs:
-            timestep_output = self.model.forward_features(panopticon_input)["x_norm_patchtokens"]
+            timestep_output = self.model.forward_features(panopticon_input)[
+                "x_norm_patchtokens"
+            ]
             num_tokens = timestep_output.shape[1]
             height = int(math.sqrt(num_tokens))
-            timestep_output = rearrange(timestep_output, "b (h w) d -> b h w d", h=height, w=height)
+            timestep_output = rearrange(
+                timestep_output, "b (h w) d -> b h w d", h=height, w=height
+            )
             output_features.append(timestep_output.unsqueeze(0))
         # stack in the timestep dimension and take the mean or maybe the max?
         if pooling == PoolingType.MEAN:
@@ -221,9 +241,11 @@ class Panopticon(nn.Module):
             output_features = torch.max(torch.cat(output_features, dim=0), dim=0)[0]
         return output_features
 
-
-
-    def __call__(self, masked_helios_sample: MaskedHeliosSample, pooling: PoolingType = PoolingType.MEAN) -> torch.Tensor:
+    def __call__(
+        self,
+        masked_helios_sample: MaskedHeliosSample,
+        pooling: PoolingType = PoolingType.MEAN,
+    ) -> torch.Tensor:
         """Make the wrapper callable."""
         return self.forward(masked_helios_sample, pooling)
 
@@ -231,6 +253,7 @@ class Panopticon(nn.Module):
 @dataclass
 class PanopticonConfig(Config):
     """olmo_core style config for PanopticonWrapper."""
+
     torchhub_id: str = "panopticon_vitb14"
     patch_size: int = 14
 

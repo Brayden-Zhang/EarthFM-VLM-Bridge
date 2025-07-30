@@ -17,10 +17,10 @@ from helios.evals.datasets.configs import DATASET_TO_CONFIG, TaskType
 from helios.evals.datasets.normalize import NormMethod
 from helios.evals.datasets.utils import eval_collate_fn
 from helios.evals.embeddings import get_embeddings
-from helios.evals.knn import run_knn
-from helios.evals.linear_probe import ProbeType, train_and_eval_probe
-from helios.nn.flexihelios import PoolingType
 from helios.evals.eval_wrapper import get_eval_wrapper
+from helios.evals.knn import run_knn
+from helios.evals.linear_probe import train_and_eval_probe
+from helios.nn.flexihelios import PoolingType
 from helios.train.callbacks.wandb import HeliosWandBCallback
 
 logger = logging.getLogger(__name__)
@@ -140,7 +140,9 @@ class DownstreamEvaluator:
         self, data_loader: DataLoader
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Get the embeddings for the given data loader."""
-        print(f"Getting embeddings for {self.dataset} with norm method {self.norm_method}")
+        print(
+            f"Getting embeddings for {self.dataset} with norm method {self.norm_method}"
+        )
         if hasattr(self.trainer.train_module.model, "encoder"):
             model = self.trainer.train_module.model.encoder
         else:
@@ -152,7 +154,7 @@ class DownstreamEvaluator:
             "patch_size": self.patch_size,
             "pooling_type": self.pooling_type,
             "concat_features": (self.probe_type == "attn_pool"),
-            "apply_imagenet_normalization": self.norm_method == NormMethod.NO_NORM
+            "apply_imagenet_normalization": self.norm_method == NormMethod.NO_NORM,
         }
         model = get_eval_wrapper(model, **wrapper_kwargs)
         return get_embeddings(

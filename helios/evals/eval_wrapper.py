@@ -1,25 +1,31 @@
-"""
-Eval wrapper contract to be able to run evals on a model"""
+"""Eval wrapper contract to be able to run evals on a model"""
 
-from torch import nn
-import torch
-from typing import Any
-from helios.evals.datasets.configs import TaskType
-from helios.nn.flexihelios import PoolingType
-from helios.train.masking import MaskedHeliosSample
-from helios.nn.flexihelios import TokensAndMasks
-from helios.nn.flexihelios import FlexiHeliosBase
-from helios.nn.st_model import STBase
-from helios.evals.panopticon.panopticon import Panopticon
-from helios.evals.dinov2.dinov2 import DINOv2
 from logging import getLogger
+from typing import Any
+
+import torch
+from torch import nn
+
+from helios.evals.datasets.configs import TaskType
+from helios.evals.dinov2.dinov2 import DINOv2
+from helios.evals.panopticon.panopticon import Panopticon
+from helios.nn.flexihelios import FlexiHeliosBase, PoolingType, TokensAndMasks
+from helios.nn.st_model import STBase
+from helios.train.masking import MaskedHeliosSample
 
 logger = getLogger(__name__)
 
 
-
 class EvalWrapper:
-    def __init__(self, model: nn.Module, task_type: TaskType, patch_size: int, pooling_type: PoolingType, concat_features: bool = False, apply_imagenet_normalization: bool = False):
+    def __init__(
+        self,
+        model: nn.Module,
+        task_type: TaskType,
+        patch_size: int,
+        pooling_type: PoolingType,
+        concat_features: bool = False,
+        apply_imagenet_normalization: bool = False,
+    ):
         super().__init__()
         self.model = model
         self.task_type = task_type
@@ -45,22 +51,15 @@ class EvalWrapper:
         return next(self.model.parameters()).device
 
     def __getattr__(self, name: str) -> Any:
-        """
-        Delegate attribute access to the underlying model if the attribute is not found on the wrapper.
-        """
+        """Delegate attribute access to the underlying model if the attribute is not found on the wrapper."""
         return getattr(self.model, name)
 
     def __call__(self, masked_helios_sample: MaskedHeliosSample) -> torch.Tensor:
-        """
-        Forward pass through the model produces the embedding specified by initialization
-        """
+        """Forward pass through the model produces the embedding specified by initialization"""
         raise NotImplementedError("Subclasses must implement this method")
 
 
-
-
 class HeliosEvalWrapper(EvalWrapper):
-
     def __call__(self, masked_helios_sample: MaskedHeliosSample) -> torch.Tensor:
         batch_embeddings: TokensAndMasks = self.model(
             masked_helios_sample, patch_size=self.patch_size
@@ -75,13 +74,16 @@ class HeliosEvalWrapper(EvalWrapper):
 
 
 class PanopticonEvalWrapper(EvalWrapper):
-
     def __call__(self, masked_helios_sample: MaskedHeliosSample) -> torch.Tensor:
         if self.spatial_pool:
             # Intermediate features are not yet working because of some bug internal to the model
-            batch_embeddings = self.model.forward_features(masked_helios_sample, pooling=self.pooling_type)
+            batch_embeddings = self.model.forward_features(
+                masked_helios_sample, pooling=self.pooling_type
+            )
         else:
-            batch_embeddings = self.model(masked_helios_sample, pooling=self.pooling_type)
+            batch_embeddings = self.model(
+                masked_helios_sample, pooling=self.pooling_type
+            )
         return batch_embeddings
 
 
@@ -90,17 +92,23 @@ class DINOv2EvalWrapper(EvalWrapper):
         # i need to do the apply imagenet normalizer thing in here
         if self.spatial_pool:
             # Intermediate features are not yet working because of some bug internal to the model
-            batch_embeddings = self.model.forward_features(masked_helios_sample, pooling=self.pooling_type, apply_imagenet_normalization=self.apply_imagenet_normalization)
+            batch_embeddings = self.model.forward_features(
+                masked_helios_sample,
+                pooling=self.pooling_type,
+                apply_imagenet_normalization=self.apply_imagenet_normalization,
+            )
         else:
             # should this call model ditectly
-            batch_embeddings = self.model(masked_helios_sample, pooling=self.pooling_type, apply_imagenet_normalization=self.apply_imagenet_normalization)
+            batch_embeddings = self.model(
+                masked_helios_sample,
+                pooling=self.pooling_type,
+                apply_imagenet_normalization=self.apply_imagenet_normalization,
+            )
         return batch_embeddings
 
 
 def get_eval_wrapper(model: nn.Module, **kwargs) -> EvalWrapper:
-    """
-    Factory function to get the appropriate eval wrapper for a given model.
-    """
+    """Factory function to get the appropriate eval wrapper for a given model."""
     if isinstance(model, FlexiHeliosBase) or isinstance(model, STBase):
         logger.info("Using HeliosEvalWrapper")
         return HeliosEvalWrapper(model=model, **kwargs)

@@ -23,7 +23,6 @@ from olmo_core.train.checkpoint import CheckpointerConfig
 from olmo_core.train.common import Duration, LoadStrategy
 from olmo_core.train.config import TrainerConfig
 
-from helios.data.constants import Modality
 from helios.internal.experiment import (
     CommonComponents,
     main,
