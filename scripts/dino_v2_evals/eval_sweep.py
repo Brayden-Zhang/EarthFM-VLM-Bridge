@@ -7,7 +7,12 @@ import subprocess  # nosec
 # Normalization
 # helios pretrained, dataset norms and imagenet normalization
 
-dino_v2_torchub_id = ["dinov2_vitb14", "dinov2_vitl14", "dinov2_vitg14", "dinov2_vitb14_reg"]
+dino_v2_torchub_ids = [
+    "dinov2_vitb14",
+    "dinov2_vitl14",
+    "dinov2_vitg14",
+    "dinov2_vitb14_reg",
+]
 LP_LRs = [1e-4, 5e-4, 1e-3, 5e-3, 1e-2, 5e-2, 1e-1, 5e-1]
 
 Normalization_MODES = ["imagenet", "dataset", "helios"]
@@ -37,27 +42,30 @@ dataset_args = " ".join(
 )
 
 # This should be set in the model config
-imagenet_args = " ".join(
-    [
-        " ",
-        "--trainer.callbacks.downstream_evaluator.tasks.m_forestnet.norm_method=no_norm",
-        "--trainer.callbacks.downstream_evaluator.tasks.m_eurosat.norm_method=no_norm",
-        "--trainer.callbacks.downstream_evaluator.tasks.m_bigearthnet.norm_method=no_norm",
-        "--trainer.callbacks.downstream_evaluator.tasks.m_so2sat.norm_method=no_norm",
-        "--trainer.callbacks.downstream_evaluator.tasks.m_brick_kiln.norm_method=no_norm",
-        "--trainer.callbacks.downstream_evaluator.tasks.m_cashew-plant.norm_method=no_norm",
-        "--trainer.callbacks.downstream_evaluator.tasks.mados.norm_method=no_norm",
-        "--trainer.callbacks.downstream_evaluator.tasks.pastis_sentinel2.norm_method=no_norm",
-        "--trainer.callbacks.downstream_evaluator.tasks.m_eurosat.norm_stats_from_pretrained=False",
-        "--trainer.callbacks.downstream_evaluator.tasks.m_bigearthnet.norm_stats_from_pretrained=False",
-        "--trainer.callbacks.downstream_evaluator.tasks.m_so2sat.norm_stats_from_pretrained=False",
-        "--trainer.callbacks.downstream_evaluator.tasks.m_brick_kiln.norm_stats_from_pretrained=False",
-        "--trainer.callbacks.downstream_evaluator.tasks.m_cashew-plant.norm_stats_from_pretrained=False",
-        "--trainer.callbacks.downstream_evaluator.tasks.mados.norm_stats_from_pretrained=False",
-        "--trainer.callbacks.downstream_evaluator.tasks.pastis_sentinel2.norm_stats_from_pretrained=False",
-        "--model.apply_imagenet_normalization=True",
-    ]
-) + dataset_args
+imagenet_args = (
+    " ".join(
+        [
+            " ",
+            "--trainer.callbacks.downstream_evaluator.tasks.m_forestnet.norm_method=no_norm",
+            "--trainer.callbacks.downstream_evaluator.tasks.m_eurosat.norm_method=no_norm",
+            "--trainer.callbacks.downstream_evaluator.tasks.m_bigearthnet.norm_method=no_norm",
+            "--trainer.callbacks.downstream_evaluator.tasks.m_so2sat.norm_method=no_norm",
+            "--trainer.callbacks.downstream_evaluator.tasks.m_brick_kiln.norm_method=no_norm",
+            "--trainer.callbacks.downstream_evaluator.tasks.m_cashew-plant.norm_method=no_norm",
+            "--trainer.callbacks.downstream_evaluator.tasks.mados.norm_method=no_norm",
+            "--trainer.callbacks.downstream_evaluator.tasks.pastis_sentinel2.norm_method=no_norm",
+            "--trainer.callbacks.downstream_evaluator.tasks.m_eurosat.norm_stats_from_pretrained=False",
+            "--trainer.callbacks.downstream_evaluator.tasks.m_bigearthnet.norm_stats_from_pretrained=False",
+            "--trainer.callbacks.downstream_evaluator.tasks.m_so2sat.norm_stats_from_pretrained=False",
+            "--trainer.callbacks.downstream_evaluator.tasks.m_brick_kiln.norm_stats_from_pretrained=False",
+            "--trainer.callbacks.downstream_evaluator.tasks.m_cashew-plant.norm_stats_from_pretrained=False",
+            "--trainer.callbacks.downstream_evaluator.tasks.mados.norm_stats_from_pretrained=False",
+            "--trainer.callbacks.downstream_evaluator.tasks.pastis_sentinel2.norm_stats_from_pretrained=False",
+            "--model.apply_imagenet_normalization=True",
+        ]
+    )
+    + dataset_args
+)
 
 
 helios_args = " ".join(

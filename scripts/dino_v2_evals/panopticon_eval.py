@@ -11,11 +11,9 @@ from olmo_core.train.callbacks import (
     GarbageCollectorCallback,
     GPUMemoryMonitorCallback,
 )
-from helios.data.constants import Modality
 from olmo_core.train.checkpoint import CheckpointerConfig
 from olmo_core.train.common import Duration, LoadStrategy
 from olmo_core.train.config import TrainerConfig
-from helios.internal.common import build_common_components
 from panopticon import (
     build_dataloader_config,
     build_dataset_config,
@@ -24,6 +22,8 @@ from panopticon import (
     build_visualize_config,
 )
 
+from helios.data.constants import Modality
+from helios.internal.common import build_common_components
 from helios.internal.experiment import (
     CommonComponents,
     main,
@@ -145,7 +145,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             embedding_batch_size=128,
             num_workers=4,
             pooling_type=PoolingType.MEAN,
-            norm_stats_from_pretrained=False, #True,
+            norm_stats_from_pretrained=False,  # True,
             eval_interval=Duration.epochs(5),
         ),
         "mados": DownstreamTaskConfig(
@@ -180,50 +180,50 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             input_modalities=[Modality.SENTINEL1.name],
             epochs=50,
         ),
-            "sickle_landsat": DownstreamTaskConfig(
-                dataset="sickle",
-                embedding_batch_size=32,
-                probe_batch_size=16,
-                num_workers=2,
-                pooling_type=PoolingType.MEAN,
-                norm_stats_from_pretrained=False,
-                probe_lr=0.01,
-                eval_interval=Duration.epochs(10),
-                input_modalities=[Modality.LANDSAT.name],
-                epochs=50,
-            ),
-            "sickle_sentinel1_landsat": DownstreamTaskConfig(
-                dataset="sickle",
-                embedding_batch_size=32,
-                probe_batch_size=16,
-                num_workers=2,
-                pooling_type=PoolingType.MEAN,
-                norm_stats_from_pretrained=False,
-                probe_lr=0.002,
-                eval_interval=Duration.epochs(10),
-                input_modalities=[Modality.SENTINEL1.name, Modality.LANDSAT.name],
-                epochs=50,
-            ),
-            "m_sa_crop_type": DownstreamTaskConfig(
-                dataset="m-sa-crop-type",
-                embedding_batch_size=32,
-                probe_batch_size=8,
-                num_workers=2,
-                pooling_type=PoolingType.MEAN,
-                norm_stats_from_pretrained=False,
-                probe_lr=0.1,
-                eval_interval=Duration.epochs(10),
-            ),
-            "m_cashew_plant": DownstreamTaskConfig(
-                dataset="m-cashew-plant",
-                embedding_batch_size=32,
-                probe_batch_size=8,
-                num_workers=2,
-                pooling_type=PoolingType.MEAN,
-                norm_stats_from_pretrained=False,
-                probe_lr=0.1,
-                eval_interval=Duration.epochs(10),
-            ),
+        "sickle_landsat": DownstreamTaskConfig(
+            dataset="sickle",
+            embedding_batch_size=32,
+            probe_batch_size=16,
+            num_workers=2,
+            pooling_type=PoolingType.MEAN,
+            norm_stats_from_pretrained=False,
+            probe_lr=0.01,
+            eval_interval=Duration.epochs(10),
+            input_modalities=[Modality.LANDSAT.name],
+            epochs=50,
+        ),
+        "sickle_sentinel1_landsat": DownstreamTaskConfig(
+            dataset="sickle",
+            embedding_batch_size=32,
+            probe_batch_size=16,
+            num_workers=2,
+            pooling_type=PoolingType.MEAN,
+            norm_stats_from_pretrained=False,
+            probe_lr=0.002,
+            eval_interval=Duration.epochs(10),
+            input_modalities=[Modality.SENTINEL1.name, Modality.LANDSAT.name],
+            epochs=50,
+        ),
+        "m_sa_crop_type": DownstreamTaskConfig(
+            dataset="m-sa-crop-type",
+            embedding_batch_size=32,
+            probe_batch_size=8,
+            num_workers=2,
+            pooling_type=PoolingType.MEAN,
+            norm_stats_from_pretrained=False,
+            probe_lr=0.1,
+            eval_interval=Duration.epochs(10),
+        ),
+        "m_cashew_plant": DownstreamTaskConfig(
+            dataset="m-cashew-plant",
+            embedding_batch_size=32,
+            probe_batch_size=8,
+            num_workers=2,
+            pooling_type=PoolingType.MEAN,
+            norm_stats_from_pretrained=False,
+            probe_lr=0.1,
+            eval_interval=Duration.epochs(10),
+        ),
     }
     trainer_config = (
         TrainerConfig(

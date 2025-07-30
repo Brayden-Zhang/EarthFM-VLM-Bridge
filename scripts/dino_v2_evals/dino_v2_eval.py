@@ -109,7 +109,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             probe_lr=0.1,
             eval_interval=Duration.epochs(10),
         ),
-              "pastis_sentinel2": DownstreamTaskConfig(
+        "pastis_sentinel2": DownstreamTaskConfig(
             dataset="pastis",
             embedding_batch_size=32,
             probe_batch_size=8,

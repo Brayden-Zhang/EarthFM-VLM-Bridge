@@ -100,7 +100,9 @@ class Panopticon(nn.Module):
             modality_yaml_name = "landsat8"
         else:
             modality_yaml_name = modality
-        with resources.open_text("helios.evals.models.panopticon.sensors", f"{modality_yaml_name}.yaml") as f:
+        with resources.open_text(
+            "helios.evals.models.panopticon.sensors", f"{modality_yaml_name}.yaml"
+        ) as f:
             sensor_config = yaml.safe_load(f)
         modality_spec = Modality.get(modality)
         # Data is prepared in helios band order so we need to tell panopticon whcich band it is
