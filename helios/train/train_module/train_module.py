@@ -377,7 +377,7 @@ class HeliosTrainModule(TrainModule):
 
         # Maybe adjust learning rate.
         if self.scheduler is not None:
-            for group_idx, group in enumerate(self.optim.param_groups):
+            for group_idx, group in enumerate(self.optimizer.param_groups):
                 new_lr = self.scheduler.set_lr(group, self.trainer)
                 self.trainer.record_metric(
                     f"LR (group {group_idx})", new_lr, namespace="optim"
