@@ -3,6 +3,8 @@
 Use the exported GSE windows for Eurosat and run KNN,
 to get somewhat comparable results to our exising KNN
 runs.
+
+This achieves an accuracy score of 0.9447852760736196.
 """
 
 import json
