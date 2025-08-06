@@ -73,10 +73,10 @@ def main():
     for lr in LP_LRs:
         for norm_mode in Normalization_MODES:
             print(f"Running with {norm_mode} normalization and {lr} learning rate")
-
-            parent_dir = os.path.basename(os.path.dirname(checkpoint_path))
-            base_run_name = f"test_{parent_dir}_{norm_mode}_lr{lr}"
-            run_name = base_run_name[:100]
+            # crop the parent dirname if needed
+            parent_dir = os.path.basename(os.path.dirname(checkpoint_path))[:100]
+            base_run_name = f"{parent_dir}_{norm_mode}_lr{lr}"
+            run_name = base_run_name
             cmd_args = lr_args.format(lr=lr)
             if norm_mode == "dataset":
                 cmd_args += dataset_args
