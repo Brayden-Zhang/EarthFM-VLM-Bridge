@@ -118,6 +118,10 @@ class Mixup(Transform):
     """Apply mixup.
 
     https://arxiv.org/abs/1710.09412
+
+    To run this, use the following kwargs when launching a training job:
+    --train_module.transform_config.transform_type=mixup
+    --train_module.transform_config.transform_kwargs={"alpha": 1.3}
     """
 
     def __init__(self, alpha: float) -> None:
@@ -138,9 +142,7 @@ class Mixup(Transform):
             ts_to_keep = other_microbatch.timestamps
         else:
             ts_to_keep = batch.timestamps
-        return batch.mul_by_float(1 - lam).add(
-            other_microbatch.mul_by_float(lam), ts_to_keep
-        )
+        return batch.scale(1 - lam).add(other_microbatch.scale(lam), ts_to_keep)
 
 
 @dataclass

@@ -204,12 +204,12 @@ class LatentMIMTrainModule(HeliosTrainModule):
         # Split into micro-batches.
         microbatches = split_batch(batch_data, self.rank_microbatch_size)
         num_microbatches = len(microbatches)
-        for microbatch_idx, org_microbatch in enumerate(microbatches):
+        for microbatch_idx, microbatch in enumerate(microbatches):
             with self._train_microbatch_context(microbatch_idx, num_microbatches):
                 logger.info(
-                    f"Training microbatch {microbatch_idx} of {num_microbatches} with batch size {org_microbatch.batch_size}"
+                    f"Training microbatch {microbatch_idx} of {num_microbatches} with batch size {microbatch.batch_size}"
                 )
-                microbatch = self.transform.apply(org_microbatch).to_device(self.device)
+                microbatch = self.transform.apply(microbatch).to_device(self.device)
                 masked_batch = self.masking_strategy.apply_mask(
                     microbatch, patch_size=patch_size
                 )

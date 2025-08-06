@@ -414,12 +414,10 @@ class HeliosSample(NamedTuple):
                 new_data_dict[attribute] = modality
         return HeliosSample(**new_data_dict)
 
-    def mul_by_float(self, m: float) -> "HeliosSample":
+    def scale(self, s: float) -> "HeliosSample":
         """Multiply a HeliosSample by a float."""
-        if not isinstance(m, float):
-            raise ValueError("Multiplication only supported for floats")
         return HeliosSample(
-            **{k: cast(ArrayTensor, v) * m for k, v in self.as_dict().items()}
+            **{k: cast(ArrayTensor, v) * s for k, v in self.as_dict().items()}
         )
 
     def add(
