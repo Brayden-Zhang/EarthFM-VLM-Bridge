@@ -34,7 +34,8 @@ lr_args = " ".join(
 )
 
 pooling_args = " ".join(
-    [
+    [" "]
+    + [
         create_linear_probe_arg(task_name, "pooling_type")
         for task_name, task in EVAL_TASKS.items()
     ]
