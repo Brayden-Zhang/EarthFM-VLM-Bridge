@@ -26,6 +26,15 @@ logger = logging.getLogger(__name__)
 # I should try both and see if there is a difference
 
 # First I will do it after the composite encodings
+class DimsToPool(StrEnum):
+    MODALITY = "modality" # 1
+    TEMPORAL = "temporal" # 2
+    SPATIAL = "spatial"
+    MODALITY_TEMPORAL = "modality_temporal" # 3
+    # MODALITY_SPATIAL = "modality_spatial"
+    # TEMPORAL_SPATIAL = "temporal_spatial"
+    ALL = "all" # 4
+
 
 class AttnPool(nn.Module):
     """
@@ -330,9 +339,22 @@ class PooledModalityPredictorConfig(Config):
 # Pooled modality predictor V2
 class PooledModalityPredictorV2(Predictor):
     """Predictor that pools the tokens across modalities."""
-    def __init__(self, include_encoder_encodings: bool = True, *args, **kwargs) -> None:
+    def __init__(self, include_encoder_encodings: bool = True, dims_to_pool: str = "modality", *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.include_encoder_encodings = include_encoder_encodings
+        self.dims_to_pool = dims_to_pool
+
+
+    def _which_encodings_to_use(self) -> dict[str, bool]:
+        # Not great probably should jsut compute bools that we pass instead of this
+        if self.dims_to_pool == DimsToPool.MODALITY:
+            return {"use_modality_encodings": False, "use_temporal_encodings": True}
+        elif self.dims_to_pool == DimsToPool.TEMPORAL:
+            return {"use_modality_encodings": True, "use_temporal_encodings": False}
+        elif self.dims_to_pool == DimsToPool.MODALITY_TEMPORAL:
+            return {"use_modality_encodings": False, "use_temporal_encodings": False}
+        else:
+            raise NotImplementedError(f"Dims to pool {self.dims_to_pool} not implemented")
 
     def apply_attn(
         self,
@@ -356,7 +378,9 @@ class PooledModalityPredictorV2(Predictor):
 
         pooled_tokens = pooled_dict["modality_pooled_tokens"]
         if self.include_encoder_encodings:
-            pooled_tokens = self.composite_encodings._apply_encodings_per_modality(Modality.SENTINEL2_L2A.name, pooled_tokens, timestamps, patch_size, input_res, use_modality_encodings=False)
+            encoding_kwargs = self._which_encodings_to_use()
+            logger.info(f"encoding_kwargs: {encoding_kwargs}")
+            pooled_tokens = self.composite_encodings._apply_encodings_per_modality(Modality.SENTINEL2_L2A.name, pooled_tokens, timestamps, patch_size, input_res, **encoding_kwargs)
         pooled_tokens = rearrange(pooled_tokens, "b ... d -> b (...) d")
         pooled_attn_mask = rearrange(pooled_dict["modality_pooled_masks"], "b ... -> b (...)")
 
@@ -525,6 +549,7 @@ class PooledModalityPredictorV2(Predictor):
 class PooledModalityPredictorV2Config(PredictorConfig):
     """Configuration for the PooledModalityPredictorV2."""
     include_encoder_encodings: bool = True
+    dims_to_pool: DimsToPool = DimsToPool.MODALITY
     def build(self) -> "Predictor":
         """Build the predictor."""
         self.validate()
@@ -544,14 +569,6 @@ class PooledModalityPredictorV2Config(PredictorConfig):
 # Pooling can be deeper
 # Pooling can be normed after pooling? (start with no but this may be needed)
 
-class DimsToPool(StrEnum):
-    MODALITY = "modality" # 1
-    TEMPORAL = "temporal" # 2
-    SPATIAL = "spatial"
-    MODALITY_TEMPORAL = "modality_temporal" # 3
-    # MODALITY_SPATIAL = "modality_spatial"
-    # TEMPORAL_SPATIAL = "temporal_spatial"
-    ALL = "all" # 4
 
 # Try doing each seperately first then 1 predictor for each
 

@@ -731,6 +731,7 @@ class FlexiHeliosCompositeEncodings(nn.Module):
         patch_size: int | None = None,
         input_res: int | None = None,
         use_modality_encodings: bool = True,
+        use_temporal_encodings: bool = True,
     ) -> Tensor:
         """Apply the encodings to the patchified data based on modality type.
 
@@ -744,16 +745,25 @@ class FlexiHeliosCompositeEncodings(nn.Module):
         Returns:
             Tensor with encodings applied based on modality type
         """
+        logger.info(f"use_modality_encodings: {use_modality_encodings}, use_temporal_encodings: {use_temporal_encodings}")
         # TODO: Improve this implementation it is quite bad
 
         modality = Modality.get(modality_name)
         logger.debug(f"Applying encodings to modality {modality}")
-        if not use_modality_encodings:
+        if not use_modality_encodings and use_temporal_encodings:
             b, h, w, t,  _ = modality_tokens.shape
             ein_string, ein_dict = (
                 "b h w t d",
                 {"b": b, "h": h, "w": w, "t": t},
             )
+        elif not use_temporal_encodings and not use_modality_encodings:
+            b, h, w,  _ = modality_tokens.shape
+            ein_string, ein_dict = (
+                "b h w d",
+                {"b": b, "h": h, "w": w},
+            )
+        elif not use_temporal_encodings and use_modality_encodings:
+            raise NotImplementedError("Not implemented")
         else:
             if modality_tokens.ndim == 3:
                 # modality_tokens = [B, Band_Sets, D]; static in space, static in time
@@ -786,7 +796,7 @@ class FlexiHeliosCompositeEncodings(nn.Module):
             )
             modality_embed[..., :n] += channel_embed
 
-        if modality.is_multitemporal:
+        if modality.is_multitemporal and use_temporal_encodings:
             # Time position encodings
             time_embed = repeat(self.pos_embed[:t], f"t d -> {ein_string}", **ein_dict)
             modality_embed[..., n : n * 2] += time_embed.to(device)
