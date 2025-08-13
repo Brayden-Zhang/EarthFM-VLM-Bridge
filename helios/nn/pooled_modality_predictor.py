@@ -712,9 +712,10 @@ class EncoderAttnPoolConfig(EncoderConfig):
 # in the end the pooled tokens dict should just be a more granular option depending on the task so we don't have to worry about mean max pooling average pooling or anyhting like that
 class EncodeEarlyAttnPool(Encoder):
     """Encoder that pools the tokens across modalities."""
-    def __init__(self, dims_to_pool: str, attn_pool_mlp_ratio: float | None = None, num_queries: int = 1, *args, **kwargs) -> None:
+    def __init__(self, dims_to_pool: str, attn_pool_mlp_ratio: float | None = None, num_queries: int = 1, num_pre_modality_pooling_layers: int = 0, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.attn_pool = AttnPool(self.embedding_size, self.embedding_size, mlp_ratio=attn_pool_mlp_ratio, num_queries=num_queries)
+        self.num_pre_modality_pooling_layers = num_pre_modality_pooling_layers
 
         self.dims_to_pool = dims_to_pool
 
@@ -857,6 +858,107 @@ class EncodeEarlyAttnPool(Encoder):
 
         return x, indices, updated_mask, seq_lengths, max_length
 
+
+    def apply_unpooled_attn( self,
+        x: dict[str, Tensor],
+        timestamps: Tensor,
+        patch_size: int,
+        input_res: int,
+        token_exit_cfg: dict[str, int] | None = None,
+        always_pass_none_mask_to_transformer: bool = False,
+    ) -> dict[str, Tensor]:
+        """Apply the attention to the tokens and masks."""
+        tokens_only_dict, original_masks_dict, modalities_to_dims_dict = (
+            self.split_tokens_masks_and_dims(x)
+        )
+        exit_ids_seq = self.create_exit_seqs(
+            tokens_only_dict, original_masks_dict, token_exit_cfg
+        )
+        # exited tokens are just the linear projection
+        exited_tokens, _ = self.collapse_and_combine_hwtc(x)
+
+        tokens_dict = self.composite_encodings.forward(
+            tokens_only_dict,
+            timestamps,
+            patch_size,
+            input_res,
+        )
+        tokens_dict.update(original_masks_dict)
+        tokens, mask = self.collapse_and_combine_hwtc(tokens_dict)
+
+        bool_mask = mask == MaskValue.ONLINE_ENCODER.value
+
+        tokens, indices, new_mask, seq_lengths, max_seqlen = self.remove_masked_tokens(
+            tokens, bool_mask
+        )
+        if exit_ids_seq is not None:
+            exit_ids_seq, _, _, _, _ = self.remove_masked_tokens(
+                exit_ids_seq, bool_mask
+            )
+            # still linear projections
+            exited_tokens, _, _, _, _ = self.remove_masked_tokens(
+                exited_tokens, bool_mask
+            )
+        cu_seqlens = get_cumulative_sequence_lengths(seq_lengths)
+        # Pack x tokens
+        if self.use_flash_attn:
+            og_shape = tokens.shape
+            tokens = self.pack_tokens(tokens, new_mask)
+
+        attn_mask = self.get_attn_or_none_mask(
+            new_mask, always_pass_none_mask_to_transformer
+        )
+        # Apply attn with varying encoder depths
+        for i_blk, blk in enumerate(self.blocks):
+            if i_blk == self.num_pre_modality_pooling_layers:
+                break
+            # Skip the zeroth block because we want to use the exited tokens that don't have encodings as this allows trivial solution of predicting the shared encodings
+            if (exit_ids_seq is not None) and (i_blk > 0):
+                # this should only ever be called by the target encoder,
+                # in a torch.no_grad context
+                assert exited_tokens is not None
+                # If a token should exit, then we update the exit token with the current token at the same position
+                exited_tokens = torch.where(
+                    condition=(exit_ids_seq == i_blk),
+                    input=tokens,
+                    other=exited_tokens,
+                )
+            # we take the inverse of the mask because a value
+            # of True indicates the value *should* take part in
+            # attention
+            # WARNING: THIS MAY CHANGE DEPENDING ON THE ATTENTION IMPLEMENTATION
+            tokens = blk(
+                x=tokens,
+                cu_seqlens=cu_seqlens,
+                max_seqlen=max_seqlen,
+                # we will have to specify k and q lens for cross attention
+                attn_mask=attn_mask,
+            )
+
+        if self.use_flash_attn:
+            tokens = self.unpack_tokens(tokens, new_mask, og_shape)
+
+        if exit_ids_seq is not None:
+            # this should only ever be called by the target encoder,
+            # in a torch.no_grad context
+            assert exited_tokens is not None
+            # full depth
+            # IMPORTANT: write this to x
+            tokens = torch.where(
+                condition=(exit_ids_seq == (i_blk + 1)),  # 2 for full depth
+                input=tokens,
+                other=exited_tokens,
+            )
+        # we don't care about the mask returned by add_removed_tokens, since we will
+        # just use the original, unclipped mask here
+        tokens, _ = self.add_removed_tokens(tokens, indices, new_mask)
+        tokens_per_modality_dict = self.split_and_expand_per_modality(
+            tokens, modalities_to_dims_dict
+        )
+        # merge original masks and the processed tokens
+        tokens_per_modality_dict.update(original_masks_dict)
+        return tokens_per_modality_dict
+
     def apply_attn(
         self,
         x: dict[str, Tensor],
@@ -867,7 +969,8 @@ class EncodeEarlyAttnPool(Encoder):
         always_pass_none_mask_to_transformer: bool = False,
     ) -> dict[str, Tensor]:
         """Apply the attention to the tokens and masks."""
-        tokens_only_dict, original_masks_dict, _ = (
+        x = self.apply_unpooled_attn(x, timestamps, patch_size, input_res, token_exit_cfg, always_pass_none_mask_to_transformer)
+        tokens_only_dict, original_masks_dict, pre_pooled_modality_to_dims_dict = (
             self.split_tokens_masks_and_dims(x)
         )
         exit_ids_seq = self.create_exit_seqs(
@@ -918,6 +1021,9 @@ class EncodeEarlyAttnPool(Encoder):
         )
         # Apply attn with varying encoder depths
         for i_blk, blk in enumerate(self.blocks):
+            if i_blk < self.num_pre_modality_pooling_layers:
+                # skip the pre-modality pooling layer attention blocks
+                continue
             # Skip the zeroth block because we want to use the exited tokens that don't have encodings as this allows trivial solution of predicting the shared encodings
             if (exit_ids_seq is not None) and (i_blk > 0):
                 # this should only ever be called by the target encoder,
@@ -1011,6 +1117,7 @@ class EncoderEarlyAttnPoolConfig(EncoderConfig):
     dims_to_pool: DimsToPool = DimsToPool.MODALITY
     num_queries: int = 1
     attn_pool_mlp_ratio: float | None = None
+    num_pre_modality_pooling_layers: int = 0
     def build(self) -> "EncodeEarlyAttnPool":
         """Build the encoder."""
         self.validate()
