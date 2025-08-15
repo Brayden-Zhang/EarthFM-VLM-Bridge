@@ -17,6 +17,7 @@ from helios.data.dataset import HeliosSample
 from helios.data.transform import TransformConfig
 from helios.nn.flexihelios import TokensAndMasks
 from helios.nn.latent_mim import LatentMIM
+from helios.nn.utils import unpack_encoder_output
 from helios.train.loss import LossConfig
 from helios.train.masking import MaskedHeliosSample, MaskingConfig
 from helios.train.train_module.train_module import (
@@ -260,11 +261,12 @@ class LatentMIMTrainModule(HeliosTrainModule):
             latent, decoded, _, reconstructed = self.model(batch, patch_size)
             with torch.no_grad():
                 logger.info("Target Encoder forward pass...")
-                target_output, _, _ = self.model.target_encoder.forward(
+                output_dict = self.model.target_encoder.forward(
                     batch.unmask(),
                     patch_size=patch_size,
                     token_exit_cfg=token_exit_cfg,
                 )
+                target_output, _, _ = unpack_encoder_output(output_dict)
             loss = self.loss_fn(decoded, target_output)
             if self.mae_loss is not None:
                 loss += self.mae_loss.compute(reconstructed, batch)
