@@ -10,6 +10,7 @@ import math
 from collections import OrderedDict
 from collections import OrderedDict as OrderedDictType
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -18,8 +19,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange, repeat
+from olmo_core.config import Config
 from torch import Tensor, vmap
 from torch.jit import Final
+from upath import UPath
 
 from helios.data.constants import Modality
 from helios.nn.flexihelios import PoolingType
@@ -1593,7 +1596,7 @@ class GalileoWrapper(nn.Module):
     """GalileoWrapper."""
     def __init__(
         self,
-        pretrained_path: Path,
+        pretrained_path: UPath,
         patch_size: int = 8,
         month: int = 6,
         add_layernorm_on_exit: bool = True,
@@ -1777,3 +1780,29 @@ class GalileoWrapper(nn.Module):
                 return s_t_x[:, :, :, :, s_t_channels, :].mean(dim=(3, 4))
             else:
                 return s_t_x[:, :, :, :, s_t_channels, :].max(dim=(3, 4))
+
+
+MODEL_SIZE_TO_WEKA_PATH = {
+    "nano": "/weka/dfive-default/presto/pretrained_models/304",
+    "tiny": "/weka/dfive-default/presto/pretrained_models/261",
+    "base": "/weka/dfive-default/presto/pretrained_models/275",
+}
+
+
+@dataclass
+class GalileoConfig(Config):
+    """olmo_core style config for GalileoWrapper."""
+
+    model_size: str = "base"
+    patch_size: int = 8,
+    month: int = 6,
+    add_layernorm_on_exit: bool = True,
+
+    def build(self) -> GalileoWrapper:
+        """Build the Galileo model."""
+        return GalileoWrapper(
+            pretrained_path=UPath(MODEL_SIZE_TO_WEKA_PATH[self.model_size]),
+            patch_size=self.patch_size,
+            month=self.month,
+            add_layernorm_on_exit=self.add_layernorm_on_exit
+        )
