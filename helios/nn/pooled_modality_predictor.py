@@ -357,31 +357,15 @@ class EncodeEarlyAttnPool(Encoder):
 
     def apply_unpooled_attn(
         self,
-        x: dict[str, Tensor],
-        timestamps: Tensor,
-        patch_size: int,
-        input_res: int,
-        token_exit_cfg: dict[str, int] | None = None,
+        tokens_and_masks_dict: dict[str, Tensor],
+        modalities_to_dims_dict: dict[str, int],
+        exit_ids_seq: Tensor | None = None,
+        exited_tokens: Tensor | None = None,
         always_pass_none_mask_to_transformer: bool = False,
     ) -> dict[str, Tensor]:
         """Apply the attention to the tokens and masks."""
-        tokens_only_dict, original_masks_dict, modalities_to_dims_dict = (
-            self.split_tokens_masks_and_dims(x)
-        )
-        exit_ids_seq = self.create_exit_seqs(
-            tokens_only_dict, original_masks_dict, token_exit_cfg
-        )
-        # exited tokens are just the linear projection
-        exited_tokens, _ = self.collapse_and_combine_hwtc(x)
 
-        tokens_dict = self.composite_encodings.forward(
-            tokens_only_dict,
-            timestamps,
-            patch_size,
-            input_res,
-        )
-        tokens_dict.update(original_masks_dict)
-        tokens, mask = self.collapse_and_combine_hwtc(tokens_dict)
+        tokens, mask = self.collapse_and_combine_hwtc(tokens_and_masks_dict)
 
         bool_mask = mask == MaskValue.ONLINE_ENCODER.value
 
@@ -453,8 +437,6 @@ class EncodeEarlyAttnPool(Encoder):
         tokens_per_modality_dict = self.split_and_expand_per_modality(
             tokens, modalities_to_dims_dict
         )
-        # merge original masks and the processed tokens
-        tokens_per_modality_dict.update(original_masks_dict)
         return tokens_per_modality_dict
 
     def apply_attn(
@@ -467,14 +449,6 @@ class EncodeEarlyAttnPool(Encoder):
         always_pass_none_mask_to_transformer: bool = False,
     ) -> dict[str, Tensor]:
         """Apply the attention to the tokens and masks."""
-        x = self.apply_unpooled_attn(
-            x,
-            timestamps,
-            patch_size,
-            input_res,
-            token_exit_cfg,
-            always_pass_none_mask_to_transformer,
-        )
         tokens_only_dict, original_masks_dict, pre_pooled_modality_to_dims_dict = (
             self.split_tokens_masks_and_dims(x)
         )
@@ -490,6 +464,17 @@ class EncodeEarlyAttnPool(Encoder):
             patch_size,
             input_res,
         )
+        tokens_dict.update(original_masks_dict)
+
+        #TODO: token exit config isn't really meant to be used here but is no-op so leaving it in
+        tokens_dict = self.apply_unpooled_attn(
+            tokens_dict,
+            pre_pooled_modality_to_dims_dict,
+            exit_ids_seq,
+            exited_tokens,
+            always_pass_none_mask_to_transformer,
+        )
+        # update the tokens_dict with the original masks
         tokens_dict.update(original_masks_dict)
         logger.info(f"tokens_dict keys: {tokens_dict.keys()}")
         spatial_tokens, spatial_masks = self.stack_spatial_modalities_and_masks(
