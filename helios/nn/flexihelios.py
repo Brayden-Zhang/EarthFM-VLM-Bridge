@@ -1051,7 +1051,7 @@ class FlexiHeliosBase(nn.Module):
 
     @staticmethod
     def split_and_expand_per_modality(
-        x: Tensor, modalities_to_dims_dict: dict[str, tuple]
+        x: Tensor, modalities_to_dims_dict: dict
     ) -> dict[str, Tensor]:
         """Split and expand the tokens per modality.
 

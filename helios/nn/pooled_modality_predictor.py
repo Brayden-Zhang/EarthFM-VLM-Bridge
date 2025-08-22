@@ -358,13 +358,12 @@ class EncodeEarlyAttnPool(Encoder):
     def apply_unpooled_attn(
         self,
         tokens_and_masks_dict: dict[str, Tensor],
-        modalities_to_dims_dict: dict[str, int],
+        modalities_to_dims_dict: dict,
         exit_ids_seq: Tensor | None = None,
         exited_tokens: Tensor | None = None,
         always_pass_none_mask_to_transformer: bool = False,
     ) -> dict[str, Tensor]:
         """Apply the attention to the tokens and masks."""
-
         tokens, mask = self.collapse_and_combine_hwtc(tokens_and_masks_dict)
 
         bool_mask = mask == MaskValue.ONLINE_ENCODER.value
@@ -466,7 +465,7 @@ class EncodeEarlyAttnPool(Encoder):
         )
         tokens_dict.update(original_masks_dict)
 
-        #TODO: token exit config isn't really meant to be used here but is no-op so leaving it in
+        # TODO: token exit config isn't really meant to be used here but is no-op so leaving it in
         tokens_dict = self.apply_unpooled_attn(
             tokens_dict,
             pre_pooled_modality_to_dims_dict,
