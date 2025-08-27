@@ -1035,6 +1035,7 @@ class HeliosDatasetConfig(Config):
     cache_dir: str | None = None
     samples_per_sec: float | None = None
     dataset_percentage: float = 1.0
+    seed: int = 0
     apply_cutmix: bool = False
 
     def get_numpy_dtype(self) -> np.dtype:

@@ -111,6 +111,10 @@ class HeliosConcatDatasetConfig(Config):
 
     dataset_configs: list[Config]
 
+    # Optional overrides for each sub dataset
+    dataset_percentage: float | None = None
+    seed: int | None = None
+
     def validate(self) -> None:
         """Validate the configuration."""
         if len(self.dataset_configs) == 0:
@@ -122,6 +126,10 @@ class HeliosConcatDatasetConfig(Config):
         logging.info(f"concatenating {len(self.dataset_configs)} sub datasets")
         datasets: list[Dataset] = []
         for dataset_config in self.dataset_configs:
+            if self.dataset_percentage is not None:
+                dataset_config.dataset_percentage = self.dataset_percentage
+            if self.seed is not None:
+                dataset_config.seed = self.seed
             dataset = dataset_config.build()
             # Dataset must be prepared before passing to HeliosConcatDataset so it has
             # a defined length.
