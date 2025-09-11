@@ -1,4 +1,4 @@
-python scripts/2025_09_10_phase1/script.py launch base_v6_default ai2/ceres-cirrascale
+python scripts/2025_09_10_phase1/script.py launch base_v6_default ai2/jupiter-cirrascale-2
 python scripts/2025_09_10_phase1/script.py launch base_v6_contrastive0.05 ai2/ceres-cirrascale --train_module.contrastive_config.loss_config.weight=0.05
 python scripts/2025_09_10_phase1/script.py launch base_v6_lr2e-4 ai2/ceres-cirrascale --train_module.optim_config.lr=0.0002
 python scripts/2025_09_10_phase1/script.py launch base_v6_encode0.25 ai2/ceres-cirrascale --train_module.masking_config.strategy_config.encode_ratio=0.25 --train_module.masking_config.strategy_config.decode_ratio=0.75
