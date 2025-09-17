@@ -26,7 +26,7 @@ HELIOS_TO_SATLAS = {
         for b in ["B04", "B03", "B02", "B05", "B06", "B07", "B08", "B11", "B12"]
     ],
     Modality.SENTINEL1.name: [
-        Modality.SENTINEL1.band_order.index(b) for b in ["VV", "VH"]
+        Modality.SENTINEL1.band_order.index(b) for b in ["vv", "vh"]
     ],
     # Our Landsat models input 11 bands, B1-B11 in order, of Landsat-8 and Landsat-9 images.
     Modality.LANDSAT.name: [
