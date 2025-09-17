@@ -47,6 +47,13 @@ class Satlas(nn.Module):
         Modality.LANDSAT.name,
     ]
 
+    modality_size_to_weights = {
+        "base": {
+            Modality.SENTINEL2_L2A.name: "sentinel2_swinb_si_ms.pth",
+            Modality.LANDSAT.name: "landsat_swinb_si.pth",
+        }
+    }
+
     def __init__(
         self,
         load_directory: str,
