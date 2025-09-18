@@ -187,7 +187,7 @@ class Satlas(nn.Module):
                 output = output.mean(dim=-1).mean(dim=-1)
             else:
                 output = rearrange(output, "b c h w -> b h w c")
-            outputs_list.append(output)
+            outputs_list.append(output.unsqueeze(0))
 
         # stack in the timestep dimension and take the mean or maybe the max?
         if pooling == PoolingType.MEAN:
