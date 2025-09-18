@@ -200,10 +200,12 @@ class SatlasConfig(Config):
 
     size: str = "base"
     load_directory: str = "/weka/dfive-default/helios/models/satlas"
+    use_pretrained_normalizer: bool = True
 
     def build(self) -> Satlas:
         """Build the Satlas model."""
         return Satlas(
             size=self.size,
             load_directory=self.load_directory,
+            use_pretrained_normalizer=self.use_pretrained_normalizer,
         )
