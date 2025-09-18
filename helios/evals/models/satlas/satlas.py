@@ -59,6 +59,7 @@ class Satlas(nn.Module):
     }
 
     size_to_backbone = {"base": Backbone.SWINB, "tiny": Backbone.SWINT}
+    model: satlaspretrain_models.Model
 
     def __init__(
         self,
@@ -74,16 +75,18 @@ class Satlas(nn.Module):
             use_pretrained_normalizer: Whether or not to apply satlas pretraining normalization
         """
         super().__init__()
-        self.model: satlaspretrain_models.Model | None = None
+        self.cur_init_modality: str = Modality.SENTINEL2_L2A.name
         self.size = size
-        self.dim = 1024 if size == "base" else 768
         self.load_directory = UPath(load_directory)
-        self.init_modality: str | None = None
-
+        # need to have some model at init so that the trainer can build correctly
+        self._initialize_model(self.cur_init_modality)
+        self.dim = 1024 if size == "base" else 768
         self.image_resolution = 512
         self.use_pretrained_normalizer = use_pretrained_normalizer
 
-    def _initialize_model(self, modality: str, multitemporal: bool) -> None:
+    def _initialize_model(self, modality: str) -> None:
+        if self.cur_init_modality == modality:
+            return None
         # check init modality to see if we need to reinitialize the model
         weights = torch.load(
             self.load_directory / self.modality_size_to_weights[self.size][modality],
@@ -159,8 +162,7 @@ class Satlas(nn.Module):
                 f"Satlas only supports one modality. Received {len(masked_helios_sample.modalities)}: {masked_helios_sample.modalities}"
             )
         modality = masked_helios_sample.modalities[0]
-        is_multitemporal = masked_helios_sample.timestamps.shape[1] > 1
-        self._initialize_model(modality, is_multitemporal)
+        self._initialize_model(modality)
 
         data = getattr(masked_helios_sample, modality)
         return self._process_modality_data(data, modality)
