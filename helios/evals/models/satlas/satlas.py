@@ -75,11 +75,11 @@ class Satlas(nn.Module):
             use_pretrained_normalizer: Whether or not to apply satlas pretraining normalization
         """
         super().__init__()
-        self.cur_init_modality: str = Modality.SENTINEL2_L2A.name
+        self.cur_init_modality: str = "no_modality_yet"  # doesn't match a modality yet
         self.size = size
         self.load_directory = UPath(load_directory)
         # need to have some model at init so that the trainer can build correctly
-        self._initialize_model(self.cur_init_modality)
+        self._initialize_model(Modality.SENTINEL2_L2A.name)
         self.dim = 1024 if size == "base" else 768
         self.image_resolution = 512
         self.use_pretrained_normalizer = use_pretrained_normalizer
@@ -101,6 +101,7 @@ class Satlas(nn.Module):
             num_categories=None,
             weights=weights,
         )
+        self.cur_init_modality = modality
 
     @staticmethod
     def normalize(image: torch.Tensor, modality: str) -> torch.Tensor:
