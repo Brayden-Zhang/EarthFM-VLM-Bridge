@@ -130,7 +130,7 @@ class Prithvi(nn.Module):
 
         data = F.interpolate(
             data,
-            size=(new_height, new_height),
+            size=(1, new_height, new_height),
             mode="bilinear",
             align_corners=False,
         )
