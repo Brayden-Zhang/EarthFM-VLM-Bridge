@@ -8,7 +8,14 @@ from einops import reduce
 from torch import nn
 
 from helios.evals.datasets.configs import TaskType
-from helios.evals.models import Croma, DINOv2, DINOv3, GalileoWrapper, Panopticon
+from helios.evals.models import (
+    Croma,
+    DINOv2,
+    DINOv3,
+    GalileoWrapper,
+    Panopticon,
+    PrestoWrapper,
+)
 from helios.nn.flexihelios import FlexiHeliosBase, PoolingType, TokensAndMasks
 from helios.nn.pooled_modality_predictor import EncodeEarlyAttnPool
 from helios.nn.st_model import STBase
@@ -183,6 +190,19 @@ class CromaEvalWrapper(EvalWrapper):
         return batch_embeddings
 
 
+class PrestoEvalWrapper(EvalWrapper):
+    """Wrapper for Presto models."""
+
+    def __call__(self, masked_helios_sample: MaskedHeliosSample) -> torch.Tensor:
+        """Forward pass through the model produces the embedding specified by initialization."""
+        batch_embeddings = self.model(
+            masked_helios_sample,
+            pooling=self.pooling_type,
+            spatial_pool=self.spatial_pool,
+        )
+        return batch_embeddings
+
+
 class DINOv3EvalWrapper(EvalWrapper):
     """Wrapper for DINOv3 models."""
 
@@ -232,5 +252,8 @@ def get_eval_wrapper(model: nn.Module, **kwargs: Any) -> EvalWrapper:
     elif isinstance(model, GalileoWrapper):
         logger.info("Using GalileoEvalWrapper")
         return GalileoEvalWrapper(model=model, **kwargs)
+    elif isinstance(model, PrestoWrapper):
+        logger.info("Using PrestoEvalWrapper")
+        return PrestoEvalWrapper(model=model, **kwargs)
     else:
         raise NotImplementedError(f"No EvalWrapper for model type {type(model)}")
