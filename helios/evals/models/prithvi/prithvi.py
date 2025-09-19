@@ -193,8 +193,8 @@ class Prithvi(nn.Module):
         if pooling == PoolingType.MEAN:
             output = output.mean(dim=1)
         elif pooling == PoolingType.MAX:
-            output_features = torch.max(output, dim=1)[0]
-        return output_features
+            output = torch.max(output, dim=1)[0]
+        return output
 
 
 @dataclass
