@@ -5,7 +5,7 @@ from helios.evals.models.dinov2.dinov2 import DINOv2, DINOv2Config
 from helios.evals.models.dinov3.dinov3 import DINOv3, DINOv3Config
 from helios.evals.models.galileo import GalileoConfig, GalileoWrapper
 from helios.evals.models.panopticon.panopticon import Panopticon, PanopticonConfig
-from helios.evals.models.prithvi.prithvi import Prithvi, PrithviConfig
+from helios.evals.models.prithvi.prithvi import PrithviV2, PrithviV2Config
 
 
 def get_launch_script_path(model_name: str) -> str:
@@ -38,6 +38,6 @@ __all__ = [
     "DINOv3Config",
     "Croma",
     "CromaConfig",
-    "Prithvi",
-    "PrithviConfig",
+    "PrithviV2",
+    "PrithviV2Config",
 ]

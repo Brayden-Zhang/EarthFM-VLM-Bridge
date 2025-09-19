@@ -14,7 +14,7 @@ from helios.evals.models import (
     DINOv3,
     GalileoWrapper,
     Panopticon,
-    Prithvi,
+    PrithviV2,
 )
 from helios.nn.flexihelios import FlexiHeliosBase, PoolingType, TokensAndMasks
 from helios.nn.pooled_modality_predictor import EncodeEarlyAttnPool
@@ -156,8 +156,8 @@ class GalileoEvalWrapper(EvalWrapper):
         )
 
 
-class PrithviEvalWrapper(EvalWrapper):
-    """Wrapper for Prithvi model."""
+class PrithviV2EvalWrapper(EvalWrapper):
+    """Wrapper for PrithviV2 model."""
 
     def __call__(self, masked_helios_sample: MaskedHeliosSample) -> torch.Tensor:
         """Forward pass through the model produces the embedding specified by initialization."""
@@ -251,8 +251,8 @@ def get_eval_wrapper(model: nn.Module, **kwargs: Any) -> EvalWrapper:
     elif isinstance(model, GalileoWrapper):
         logger.info("Using GalileoEvalWrapper")
         return GalileoEvalWrapper(model=model, **kwargs)
-    elif isinstance(model, Prithvi):
+    elif isinstance(model, PrithviV2):
         logger.info("Using PrithviEvalWrapper")
-        return PrithviEvalWrapper(model=model, **kwargs)
+        return PrithviV2EvalWrapper(model=model, **kwargs)
     else:
         raise NotImplementedError(f"No EvalWrapper for model type {type(model)}")

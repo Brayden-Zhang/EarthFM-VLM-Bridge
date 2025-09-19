@@ -42,8 +42,8 @@ HF_HUB_ID = "ibm-nasa-geospatial/Prithvi-EO-2.0-300M"
 logger = logging.getLogger(__name__)
 
 
-class Prithvi(nn.Module):
-    """Class containing the Prithvi model that can ingest MaskedHeliosSample objects."""
+class PrithviV2(nn.Module):
+    """Class containing the PrithviV2 model that can ingest MaskedHeliosSample objects."""
 
     supported_modalities = [Modality.SENTINEL2_L2A.name]
 
@@ -52,7 +52,7 @@ class Prithvi(nn.Module):
         load_directory: str,
         use_pretrained_normalizer: bool = True,
     ):
-        """Initialize the Prithvi wrapper.
+        """Initialize the PrithviV2 wrapper.
 
         Args:
             load_directory: The directory to load from
@@ -200,15 +200,15 @@ class Prithvi(nn.Module):
 
 
 @dataclass
-class PrithviConfig(Config):
-    """olmo_core style config for Prithvi Wrapper."""
+class PrithviV2Config(Config):
+    """olmo_core style config for PrithviV2 Wrapper."""
 
     load_directory: str = "/weka/dfive-default/helios/models/prithvi"
     use_pretrained_normalizer: bool = True
 
-    def build(self) -> Prithvi:
-        """Build the Prithvi model."""
-        return Prithvi(
+    def build(self) -> PrithviV2:
+        """Build the PrithviV2 model."""
+        return PrithviV2(
             load_directory=self.load_directory,
             use_pretrained_normalizer=self.use_pretrained_normalizer,
         )
