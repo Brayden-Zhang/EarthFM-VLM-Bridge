@@ -108,7 +108,9 @@ class Prithvi(nn.Module):
             data - torch.tensor(PRITHVI_MEAN, dtype=data.dtype, device=data.device)
         ) / (torch.tensor(PRITHVI_STD, dtype=data.dtype, device=data.device))
 
-    def _process_modality_data(self, data: torch.Tensor, modality: str) -> torch.Tensor:
+    def _process_modality_data(
+        self, data: torch.Tensor, modality: str
+    ) -> list[torch.Tensor]:
         """Process individual modality data.
 
         Args:
@@ -118,24 +120,33 @@ class Prithvi(nn.Module):
         Returns:
             list of tensors of shape [B, C, H, W]
         """
+        t_dim = data.shape[3]
+
         # Get original dimensions
         original_height = data.shape[2]
+        data_list = []
 
-        data = data[:, :, :, :, self.helios_s2_to_prithvi]
-        if self.use_pretrained_normalizer:
-            data = self.normalize(data)
-        data = rearrange(data, "b h w t c -> b c t h w")
+        # interpolate only accepts up to 4d tensors
+        for i in range(t_dim):
+            data_i = data[:, :, :, i, self.helios_s2_to_prithvi]
+            if self.use_pretrained_normalizer:
+                data_i = self.normalize(data_i)
+            data_i = rearrange(data_i, "b h w c -> b c h w")
 
-        new_height = self.patch_size if original_height == 1 else self.image_resolution
+            new_height = (
+                self.patch_size if original_height == 1 else self.image_resolution
+            )
 
-        data = F.interpolate(
-            data,
-            size=(1, new_height, new_height),
-            mode="bilinear",
-            align_corners=False,
-        )
+            data_i = F.interpolate(
+                data_i,
+                size=(new_height, new_height),
+                mode="bilinear",
+                align_corners=False,
+            )
 
-        return data
+            data_list.append(data_i)
+
+        return torch.stack(data_list, dim=2)
 
     def prepare_input(
         self,
