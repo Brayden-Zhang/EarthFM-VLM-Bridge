@@ -1,5 +1,6 @@
 """Helios wrapper for Prithvi v2."""
 
+import logging
 import math
 from dataclasses import dataclass
 
@@ -33,6 +34,9 @@ PRITHVI_STD = [
     1242.0,
     1049.0,
 ]
+
+
+logger = logging.getLogger(__name__)
 
 
 class Prithvi(nn.Module):
@@ -85,9 +89,7 @@ class Prithvi(nn.Module):
             data - torch.tensor(PRITHVI_MEAN, dtype=data.dtype, device=data.device)
         ) / (torch.tensor(PRITHVI_STD, dtype=data.dtype, device=data.device))
 
-    def _process_modality_data(
-        self, data: torch.Tensor, modality: str
-    ) -> list[torch.Tensor]:
+    def _process_modality_data(self, data: torch.Tensor, modality: str) -> torch.Tensor:
         """Process individual modality data.
 
         Args:
@@ -97,32 +99,24 @@ class Prithvi(nn.Module):
         Returns:
             list of tensors of shape [B, C, H, W]
         """
-        t_dim = data.shape[3]
-
         # Get original dimensions
         original_height = data.shape[2]
-        data_list = []
 
-        for i in range(t_dim):
-            data_i = data[:, :, :, i, self.helios_s2_to_prithvi]
-            if self.use_pretrained_normalizer:
-                data_i = self.normalize(data_i)
-            data_i = rearrange(data_i, "b h w c -> b c h w")
+        data = data[:, :, :, :, self.helios_s2_to_prithvi]
+        if self.use_pretrained_normalizer:
+            data = self.normalize(data)
+        data = rearrange(data, "b h w t c -> b c t h w")
 
-            new_height = (
-                self.patch_size if original_height == 1 else self.image_resolution
-            )
+        new_height = self.patch_size if original_height == 1 else self.image_resolution
 
-            data_i = F.interpolate(
-                data_i,
-                size=(new_height, new_height),
-                mode="bilinear",
-                align_corners=False,
-            )
+        data = F.interpolate(
+            data,
+            size=(new_height, new_height),
+            mode="bilinear",
+            align_corners=False,
+        )
 
-            data_list.append(data_i)
-
-        return data_list
+        return data
 
     def prepare_input(
         self,
@@ -149,29 +143,27 @@ class Prithvi(nn.Module):
         spatial_pool: bool = False,
     ) -> torch.Tensor:
         """Forward pass through the satlas model."""
-        processed_inputs = self.prepare_input(masked_helios_sample)
-        outputs_list: list[torch.Tensor] = []
-        for per_t_input in processed_inputs:
-            output = self.model.forward_features(per_t_input)[-1]
-            # following
-            # https://github.com/IBM/terratorch/blob/main/terratorch/models/backbones/prithvi_mae.py#L449
-            # we remove the class token. This is also the approach they
-            # take for classification: https://github.com/IBM/terratorch/blob/main/terratorch/models/scalar_output_model.py#L19
-            output = output[:, 1:, :]
+        processed_input = self.prepare_input(masked_helios_sample)
+        output = self.model.forward_features(processed_input)[-1]
+        t = output.shape[2]
+        # following
+        # https://github.com/IBM/terratorch/blob/main/terratorch/models/backbones/prithvi_mae.py#L449
+        # we remove the class token. This is also the approach they
+        # take for classification: https://github.com/IBM/terratorch/blob/main/terratorch/models/scalar_output_model.py#L19
+        output = output[:, 1:, :]
 
-            if not spatial_pool:
-                # then we don't want to keep the spatial dimensions
-                output = output.mean(dim=1)
-            else:
-                side = math.isqrt(output.shape[1])
-                output = rearrange(output, "b (h w) c -> b h w c", h=side, w=side)
-            outputs_list.append(output.unsqueeze(0))
+        if not spatial_pool:
+            # then we don't want to keep the spatial dimensions
+            output = output.mean(dim=1)
+        else:
+            side = math.isqrt((output).shape[1] / t)
+            output = rearrange(output, "b (h w t) c -> b t h w c", h=side, w=side)
 
         # stack in the timestep dimension and take the mean or maybe the max?
         if pooling == PoolingType.MEAN:
-            output_features = torch.cat(outputs_list, dim=0).mean(dim=0)
+            output = output.mean(dim=1)
         elif pooling == PoolingType.MAX:
-            output_features = torch.max(torch.cat(outputs_list, dim=0), dim=0)[0]
+            output_features = torch.max(output, dim=1)[0]
         return output_features
 
 
