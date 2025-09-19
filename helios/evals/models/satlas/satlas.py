@@ -40,7 +40,7 @@ class Satlas(nn.Module):
     """Class containing the Satlas model that can ingest MaskedHeliosSample objects."""
 
     patch_size: int = 8
-    image_resolution: int = 120
+    image_resolution: int = 512
     supported_modalities: list[str] = [
         Modality.SENTINEL2_L2A.name,
         Modality.SENTINEL1.name,
@@ -79,11 +79,10 @@ class Satlas(nn.Module):
         self.load_directory = UPath(load_directory)
         # need to have some model at init so that the trainer can build correctly
         supported_modalities = self.modality_size_to_weights[self.size].keys()
-        self.models = nn.ParameterDict(
+        self.models = nn.ModuleDict(
             {modality: self._load_model(modality) for modality in supported_modalities}
         )
         self.dim = 1024 if size == "base" else 768
-        self.image_resolution = 512
         self.use_pretrained_normalizer = use_pretrained_normalizer
 
     def _load_model(self, modality: str) -> satlaspretrain_models.Model:
