@@ -10,7 +10,7 @@ from helios.data.concat import HeliosConcatDatasetConfig
 from helios.data.constants import Modality
 from helios.data.dataloader import HeliosDataLoaderConfig
 from helios.data.dataset import HeliosDatasetConfig
-from helios.evals.models.prithvi.prithvi import PrithviConfig
+from helios.evals.models.prithviv2.prithviv2 import PrithviV2Config
 from helios.internal.experiment import CommonComponents, HeliosVisualizeConfig
 from helios.train.loss import LossConfig
 from helios.train.masking import MaskingConfig
@@ -22,9 +22,9 @@ MAX_PATCH_SIZE = 8
 MIN_PATCH_SIZE = 1
 
 
-def build_model_config(common: CommonComponents) -> PrithviConfig:
+def build_model_config(common: CommonComponents) -> PrithviV2Config:
     """Build the model config for an experiment."""
-    model_config = PrithviConfig()
+    model_config = PrithviV2Config()
     return model_config
 
 

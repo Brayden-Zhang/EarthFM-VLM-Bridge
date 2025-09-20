@@ -14,7 +14,7 @@ from olmo_core.config import Config
 from upath import UPath
 
 from helios.data.constants import Modality
-from helios.evals.models.prithvi.prithvi_mae import PrithviMAE
+from helios.evals.models.prithviv2.prithvi_mae import PrithviMAE
 from helios.nn.flexihelios import PoolingType
 from helios.train.masking import MaskedHeliosSample
 
