@@ -58,8 +58,13 @@ EVAL_TASKS = {
     ),
     "m_forestnet": DownstreamTaskConfig(
         dataset="m-forestnet",
+<<<<<<< HEAD
         embedding_batch_size=64,
         ft_batch_size=16,
+=======
+        embedding_batch_size=128,
+        ft_batch_size=4,
+>>>>>>> bc791a8e (update the default set up)
         num_workers=4,
         pooling_type=PoolingType.MEAN,
         norm_stats_from_pretrained=False,

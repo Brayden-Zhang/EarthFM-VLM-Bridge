@@ -22,7 +22,7 @@ LP_LRs = [1e-4, 5e-4, 1e-3, 5e-3, 1e-2, 5e-2, 1e-1, 5e-1]
 # Fine-tune learning rates to sweep over
 FT_LRs = [1e-5, 3e-5, 6e-5, 1e-4, 3e-4, 6e-4, 1e-3]
 
-Normalization_MODES = ["dataset", "pre_trained"]
+Normalization_MODES = ["pre_trained", "dataset"]
 pooling_types = [PoolingType.MEAN, PoolingType.MAX]
 
 logger = getLogger(__name__)
