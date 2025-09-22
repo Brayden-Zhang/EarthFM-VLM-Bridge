@@ -224,6 +224,7 @@ class CopernicusFM(torch.nn.Module):
                 (1, 4), float("nan"), device=data.device
             )  # [lon, lat, delta_time, patch_token_area], assume unknown
             # "The embed tensor contains the encoded image features, which can be used for downstream tasks."
+            print(data.shape)
             _, timestep_output = self.model(
                 data,
                 meta,
