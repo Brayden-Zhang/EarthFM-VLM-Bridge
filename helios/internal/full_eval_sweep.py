@@ -17,24 +17,40 @@ from helios.internal.all_evals import EVAL_TASKS
 from helios.internal.experiment import SubCmd
 from helios.nn.flexihelios import PoolingType
 
+# Linear probe learning rates to sweep over
 LP_LRs = [1e-4, 5e-4, 1e-3, 5e-3, 1e-2, 5e-2, 1e-1, 5e-1]
+# Fine-tune learning rates to sweep over
+FT_LRs = [1e-5, 3e-5, 6e-5, 1e-4, 3e-4, 6e-4, 1e-3]
+
 Normalization_MODES = ["dataset", "pre_trained"]
 pooling_types = [PoolingType.MEAN, PoolingType.MAX]
 
 logger = getLogger(__name__)
 
 
-def create_linear_probe_arg(task_name: str, field_name: str) -> str:
-    """Create a linear probe argument for a given task name."""
-    initial_str = (
-        f"--trainer.callbacks.downstream_evaluator.tasks.{task_name}.{field_name}="
-    )
-    return initial_str + "{arg}"
+def create_task_arg(task_name: str, field_name: str) -> str:
+    """Create a command line argument for a specific task and field."""
+    return f"--trainer.callbacks.downstream_evaluator.tasks.{task_name}.{field_name}={{arg}}"
 
+
+def _ft_task_names() -> list[str]:
+    """When finetune is enabled, we just run *all* tasks as finetune."""
+    return list(EVAL_TASKS.keys())
+
+
+# Set eval_mode to finetune for all tasks that support it
+ft_mode_args = " ".join(
+    [
+        f"--trainer.callbacks.downstream_evaluator.tasks.{t}.eval_mode=finetune"
+        for t in _ft_task_names()
+    ]
+)
+
+ft_lr_args_template = " ".join([create_task_arg(t, "ft_lr") for t in _ft_task_names()])
 
 lr_args = " ".join(
     [
-        create_linear_probe_arg(task_name, "probe_lr")
+        create_task_arg(task_name, "probe_lr")
         for task_name, task in EVAL_TASKS.items()
         if get_eval_mode(dataset_to_config(task.dataset).task_type) == "linear_probe"
     ]
@@ -43,7 +59,7 @@ lr_args = " ".join(
 pooling_args = " ".join(
     [" "]
     + [
-        create_linear_probe_arg(task_name, "pooling_type")
+        create_task_arg(task_name, "pooling_type")
         for task_name, task in EVAL_TASKS.items()
     ]
 )
@@ -83,6 +99,28 @@ def no_norm_sweep() -> Generator[dict[str, Any], None, None]:
         for lr in LP_LRs:
             yield {
                 "lr": lr,
+                "pooling_type": pooling_type,
+            }
+
+
+def ft_loop_through_params() -> Generator[dict[str, Any], None, None]:
+    """Yield FT sweep points (ft_lr × norm_mode × pooling)."""
+    for lr in FT_LRs:
+        for norm_mode in Normalization_MODES:
+            for pooling_type in pooling_types:
+                yield {
+                    "ft_lr": lr,
+                    "norm_mode": norm_mode,
+                    "pooling_type": pooling_type,
+                }
+
+
+def no_norm_ft_sweep() -> Generator[dict[str, Any], None, None]:
+    """Yield a dict of FT hps we are sweeping over (no normalization)."""
+    for pooling_type in pooling_types:
+        for lr in FT_LRs:
+            yield {
+                "ft_lr": lr,
                 "pooling_type": pooling_type,
             }
 
@@ -492,6 +530,83 @@ def _build_hyperparameter_command(
     )
 
 
+def _build_default_ft_command(
+    args: argparse.Namespace,
+    base_run_name: str,
+    sub_command: str,
+    launch_command: str,
+    checkpoint_args: str,
+    project_name: str,
+    extra: str,
+) -> str:
+    """Build command for running FT with default hyperparameters."""
+    lr = FT_LRs[0]
+    norm_mode = Normalization_MODES[0]
+    pooling_type = pooling_types[0]
+    logger.info(
+        f"Running FT defaults: norm={norm_mode}, lr={lr}, pooling={pooling_type}"
+    )
+    run_name = f"{base_run_name}_FT_defaults"
+
+    cmd_args = _get_model_specific_args(args)
+    cmd_args += " " + ft_mode_args
+    cmd_args += " " + ft_lr_args_template.format(arg=lr)
+    cmd_args += " " + pooling_args.format(arg=pooling_type)
+    cmd_args += " " + _get_normalization_args(args, norm_mode)
+
+    module_path = (
+        args.module_path if args.module_path is not None else _get_module_path(args)
+    )
+    logger.info(f"Using module path {module_path}")
+
+    return (
+        f"TRAIN_SCRIPT_PATH={module_path} {launch_command} helios/internal/all_evals.py "
+        f"{sub_command} {run_name} {args.cluster} --launch.priority=high "
+        f"--launch.task_name=eval {checkpoint_args} --trainer.callbacks.wandb.project={project_name}{extra} {cmd_args}"
+    )
+
+
+def _build_ft_hyperparameter_command(
+    args: argparse.Namespace,
+    params: dict,
+    base_run_name: str,
+    sub_command: str,
+    launch_command: str,
+    checkpoint_args: str,
+    project_name: str,
+    extra: str,
+) -> str:
+    """Build command for running FT with specific hyperparameters."""
+    lr = params.get("ft_lr")
+    norm_mode = params.get("norm_mode", "fixed")
+    pooling_type = params.get("pooling_type", "default")
+
+    logger.info(f"Running FT with norm={norm_mode}, lr={lr}, pooling={pooling_type}")
+    logger.info(
+        f"Running with module path {args.module_path} on cluster {args.cluster}"
+    )
+
+    run_name = f"{base_run_name}_FT_{norm_mode}_lr{lr}_pooling{pooling_type}"
+
+    cmd_args = ""
+    cmd_args += " " + ft_mode_args
+    cmd_args += " " + ft_lr_args_template.format(arg=lr)
+    if pooling_type != "default":
+        cmd_args += " " + pooling_args.format(arg=pooling_type)
+
+    cmd_args += " " + _get_normalization_args(args, norm_mode)
+    cmd_args += " " + _get_model_specific_args(args)
+
+    module_path = (
+        args.module_path if args.module_path is not None else _get_module_path(args)
+    )
+    return (
+        f"TRAIN_SCRIPT_PATH={module_path} {launch_command} helios/internal/all_evals.py "
+        f"{sub_command} {run_name} {args.cluster} --launch.priority=high {cmd_args} "
+        f"--launch.task_name=eval {checkpoint_args} --trainer.callbacks.wandb.project={project_name}{extra}"
+    )
+
+
 def _get_module_path(args: argparse.Namespace) -> str:
     """Get the module path for the launch script."""
     if args.dino_v3:
@@ -528,8 +643,42 @@ def build_commands(args: argparse.Namespace, extra_cli: list[str]) -> list[str]:
     launch_command = "python3" if not sub_command == SubCmd.train else "torchrun"
     checkpoint_args = _get_checkpoint_args(args.checkpoint_path)
 
-    commands_to_run = []
+    commands_to_run: list[str] = []
 
+    # Fine-tune all tasks if specified
+    if args.finetune:
+        if args.defaults_only:
+            cmd = _build_default_ft_command(
+                args,
+                base_run_name,
+                sub_command,
+                launch_command,
+                checkpoint_args,
+                project_name,
+                extra,
+            )
+            commands_to_run.append(cmd)
+        else:
+            hp_params = (
+                no_norm_ft_sweep()
+                if args.dino_v3 or args.panopticon
+                else ft_loop_through_params()
+            )
+            for params in hp_params:
+                cmd = _build_ft_hyperparameter_command(
+                    args,
+                    params,
+                    base_run_name,
+                    sub_command,
+                    launch_command,
+                    checkpoint_args,
+                    project_name,
+                    extra,
+                )
+                commands_to_run.append(cmd)
+        return commands_to_run
+
+    # Not-finetune (KNN or linear probe) sweep
     if args.defaults_only:
         # Just run with the first/default values
         cmd = _build_default_command(
@@ -551,7 +700,6 @@ def build_commands(args: argparse.Namespace, extra_cli: list[str]) -> list[str]:
             and not args.tessera  # Only use the dataset normalization stats for these models
             else no_norm_sweep()
         )
-
         for params in hp_params:
             cmd = _build_hyperparameter_command(
                 args,
@@ -598,6 +746,11 @@ def main() -> None:
         "--dry_run",
         action="store_true",
         help="If set, only print the commands that would be run",
+    )
+    parser.add_argument(
+        "--finetune",
+        action="store_true",
+        help="Run fine-tuning sweeps for all tasks",
     )
     parser.add_argument(
         "--model_name",
