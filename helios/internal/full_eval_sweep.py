@@ -541,7 +541,7 @@ def _build_default_ft_command(
 
     return (
         f"TRAIN_SCRIPT_PATH={module_path} {launch_command} helios/internal/all_evals.py "
-        f"{sub_command} {run_name} {args.cluster} --finetune --launch.priority=high "
+        f"{sub_command} {run_name} {args.cluster} --launch.priority=high "
         f"--launch.task_name=eval {checkpoint_args} --trainer.callbacks.wandb.project={project_name}{extra} {cmd_args} "
         # This is needed to disable DP for Helios FT runs
         "--train_module.dp_config=null"
@@ -578,7 +578,7 @@ def _build_ft_hyperparameter_command(
     )
     return (
         f"TRAIN_SCRIPT_PATH={module_path} {launch_command} helios/internal/all_evals.py "
-        f"{sub_command} {run_name} {args.cluster} --finetune --launch.priority=high {cmd_args} "
+        f"{sub_command} {run_name} {args.cluster} --launch.priority=high {cmd_args} "
         f"--launch.task_name=eval {checkpoint_args} --trainer.callbacks.wandb.project={project_name}{extra} "
         # This is needed to disable DP for Helios FT runs
         "--train_module.dp_config=null"
@@ -795,10 +795,13 @@ def main() -> None:
     args, extra_cli = parser.parse_known_args()
 
     commands_to_run = build_commands(args, extra_cli)
+    env = os.environ.copy()
+    if args.finetune:
+        env["FINETUNE"] = "1"
 
     for cmd in commands_to_run:
         logger.info(cmd)
-        subprocess.run(cmd, shell=True, check=True)  # nosec
+        subprocess.run(cmd, shell=True, check=True, env=env)  # nosec
 
 
 if __name__ == "__main__":
