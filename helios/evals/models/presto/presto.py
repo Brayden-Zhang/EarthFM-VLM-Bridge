@@ -135,8 +135,9 @@ class PrestoWrapper(nn.Module):
                 s1 = (s1 - PRESTO_S1_SUBTRACT_VALUE) / PRESTO_S1_DIV_VALUE
             x[:, :, :, :, self.to_presto_s1_map] = s1[:, :, :, :, self.kept_s1_band_idx]
 
-        else:
+        if x is None:
             raise ValueError("no s1 or s2?")
+
         s_t_m = torch.ones(
             (b, h, w, t, len(INPUT_PRESTO_BANDS)),
             dtype=x.dtype,
