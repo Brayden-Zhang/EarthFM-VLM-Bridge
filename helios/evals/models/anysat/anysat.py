@@ -67,7 +67,7 @@ class AnySat(nn.Module):
             "gastruc/anysat",
             "anysat",
             pretrained=True,
-            flash_attn=False,
+            flash_attn=True,
             force_reload=True,
         )
 
