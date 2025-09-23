@@ -540,8 +540,8 @@ def _build_default_ft_command(
     logger.info(f"Using module path {module_path}")
 
     return (
-        f"FINETUNE=1 "
         f"TRAIN_SCRIPT_PATH={module_path} {launch_command} helios/internal/all_evals.py "
+        f"--finetune "
         f"{sub_command} {run_name} {args.cluster} --launch.priority=high "
         f"--launch.task_name=eval {checkpoint_args} --trainer.callbacks.wandb.project={project_name}{extra} {cmd_args} "
         # This is needed to disable DP for Helios FT runs
@@ -578,8 +578,8 @@ def _build_ft_hyperparameter_command(
         args.module_path if args.module_path is not None else _get_module_path(args)
     )
     return (
-        f"FINETUNE=1 "
         f"TRAIN_SCRIPT_PATH={module_path} {launch_command} helios/internal/all_evals.py "
+        f"--finetune "
         f"{sub_command} {run_name} {args.cluster} --launch.priority=high {cmd_args} "
         f"--launch.task_name=eval {checkpoint_args} --trainer.callbacks.wandb.project={project_name}{extra} "
         # This is needed to disable DP for Helios FT runs

@@ -1,5 +1,6 @@
 """Launch script for evaluation allowing you to easily run all the evals for your model by just pointing at your training script."""
 
+import argparse
 import importlib.util
 import os
 import sys
@@ -631,18 +632,9 @@ FT_EVAL_TASKS = {
 }
 
 
-def _select_tasks_from_env() -> dict[str, DownstreamTaskConfig]:
-    """If FINETUNE=1 use FT_EVAL_TASKS, otherwise use EVAL_TASKS."""
-    finetune_flag = os.environ.get("FINETUNE", "0")
-    use_ft = finetune_flag == "1"
-    tasks = FT_EVAL_TASKS if use_ft else EVAL_TASKS
-    logger.info(
-        f"Using {'FT_EVAL_TASKS' if use_ft else 'EVAL_TASKS'} (FINETUNE={finetune_flag})"
-    )
-    return tasks
-
-
-def build_trainer_config(common: CommonComponents) -> TrainerConfig:
+def build_trainer_config(
+    common: CommonComponents, finetune: bool = False
+) -> TrainerConfig:
     """Build the trainer config for an experiment."""
     MAX_DURATION = Duration.epochs(300)
     METRICS_COLLECT_INTERVAL = 10
@@ -651,7 +643,8 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
     WANDB_USERNAME = "eai-ai2"  # nosec
     WANDB_PROJECT = "helios_in_loop_evals"
 
-    selected_tasks = _select_tasks_from_env()
+    tasks = FT_EVAL_TASKS if finetune else EVAL_TASKS
+    logger.info(f"Using {'FT_EVAL_TASKS' if finetune else 'EVAL_TASKS'}")
     checkpointer_config = CheckpointerConfig(work_dir=common.save_folder)
     wandb_callback = HeliosWandBCallback(
         name=common.run_name,
@@ -677,7 +670,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
         .with_callback(
             "downstream_evaluator",
             DownstreamEvaluatorCallbackConfig(
-                tasks=selected_tasks,
+                tasks=tasks,
                 eval_on_startup=True,
                 cancel_after_first_eval=True,
                 run_on_test=False,
@@ -690,6 +683,14 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--finetune",
+        action="store_true",
+        help="Use FT_EVAL_TASKS instead of EVAL_TASKS",
+    )
+    args, unknown = parser.parse_known_args()
+
     module_path = os.environ.get("TRAIN_SCRIPT_PATH")
     if module_path is None:
         raise ValueError("TRAIN_SCRIPT_PATH environment variable must be set")
