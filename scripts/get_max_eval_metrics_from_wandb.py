@@ -1,7 +1,7 @@
 """Get metrics summary from W&B. See get_max_metrics."""
 
+import argparse
 import csv
-import sys
 
 import wandb
 
@@ -129,65 +129,99 @@ def get_max_metrics(project_name: str, run_prefix: str) -> dict[str, float]:
     return metrics
 
 
-if __name__ == "__main__":
-    # project_name is the W&B project under eai-ai2
-    project_name = sys.argv[1]
-    # run_prefix is the prefix of the runs with different probe learning rates.
-    # If you are not sweeping across probe learning rates, this can just be the name
-    # of the run (as long as no other run shares the same prefix).
-    run_prefix = sys.argv[2]
-    # output CSV file
-    output_file = sys.argv[3]
+def main():
+    """Parse args and call get_max_metrics or get_max_metrics_per_partition."""
+    parser = argparse.ArgumentParser(
+        description="Aggregate eval metrics and write CSV."
+    )
+    parser.add_argument("project_name", help="W&B project under eai-ai2")
+    parser.add_argument("run_prefix", help="Run prefix (or exact run name if unique)")
+    parser.add_argument(
+        "-o",
+        "--output-file",
+        default="final_metrics.csv",
+        help="Path to output CSV (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--per-partition",
+        action="store_true",
+        help="Aggregate per dataset partition (excludes 'default')",
+    )
+    args = parser.parse_args()
 
-    # Check if user wants partition-based aggregation
-    if len(sys.argv) > 3 and sys.argv[3] == "--per-partition":
+    if args.per_partition:
         print("Getting max metrics per dataset partition (excluding default)...")
-        partition_metrics = get_max_metrics_per_partition(project_name, run_prefix)
+        partition_metrics = get_max_metrics_per_partition(
+            args.project_name, args.run_prefix
+        )
 
         print("\nResults per partition:")
+        rows = []  # for CSV: partition, metric, value
         for partition in PARTITIONS:
             if partition in partition_metrics:
                 print(f"\n{partition}:")
                 for metric in METRICS:
-                    try:
-                        k = f"eval/{metric}"
-                        print(f"  {metric}: {partition_metrics[partition][k]}")
-                    except KeyError:
-                        try:
-                            metric = metric.replace("-", "_")
-                            k = f"eval/{metric}"
-                            print(f"  {metric}: {partition_metrics[partition][k]}")
-                        except KeyError:
-                            print(f"  {metric}: not found")
+                    # Try original name
+                    key = f"eval/{metric}"
+                    val = partition_metrics[partition].get(key)
+                    # Fallback with underscore variant
+                    if val is None:
+                        metric_alt = metric.replace("-", "_")
+                        key_alt = f"eval/{metric_alt}"
+                        val = partition_metrics[partition].get(key_alt)
+                        name_for_print = metric_alt if val is not None else metric
+                    else:
+                        name_for_print = metric
+
+                    if val is None:
+                        print(f"  {metric}: not found")
+                        rows.append((partition, metric, "not found"))
+                    else:
+                        print(f"  {name_for_print}: {val}")
+                        rows.append((partition, name_for_print, val))
             else:
                 print(f"\n{partition}: no runs found")
+                # Optionally record that in CSV (comment out if you don't want it)
+                # rows.append((partition, "", "no runs found"))
+
+        # Write per-partition CSV (long format)
+        with open(args.output_file, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["partition", "metric", "value"])
+            writer.writerows(rows)
+        print(f"\nPer-partition metrics written to {args.output_file}")
+
     else:
         print("Getting max metrics across runs...")
-        metrics = get_max_metrics(project_name, run_prefix)
+        metrics = get_max_metrics(args.project_name, args.run_prefix)
 
         print("\nFinal Results:")
         rows = []
         for metric in METRICS:
-            try:
-                k = f"eval/{metric}"
-                val = metrics[k]
-                print(f"{metric} {val}")
-                rows.append((metric, val))
-            except KeyError:
-                try:
-                    metric_alt = metric.replace("-", "_")
-                    k = f"eval/{metric_alt}"
-                    val = metrics[k]
-                    print(f"{metric_alt} {val}")
-                    rows.append((metric_alt, val))
-                except KeyError:
-                    print(f"Metric {metric} not found")
-                    rows.append((metric, "not found"))
+            key = f"eval/{metric}"
+            val = metrics.get(key)
+            if val is None:
+                metric_alt = metric.replace("-", "_")
+                key_alt = f"eval/{metric_alt}"
+                val = metrics.get(key_alt)
+                name_for_print = metric_alt if val is not None else metric
+            else:
+                name_for_print = metric
 
-        # Write to CSV
-        with open(output_file, "w", newline="") as f:
+            if val is None:
+                print(f"Metric {metric} not found")
+                rows.append((metric, "not found"))
+            else:
+                print(f"{name_for_print} {val}")
+                rows.append((name_for_print, val))
+
+        with open(args.output_file, "w", newline="") as f:
             writer = csv.writer(f)
             writer.writerow(["metric", "value"])
             writer.writerows(rows)
 
-        print(f"\nMetrics written to {output_file}")
+        print(f"\nMetrics written to {args.output_file}")
+
+
+if __name__ == "__main__":
+    main()
