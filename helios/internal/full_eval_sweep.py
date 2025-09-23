@@ -13,7 +13,7 @@ from typing import Any
 
 from helios.evals.datasets.configs import dataset_to_config, get_eval_mode
 from helios.evals.models import get_launch_script_path
-from helios.internal.all_evals import EVAL_TASKS
+from helios.internal.all_evals import EVAL_TASKS, FT_EVAL_TASKS
 from helios.internal.experiment import SubCmd
 from helios.nn.flexihelios import PoolingType
 
@@ -35,7 +35,7 @@ def create_task_arg(task_name: str, field_name: str) -> str:
 
 def _ft_task_names() -> list[str]:
     """When finetune is enabled, we just run *all* tasks as finetune."""
-    return list(EVAL_TASKS.keys())
+    return list(FT_EVAL_TASKS.keys())
 
 
 # Set eval_mode to finetune for all tasks that support it
@@ -541,18 +541,12 @@ def _build_default_ft_command(
 ) -> str:
     """Build command for running FT with default hyperparameters."""
     lr = FT_LRs[0]
-    norm_mode = Normalization_MODES[0]
-    pooling_type = pooling_types[0]
-    logger.info(
-        f"Running FT defaults: norm={norm_mode}, lr={lr}, pooling={pooling_type}"
-    )
+    logger.info(f"Running FT defaults: lr={lr}")
     run_name = f"{base_run_name}_FT_defaults"
 
     cmd_args = _get_model_specific_args(args)
     cmd_args += " " + ft_mode_args
     cmd_args += " " + ft_lr_args_template.format(arg=lr)
-    cmd_args += " " + pooling_args.format(arg=pooling_type)
-    cmd_args += " " + _get_normalization_args(args, norm_mode)
 
     module_path = (
         args.module_path if args.module_path is not None else _get_module_path(args)
@@ -580,23 +574,17 @@ def _build_ft_hyperparameter_command(
 ) -> str:
     """Build command for running FT with specific hyperparameters."""
     lr = params.get("ft_lr")
-    norm_mode = params.get("norm_mode", "fixed")
-    pooling_type = params.get("pooling_type", "default")
 
-    logger.info(f"Running FT with norm={norm_mode}, lr={lr}, pooling={pooling_type}")
+    logger.info(f"Running FT with lr={lr}")
     logger.info(
         f"Running with module path {args.module_path} on cluster {args.cluster}"
     )
 
-    run_name = f"{base_run_name}_FT_{norm_mode}_lr{lr}_pooling{pooling_type}"
+    run_name = f"{base_run_name}_FT_lr{lr}"
 
     cmd_args = ""
     cmd_args += " " + ft_mode_args
     cmd_args += " " + ft_lr_args_template.format(arg=lr)
-    if pooling_type != "default":
-        cmd_args += " " + pooling_args.format(arg=pooling_type)
-
-    cmd_args += " " + _get_normalization_args(args, norm_mode)
     cmd_args += " " + _get_model_specific_args(args)
 
     module_path = (
