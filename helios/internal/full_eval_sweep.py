@@ -564,7 +564,7 @@ def _build_default_ft_command(
         f"{sub_command} {run_name} {args.cluster} --launch.priority=high "
         f"--launch.task_name=eval {checkpoint_args} --trainer.callbacks.wandb.project={project_name}{extra} {cmd_args} "
         # This is needed to disable DP for Helios FT runs
-        "--train_module.dp_config=None"
+        "--train_module.dp_config=null"
     )
 
 
@@ -607,7 +607,7 @@ def _build_ft_hyperparameter_command(
         f"{sub_command} {run_name} {args.cluster} --launch.priority=high {cmd_args} "
         f"--launch.task_name=eval {checkpoint_args} --trainer.callbacks.wandb.project={project_name}{extra} "
         # This is needed to disable DP for Helios FT runs
-        "--train_module.dp_config=None"
+        "--train_module.dp_config=null"
     )
 
 
