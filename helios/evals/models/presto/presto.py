@@ -37,6 +37,7 @@ class PrestoWrapper(nn.Module):
     """Class containing the Presto model that can ingest MaskedHeliosSample objects."""
 
     supported_modalities = [Modality.SENTINEL2_L2A.name, Modality.SENTINEL1.name]
+    requires_timeseries: bool = True
 
     def __init__(
         self,
