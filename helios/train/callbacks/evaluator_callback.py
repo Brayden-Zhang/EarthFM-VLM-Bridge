@@ -26,7 +26,7 @@ from helios.evals.datasets.configs import (
 from helios.evals.datasets.normalize import NormMethod
 from helios.evals.datasets.utils import eval_collate_fn
 from helios.evals.embeddings import get_embeddings
-from helios.evals.eval_wrapper import get_eval_wrapper
+from helios.evals.eval_wrapper import Satlas, get_eval_wrapper
 from helios.evals.knn import run_knn
 from helios.evals.linear_probe import ProbeType, train_and_eval_probe
 from helios.nn.flexihelios import PoolingType
@@ -243,6 +243,12 @@ class DownstreamEvaluatorCallback(Callback):
         logger.info(f"Task instance used modalities: {task_instance_used_modalities}")
         if len(task_instance_used_modalities) == 0:
             task_instance_used_modalities = task_supported_modalities
+
+        if isinstance(self.trainer.train_module.model, Satlas):
+            if len(task_instance_used_modalities) > 1:
+                # satlas can only ingest one modality at a time
+                return False
+
         does_model_support_all_task_instance_used_modalities = set(
             task_instance_used_modalities
         ).issubset(set(self.model_supported_modalities))

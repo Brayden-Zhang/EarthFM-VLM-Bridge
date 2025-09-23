@@ -176,6 +176,31 @@ def get_galileo_args(pretrained_normalizer: bool = True) -> str:
     return galileo_args
 
 
+def get_satlas_args(pretrained_normalizer: bool = True) -> str:
+    """Get the satlas arguments."""
+    satlas_args = dataset_args
+    if pretrained_normalizer:
+        # To use satlas pretrained normalizer we want to leave normalization to the satlas wrapper
+        satlas_args += " " + " ".join(
+            [
+                f"--trainer.callbacks.downstream_evaluator.tasks.{task_name}.norm_method=NormMethod.NO_NORM"
+                for task_name in EVAL_TASKS.keys()
+            ]
+        )
+
+        satlas_args += " " + "--model.use_pretrained_normalizer=True"
+    else:
+        satlas_args += " " + " ".join(
+            [
+                f"--trainer.callbacks.downstream_evaluator.tasks.{task_name}.norm_method=NormMethod.NORM_YES_CLIP"
+                for task_name in EVAL_TASKS.keys()
+            ]
+        )
+        # IF we use dataset stats we want to turn off the pretrained normalizer
+        satlas_args += " " + "--model.use_pretrained_normalizer=False"
+    return satlas_args
+
+
 def get_prithviv2_args(pretrained_normalizer: bool = True) -> str:
     """Get the Prithvi arguments."""
     prithvi_args = dataset_args
@@ -245,6 +270,8 @@ def _get_model_specific_args(args: argparse.Namespace) -> str:
         return get_panopticon_args()
     elif args.galileo:
         return get_galileo_args()
+    elif args.satlas:
+        return get_satlas_args()
     elif args.croma:
         return get_croma_args()
     elif args.tessera:
@@ -260,6 +287,7 @@ def _get_normalization_args(args: argparse.Namespace, norm_mode: str) -> str:
         "galileo": get_galileo_args,
         "tessera": get_tessera_args,
         "prithvi_v2": get_prithviv2_args,
+        "satlas": get_satlas_args,
     }
     for model, func in model_map.items():
         if getattr(args, model, False):
@@ -352,6 +380,8 @@ def _get_module_path(args: argparse.Namespace) -> str:
         return get_launch_script_path("croma")
     elif args.galileo:
         return get_launch_script_path("galileo")
+    elif args.satlas:
+        return get_launch_script_path("satlas")
     elif args.tessera:
         return get_launch_script_path("tessera")
     elif args.prithvi_v2:
@@ -460,6 +490,11 @@ def main() -> None:
         "--galileo",
         action="store_true",
         help="If set, use the galileo normalization settings",
+    )
+    parser.add_argument(
+        "--satlas",
+        action="store_true",
+        help="If set, use the satlas normalization settings",
     )
     parser.add_argument(
         "--croma",
