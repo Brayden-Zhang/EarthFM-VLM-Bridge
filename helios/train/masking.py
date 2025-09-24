@@ -868,6 +868,18 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
             for sample_idx in present_sample_indices:
                 sample_idx = sample_idx.item()
                 for bandset_idx in range(num_bandsets):
+                    # check if that modality bandset has any encoded tokens if it has no encoded tokens it is not present
+                    is_any_tokens_encoded_for_sample = (
+                        torch.sum(
+                            modality_mask[sample_idx, ..., bandset_idx]
+                            == MaskValue.ONLINE_ENCODER.value
+                        )
+                        > 0
+                    )
+                    # only say something is present if it has any encoded tokens
+                    # A little hacky but basically means that we leave the bandset untouched for encoding and decoding
+                    if not is_any_tokens_encoded_for_sample:
+                        continue
                     present_modalities_bandsets[sample_idx].append(
                         (modality, bandset_idx)
                     )
@@ -896,38 +908,41 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
             else:
                 # Select Indices to Encode
                 num_present_modalities = len(present_modalities_bandsets_for_sample)
-                encodable_modalities = [
+                encodable_modality_bandsets = [
                     modality_bandset
                     for modality_bandset in present_modalities_bandsets_for_sample
                     if modality_bandset[0] not in self.only_decode_modalities
                 ]
-                num_encodable_modalities = len(encodable_modalities)
+                num_encodable_modality_bandsets = len(encodable_modality_bandsets)
                 # if min and max are none we will always encode all encodable bandsets
                 # if min is none, max must be none
+                upper_limit = num_encodable_modality_bandsets
+                if not self.allow_encoding_decoding_same_bandset:
+                    # Otherwise no decoding will be done
+                    upper_limit -= 1
                 if self.max_encoded_bandsets is None:
-                    max_encoded_bandsets = num_encodable_modalities
+                    max_encoded_bandsets = upper_limit
                 else:
-                    max_encoded_bandsets = min(
-                        self.max_encoded_bandsets, num_encodable_modalities
-                    )
+                    max_encoded_bandsets = min(self.max_encoded_bandsets, upper_limit)
 
                 if self.min_encoded_bandsets is None:
-                    min_encoded_bandsets = num_encodable_modalities
+                    min_encoded_bandsets = num_encodable_modality_bandsets
                 else:
                     min_encoded_bandsets = min(
-                        self.min_encoded_bandsets, num_encodable_modalities
+                        self.min_encoded_bandsets, num_encodable_modality_bandsets
                     )
-
-                num_encoded_bandsets = np.random.randint(
+                # Ensure min is less than max
+                min_encoded_bandsets = min(min_encoded_bandsets, max_encoded_bandsets)
+                num_bandsets_to_encode = np.random.randint(
                     min_encoded_bandsets, max_encoded_bandsets + 1
                 )
                 encoded_idxs = np.random.choice(
-                    len(encodable_modalities),
-                    size=num_encoded_bandsets,
+                    len(encodable_modality_bandsets),
+                    size=num_bandsets_to_encode,
                     replace=False,
                 )
                 encoded_bandset_idxs = set(
-                    [encodable_modalities[i] for i in encoded_idxs]
+                    [encodable_modality_bandsets[i] for i in encoded_idxs]
                 )
                 # Select Indices to Decode
                 min_decoded_bandsets = min(
@@ -1014,6 +1029,8 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
             masked_modality_name = MaskedHeliosSample.get_masked_modality_name(modality)
             modality_spec = Modality.get(modality)
             modality_mask = masked_batch_dict[masked_modality_name]
+            # with 1-12 patch size I got a run time aliasing error when writing to the modality mask
+            out_modality_mask = modality_mask.clone()
             num_bandsets = modality_mask.shape[-1]
 
             for sample_idx in range(masked_batch.timestamps.shape[0]):
@@ -1053,7 +1070,7 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
                             modality_mask[sample_idx, ..., bandset_idx]
                             != MaskValue.MISSING.value
                         )
-                        modality_mask[sample_idx, ..., bandset_idx] = torch.where(
+                        out_modality_mask[sample_idx, ..., bandset_idx] = torch.where(
                             not_missing_mask,
                             forced_mask_value,
                             modality_mask[sample_idx, ..., bandset_idx],
@@ -1066,8 +1083,9 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
                             modality_mask[sample_idx, ..., bandset_idx]
                             == MaskValue.ONLINE_ENCODER.value
                         )
-                        modality_mask[sample_idx, ..., bandset_idx] = torch.where(
-                            online_encoder_mask,
+
+                        out_modality_mask[sample_idx, ..., bandset_idx] = torch.where(
+                            online_encoder_mask.clone(),
                             MaskValue.TARGET_ENCODER_ONLY.value,
                             modality_mask[sample_idx, ..., bandset_idx],
                         )
@@ -1078,15 +1096,17 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
                             modality_mask[sample_idx, ..., bandset_idx]
                             == MaskValue.DECODER.value
                         )
-                        modality_mask[sample_idx, ..., bandset_idx] = torch.where(
+
+                        out_modality_mask[sample_idx, ..., bandset_idx] = torch.where(
                             decoder_mask,
                             MaskValue.TARGET_ENCODER_ONLY.value,
                             modality_mask[sample_idx, ..., bandset_idx],
                         )
 
-            masked_batch_dict[masked_modality_name] = modality_mask
+            masked_batch_dict[masked_modality_name] = out_modality_mask
 
         masked_batch = MaskedHeliosSample(**masked_batch_dict)
+
         return masked_batch
 
     def apply_mask(
@@ -1094,6 +1114,23 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
     ) -> MaskedHeliosSample:
         """Apply space masking to the input data."""
         masked_sample = self.strategy.apply_mask(batch, patch_size, **kwargs)
+        # get shape of each modality in the masked sample
+        # modality_shapes = {
+        #     modality: getattr(masked_sample, modality).shape
+        #     for modality in masked_sample.modalities
+        # }
+        # logger.info(f"Modality shapes: {modality_shapes}")
+        # num_encoded_per_modality = {
+        #     modality: (
+        #         getattr(
+        #             masked_sample, MaskedHeliosSample.get_masked_modality_name(modality)
+        #         )
+        #         == MaskValue.ONLINE_ENCODER.value
+        #     ).sum()
+        #     for modality in masked_sample.modalities
+        # }
+        # logger.info(f"Num encoded per modality: {num_encoded_per_modality}")
+
         present_modalities_bandsets = self.get_sample_present_modalities_bandsets(
             masked_sample
         )
@@ -1103,6 +1140,29 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
         masked_sample = self.apply_bandset_mask_rules(
             masked_sample, encoded_decoded_bandsets, present_modalities_bandsets
         )
+        # # Check to see if any sample indexes have no encoded tokens
+        # no_encoded_sample_idxs = []
+        # for sample_idx in range(masked_sample.timestamps.shape[0]):
+        #     encoded_tokens = 0
+        #     for modality in masked_sample.modalities:
+        #         masked_modality_name = MaskedHeliosSample.get_masked_modality_name(
+        #             modality
+        #         )
+        #         encoded_tokens += (
+        #             getattr(masked_sample, masked_modality_name)
+        #             == MaskValue.ONLINE_ENCODER.value
+        #         ).sum()
+
+        #     if encoded_tokens == 0:
+        #         no_encoded_sample_idxs.append(sample_idx)
+        # if len(no_encoded_sample_idxs) > 0:
+        #     logger.info(
+        #         f"No encoded sample idxs: {no_encoded_sample_idxs} encoded decoded bandsets: {[encoded_decoded_bandsets[sample_idx] for sample_idx in no_encoded_sample_idxs]}"
+        #     )
+        #     logger.info(
+        #         f"Encoded decoded bandsets for no encoded sample idxs: {encoded_decoded_bandsets[no_encoded_sample_idxs]}"
+        #     )
+        #     raise ValueError("No encoded sample idxs found")
         return masked_sample
 
 
