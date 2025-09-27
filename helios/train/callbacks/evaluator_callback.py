@@ -172,7 +172,7 @@ class DownstreamEvaluator:
             self.patch_size = model.patch_size
         else:
             logger.info(
-                f"No patch size found for {self.dataset}, using patch size {self.patch_size}"
+                f"No patch size found from model, using patch size {self.patch_size}"
             )
 
         # Superset of the kwargs the wrapper may need
