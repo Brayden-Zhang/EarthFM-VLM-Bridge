@@ -126,7 +126,7 @@ def build_rslearn_model_dataset(
             property_name=property_name,
             classes=classes,
         ),
-        workers=0,
+        workers=32,
     )
 
 
@@ -264,39 +264,3 @@ class RslearnToHeliosDataset(Dataset):
         helios_sample = HeliosSample(**sample_dict)
         masked_sample = MaskedHeliosSample.from_heliossample(helios_sample)
         return masked_sample, target["class"].long()
-
-
-# # Example usage:
-# from torch.utils.data import DataLoader
-
-
-# def main():
-#     ds_path = "/weka/dfive-default/rslearn-eai/datasets/crop/kenya_nandi/20250625"
-
-#     dataset = RslearnToHeliosDataset(
-#         ds_path=ds_path,
-#         ds_groups=None,
-#         layers=["sentinel2"],
-#         input_size=32,
-#         split="train",
-#         input_modalities=["sentinel2_l2a"],
-#         start_time="2022-09-01",
-#         end_time="2023-08-31",
-#     )
-
-#     loader = DataLoader(dataset, batch_size=1, shuffle=True, num_workers=0)
-
-#     for masked_samples, targets in loader:
-#         print(masked_samples)
-#         print(targets.shape)
-#         break
-
-
-# if __name__ == "__main__":
-#     import multiprocessing as mp
-
-#     try:
-#         mp.set_start_method("fork")
-#     except RuntimeError:
-#         pass
-#     main()

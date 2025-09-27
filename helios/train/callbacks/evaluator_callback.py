@@ -44,7 +44,10 @@ class DownstreamTaskConfig:
     num_workers: int = 8
     pooling_type: str = PoolingType.MEAN
     norm_stats_from_pretrained: bool = True
+    # Only for multimodal tasks, e.g. pastis, sickle, nandi, awf, cropharvest
     input_modalities: list[str] = field(default_factory=list)
+    # Only for rslearn datasets, e.g. nandi, awf
+    input_layers: list[str] = field(default_factory=list)
     # Sweep across lrs for segmentation tasks
     probe_lr: float | None = None
     patch_size: int = 4
@@ -381,6 +384,19 @@ class DownstreamEvaluatorCallbackConfig(CallbackConfig):
                 f"input_modalities must be a subset of supported_modalities, got {task.input_modalities} and {config.supported_modalities}"
             )
 
+    def verify_input_layers(self, task: DownstreamTaskConfig) -> None:
+        """Verify the input layers configuration for a task."""
+        # Check that input_layers is only set for rslearn tasks
+        if (task.dataset not in ["nandi", "awf"]) and len(task.input_layers) > 0:
+            raise ValueError(
+                f"input_layers must be set for rslearn tasks, got {task.dataset}"
+            )
+        # Make sure input_layers contains only unique layers
+        if len(task.input_layers) != len(set(task.input_layers)):
+            raise ValueError(
+                f"input_layers must contain unique layers, got {task.input_layers}"
+            )
+
     def build(self, trainer: Trainer) -> Callback | None:
         """Build the downstream evaluator callback."""
         if not self.enabled:
@@ -405,6 +421,7 @@ class DownstreamEvaluatorCallbackConfig(CallbackConfig):
             self.verify_input_modalities(task, config)
             # Sort to ensure consistent order
             task.input_modalities.sort()
+            self.verify_input_layers(task)
 
             evaluators.append(
                 DownstreamEvaluator(

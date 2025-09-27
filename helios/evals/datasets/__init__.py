@@ -35,6 +35,7 @@ def get_eval_dataset(
     split: str,
     norm_stats_from_pretrained: bool = False,
     input_modalities: list[str] = [],
+    input_layers: list[str] = [],
     partition: str = EvalDatasetPartition.TRAIN1X,
     norm_method: str = NormMethod.NORM_NO_CLIP,
 ) -> Dataset:
@@ -46,6 +47,12 @@ def get_eval_dataset(
         ):
             raise ValueError(
                 f"input_modalities is only supported for multimodal tasks, got {eval_dataset}"
+            )
+
+    if input_layers:
+        if eval_dataset not in ["nandi", "awf"]:
+            raise ValueError(
+                f"input_layers is only supported for rslearn tasks, got {eval_dataset}"
             )
 
     if eval_dataset.startswith("m-"):
@@ -131,7 +138,7 @@ def get_eval_dataset(
         return RslearnToHeliosDataset(
             ds_path="/weka/dfive-default/rslearn-eai/datasets/crop/kenya_nandi/20250625",
             ds_groups=["groundtruth_polygon_split_window_32"],
-            layers=["sentinel2", "sentinel1_ascending", "landsat"],
+            layers=input_layers,
             # Use 4*4 input size for crop type classification
             input_size=4,
             split=split,
@@ -148,7 +155,7 @@ def get_eval_dataset(
         return RslearnToHeliosDataset(
             ds_path="/weka/dfive-default/rslearn-eai/datasets/crop/awf_2023",
             ds_groups=["20250822"],
-            layers=["sentinel2", "sentinel1_ascending", "landsat"],
+            layers=input_layers,
             # Use 32*32 input size for LULC classification
             input_size=32,
             split=split,
