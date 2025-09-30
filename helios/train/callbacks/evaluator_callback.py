@@ -216,12 +216,14 @@ class DownstreamEvaluator:
             f"train embeddings shape for {self.dataset}: {train_embeddings.shape}"
         )
         logger.info(f"val embeddings shape for {self.dataset}: {val_embeddings.shape}")
-        logger.info(
-            f"test embeddings shape for {self.dataset}: {test_embeddings.shape}"
-        )
+        if test_embeddings is not None:
+            logger.info(
+                f"test embeddings shape for {self.dataset}: {test_embeddings.shape}"
+            )
         logger.info(f"train labels shape for {self.dataset}: {train_labels.shape}")
         logger.info(f"val labels shape for {self.dataset}: {val_labels.shape}")
-        logger.info(f"test labels shape for {self.dataset}: {test_labels.shape}")
+        if test_labels is not None:
+            logger.info(f"test labels shape for {self.dataset}: {test_labels.shape}")
 
         kwargs = {
             "config": self.config,
