@@ -123,6 +123,7 @@ if __name__ == "__main__":
     p.add_argument("--ds_path", required=True)
     p.add_argument("--ds_group", action="append")
     p.add_argument("--input_layers", nargs="+", required=True)
+    p.add_argument("--input_size", type=int, default=4)
     p.add_argument("--output_json", required=True)
     args = p.parse_args()
 
@@ -131,7 +132,7 @@ if __name__ == "__main__":
         rslearn_dataset=base_ds,
         layers=args.input_layers,
         rslearn_dataset_groups=args.ds_group,
-        input_size=4,  # Limit input_size to speed up loading
+        input_size=args.input_size,
         split="train",
         property_name="placeholder",
         classes=["cls0"],

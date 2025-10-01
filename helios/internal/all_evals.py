@@ -315,7 +315,6 @@ EVAL_TASKS = {
         norm_stats_from_pretrained=True,
         input_modalities=[Modality.SENTINEL2_L2A.name],
         input_layers=["sentinel2"],
-        patch_size=1,
         eval_interval=Duration.epochs(20),
     ),
     "nandi_sentinel1": DownstreamTaskConfig(
@@ -326,7 +325,6 @@ EVAL_TASKS = {
         norm_stats_from_pretrained=True,
         input_modalities=[Modality.SENTINEL1.name],
         input_layers=["sentinel1_ascending"],
-        patch_size=1,
         eval_interval=Duration.epochs(20),
     ),
     "nandi_landsat": DownstreamTaskConfig(
@@ -337,7 +335,6 @@ EVAL_TASKS = {
         norm_stats_from_pretrained=True,
         input_modalities=[Modality.LANDSAT.name],
         input_layers=["landsat"],
-        patch_size=1,
         eval_interval=Duration.epochs(20),
     ),
     "awf_sentinel2": DownstreamTaskConfig(
