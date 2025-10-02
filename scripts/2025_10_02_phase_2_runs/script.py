@@ -128,6 +128,9 @@ def build_train_module_config(
                     "worldcover",
                     "srtm",
                     "openstreetmap_raster",
+                    "wri_canopy_height_map",
+                    "cdl",
+                    "worldcereal",
                 ],
             }
         ),
