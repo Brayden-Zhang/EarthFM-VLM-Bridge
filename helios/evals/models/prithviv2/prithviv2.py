@@ -49,21 +49,21 @@ class PrithviV2(nn.Module):
     def __init__(
         self,
         load_directory: str,
-        model_name: PrithviV2Models.VIT_300,
+        size: PrithviV2Models.VIT_300,
         use_pretrained_normalizer: bool = True,
     ):
         """Initialize the PrithviV2 wrapper.
 
         Args:
             load_directory: The directory to load from
-            model_name: one of VIT_300 or VIT_600
+            size: one of VIT_300 or VIT_600
             use_pretrained_normalizer: Whether or not to apply prithvi pretraining normalization
         """
         super().__init__()
 
-        hub_id = MODEL_TO_HF_INFO[model_name]["hf_hub_id"]
-        revision = MODEL_TO_HF_INFO[model_name]["revison"]
-        weights_path = MODEL_TO_HF_INFO[model_name]["weights"]
+        hub_id = MODEL_TO_HF_INFO[size]["hf_hub_id"]
+        revision = MODEL_TO_HF_INFO[size]["revison"]
+        weights_path = MODEL_TO_HF_INFO[size]["weights"]
 
         if not (UPath(load_directory) / "config.json").exists():
             # even though we have a nosec here we actually follow the advice in
@@ -217,13 +217,13 @@ class PrithviV2Config(Config):
     """olmo_core style config for PrithviV2 Wrapper."""
 
     load_directory: str = "/weka/dfive-default/helios/models/prithvi"
-    model_name: PrithviV2Models = PrithviV2Models.VIT_300
+    size: PrithviV2Models = PrithviV2Models.VIT_300
     use_pretrained_normalizer: bool = True
 
     def build(self) -> PrithviV2:
         """Build the PrithviV2 model."""
         return PrithviV2(
             load_directory=self.load_directory,
-            model_name=self.model_name,
+            size=self.size,
             use_pretrained_normalizer=self.use_pretrained_normalizer,
         )
