@@ -36,7 +36,12 @@ def supported_modalities() -> list:
 @pytest.fixture
 def supported_modality_names() -> list[str]:
     """Return the supported modality names for the test."""
-    return ["sentinel2_l2a", "sentinel1", "worldcover", "latlon"]
+    return [
+        Modality.SENTINEL2_L2A.name,
+        Modality.SENTINEL1.name,
+        Modality.WORLDCOVER.name,
+        Modality.LATLON.name,
+    ]
 
 
 @pytest.fixture
