@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from logging import getLogger
+from typing import cast
 
 import torch
 import torch.nn as nn
@@ -65,12 +66,13 @@ class _BackboneWithHead(nn.Module):
         """Forward pass through the model and head."""
         dev = next(self.wrapper.parameters()).device
         # classification: (B, D), segmentation: (B, H, W, D)
-        emb = self.wrapper(batch, None)
-        emb_dim = emb.shape[-1]  # type: ignore
+        emb, _ = self.wrapper(batch, None)
+        emb = cast(torch.Tensor, emb)
+        emb_dim = emb.shape[-1]
         if not self._inited:
             self._init_head(emb_dim, dev)
-        if emb.device != dev:  # type: ignore
-            emb = emb.to(dev, non_blocking=True)  # type: ignore
+        if emb.device != dev:
+            emb = emb.to(dev, non_blocking=True)
         # Follow linear probe, apply BatchNorm before linear layer for classification tasks
         if self.task_type == TaskType.CLASSIFICATION:
             emb = self.batch_norm(emb)
