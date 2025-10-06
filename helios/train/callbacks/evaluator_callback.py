@@ -44,12 +44,16 @@ class DownstreamTaskConfig:
     num_workers: int = 8
     pooling_type: str = PoolingType.MEAN
     norm_stats_from_pretrained: bool = True
+    # Only for multimodal tasks, e.g. pastis, sickle, nandi, awf, cropharvest
     input_modalities: list[str] = field(default_factory=list)
+    # Only for rslearn datasets, e.g. nandi, awf
+    input_layers: list[str] = field(default_factory=list)
     # Sweep across lrs for segmentation tasks
     probe_lr: float | None = None
     patch_size: int = 4
     probe_batch_size: int = 32
     epochs: int = 50  # Number of training epochs for linear probing task
+    linear_probe_eval_interval: int = 50  # calculate val results every N epochs
     eval_interval: Duration = field(default_factory=lambda: Duration.epochs(1))
     eval_mode: str | None = None
     probe_type: ProbeType = ProbeType.LINEAR
@@ -67,6 +71,7 @@ class DownstreamEvaluator:
         task: DownstreamTaskConfig,
         trainer: Trainer,
         device: torch.device | None = None,
+        run_on_test: bool = False,
     ) -> None:
         """Initialize the downstream evaluator.
 
@@ -75,6 +80,8 @@ class DownstreamEvaluator:
             task: Task configuration.
             trainer: Trainer object.
             device: Device to evaluate on.
+            run_on_test: Whether to run the evaluators on the val set
+                only (=False) or on the test and val set (=True)
         """
         self.evaluation_name = evaluation_name
         self.config = dataset_to_config(task.dataset)
@@ -87,10 +94,12 @@ class DownstreamEvaluator:
         self.pooling_type = task.pooling_type
         self.norm_stats_from_pretrained = task.norm_stats_from_pretrained
         self.input_modalities = task.input_modalities
+        self.input_layers = task.input_layers
         self.probe_lr = task.probe_lr
         self.patch_size = task.patch_size
         self.probe_batch_size = task.probe_batch_size
         self.epochs = task.epochs
+        self.linear_probe_eval_interval = task.linear_probe_eval_interval
         self.eval_interval = task.eval_interval
         self.eval_mode = task.eval_mode
         self.probe_type = task.probe_type
@@ -122,11 +131,12 @@ class DownstreamEvaluator:
                 train_and_eval_probe,
                 batch_size=self.probe_batch_size,
                 epochs=self.epochs,
-                eval_interval=self.eval_interval.value,
+                eval_interval=self.linear_probe_eval_interval,
                 probe_type=self.probe_type,
                 lr=self.probe_lr,
             )
         )
+        self.run_on_test = run_on_test
 
     def _get_data_loader(self, split: str) -> DataLoader:
         """Get the data loader for the given split."""
@@ -140,6 +150,7 @@ class DownstreamEvaluator:
                 partition=self.partition,
                 norm_stats_from_pretrained=self.norm_stats_from_pretrained,
                 input_modalities=self.input_modalities,
+                input_layers=self.input_layers,
                 norm_method=self.norm_method,
             ),
             collate_fn=eval_collate_fn,
@@ -167,7 +178,7 @@ class DownstreamEvaluator:
             self.patch_size = model.patch_size
         else:
             logger.info(
-                f"No patch size found for {self.dataset}, using patch size {self.patch_size}"
+                f"No patch size found from model, using patch size {self.patch_size}"
             )
 
         # Superset of the kwargs the wrapper may need
@@ -182,18 +193,26 @@ class DownstreamEvaluator:
         model = get_eval_wrapper(model, **wrapper_kwargs)
         return get_embeddings(data_loader=data_loader, model=model)
 
-    def val(self) -> float:
+    def val(self) -> tuple[float, float]:
         """Validate the model on the downstream task."""
         train_loader = self._get_data_loader("train")
         val_loader = self._get_data_loader("valid")
+        test_loader = self._get_data_loader("test")
 
         start_time = time.time()
         logger.info(f"Getting train embeddings for {self.dataset}...")
         train_embeddings, train_labels = self._get_embeddings(
             train_loader, is_train=True
         )
-        logger.info(f"Getting test embeddings for {self.dataset}...")
-        test_embeddings, test_labels = self._get_embeddings(val_loader, is_train=False)
+        logger.info(f"Getting val embeddings for {self.dataset}...")
+        val_embeddings, val_labels = self._get_embeddings(val_loader, is_train=False)
+        if self.run_on_test:
+            logger.info(f"Getting test embeddings for {self.dataset}...")
+            test_embeddings, test_labels = self._get_embeddings(
+                test_loader, is_train=False
+            )
+        else:
+            test_embeddings, test_labels = None, None
         logger.info(
             f"Time to get embeddings for {self.dataset}: {time.time() - start_time:.2f}s"
         )
@@ -201,21 +220,27 @@ class DownstreamEvaluator:
         logger.info(
             f"train embeddings shape for {self.dataset}: {train_embeddings.shape}"
         )
-        logger.info(
-            f"test embeddings shape for {self.dataset}: {test_embeddings.shape}"
-        )
+        logger.info(f"val embeddings shape for {self.dataset}: {val_embeddings.shape}")
+        if test_embeddings is not None:
+            logger.info(
+                f"test embeddings shape for {self.dataset}: {test_embeddings.shape}"
+            )
         logger.info(f"train labels shape for {self.dataset}: {train_labels.shape}")
-        logger.info(f"test labels shape for {self.dataset}: {test_labels.shape}")
+        logger.info(f"val labels shape for {self.dataset}: {val_labels.shape}")
+        if test_labels is not None:
+            logger.info(f"test labels shape for {self.dataset}: {test_labels.shape}")
 
         kwargs = {
             "config": self.config,
             "train_embeddings": train_embeddings,
             "train_labels": train_labels,
+            "val_embeddings": val_embeddings,
+            "val_labels": val_labels,
             "test_embeddings": test_embeddings,
             "test_labels": test_labels,
             "device": self.device,
         }
-        val_result = self.eval_function(**kwargs)  # type: ignore
+        val_result, test_result = self.eval_function(**kwargs)  # type: ignore
         logger.info(f"Downstream evaluator {self.evaluation_name} score: {val_result}")
         # free memory
         del train_embeddings, train_labels, test_embeddings, test_labels
@@ -224,7 +249,7 @@ class DownstreamEvaluator:
         torch.cuda.empty_cache()
         gc.collect()
 
-        return val_result
+        return val_result, test_result
 
 
 @dataclass
@@ -234,6 +259,7 @@ class DownstreamEvaluatorCallback(Callback):
     evaluators: list[DownstreamEvaluator] = field(default_factory=list)
     eval_on_startup: bool = False
     cancel_after_first_eval: bool = False
+    run_on_test: bool = False
 
     def _check_supported_modalities(self, evaluator: DownstreamEvaluator) -> bool:
         """Check if the evaluator is supported by the model."""
@@ -303,7 +329,7 @@ class DownstreamEvaluatorCallback(Callback):
                         f"Skipping {evaluator.evaluation_name} because it doesn't match input requirements of the model"
                     )
                     continue
-                val_result, eval_time = self._perform_eval(evaluator)
+                val_result, test_result, eval_time = self._perform_eval(evaluator)
                 if wandb_callback.enabled:
                     wandb_callback.wandb.log(
                         {"eval/" + evaluator.evaluation_name: val_result}
@@ -311,6 +337,10 @@ class DownstreamEvaluatorCallback(Callback):
                     wandb_callback.wandb.log(
                         {"eval_time/" + evaluator.evaluation_name: eval_time}
                     )
+                    if self.run_on_test:
+                        wandb_callback.wandb.log(
+                            {"eval/test/" + evaluator.evaluation_name: test_result}
+                        )
 
         if self.cancel_after_first_eval:
             self.trainer.cancel_run(
@@ -328,18 +358,24 @@ class DownstreamEvaluatorCallback(Callback):
                 continue
             self._perform_eval(evaluator)
 
-    def _perform_eval(self, evaluator: DownstreamEvaluator) -> tuple[float, float]:
+    def _perform_eval(
+        self, evaluator: DownstreamEvaluator
+    ) -> tuple[float, float, float]:
         """Run the evaluator."""
         logger.info(f"Running {evaluator.evaluation_name} evaluations...")
         start_time = time.monotonic()
-        val_result = evaluator.val()
+        val_result, test_result = evaluator.val()
         self.trainer.record_metric(f"eval/{evaluator.evaluation_name}", val_result)
+        if self.run_on_test:
+            self.trainer.record_metric(
+                f"eval/test/{evaluator.evaluation_name}", test_result
+            )
         eval_time = time.monotonic() - start_time
         self.trainer.record_metric(f"eval_time/{evaluator.evaluation_name}", eval_time)
         logger.info(
             f"Finished {evaluator.evaluation_name} evaluations in {eval_time:.1f} seconds."
         )
-        return val_result, eval_time
+        return val_result, test_result, eval_time
 
 
 @dataclass
@@ -355,6 +391,8 @@ class DownstreamEvaluatorCallbackConfig(CallbackConfig):
     # without training any longer.
     cancel_after_first_eval: bool = False
     tasks_to_run: list[str] | None = None
+    # whether to run the evaluators on the val set only (=False) or on the test and val set (=True)
+    run_on_test: bool = False
 
     def verify_input_modalities(
         self, task: DownstreamTaskConfig, config: EvalDatasetConfig
@@ -363,7 +401,7 @@ class DownstreamEvaluatorCallbackConfig(CallbackConfig):
         # Check that input_modalities is only set for multimodal tasks
         if (
             not (
-                (task.dataset in ["pastis", "pastis128", "sickle"])
+                (task.dataset in ["pastis", "pastis128", "sickle", "nandi", "awf"])
                 or task.dataset.startswith("cropharvest")
             )
             and len(task.input_modalities) > 0
@@ -380,6 +418,21 @@ class DownstreamEvaluatorCallbackConfig(CallbackConfig):
             raise ValueError(
                 f"input_modalities must be a subset of supported_modalities, got {task.input_modalities} and {config.supported_modalities}"
             )
+
+    def verify_input_layers(self, task: DownstreamTaskConfig) -> None:
+        """Check input_layers config."""
+        rslearn_datasets = {"nandi", "awf"}
+        layers = task.input_layers or []
+
+        # input_layers not allowed on non-rslearn datasets
+        if task.dataset not in rslearn_datasets and layers:
+            raise ValueError(
+                f"`input_layers` not supported for dataset '{task.dataset}'."
+            )
+
+        # input_layers must be unique
+        if len(layers) != len(set(layers)):
+            raise ValueError(f"`input_layers` must be unique, got {layers}")
 
     def build(self, trainer: Trainer) -> Callback | None:
         """Build the downstream evaluator callback."""
@@ -405,6 +458,7 @@ class DownstreamEvaluatorCallbackConfig(CallbackConfig):
             self.verify_input_modalities(task, config)
             # Sort to ensure consistent order
             task.input_modalities.sort()
+            self.verify_input_layers(task)
 
             evaluators.append(
                 DownstreamEvaluator(
@@ -412,10 +466,12 @@ class DownstreamEvaluatorCallbackConfig(CallbackConfig):
                     task=task,
                     trainer=trainer,
                     device=trainer.device,
+                    run_on_test=self.run_on_test,
                 )
             )
         return DownstreamEvaluatorCallback(
             evaluators=evaluators,
             eval_on_startup=self.eval_on_startup,
             cancel_after_first_eval=self.cancel_after_first_eval,
+            run_on_test=self.run_on_test,
         )
