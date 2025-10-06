@@ -8,42 +8,52 @@ import os
 import subprocess  # nosec
 import uuid
 from collections.abc import Generator
+from enum import StrEnum
 from logging import getLogger
 from typing import Any
 
 from helios.evals.datasets.configs import dataset_to_config, get_eval_mode
 from helios.evals.models import get_launch_script_path
-from helios.internal.all_evals import EVAL_TASKS
+from helios.internal.all_evals import EVAL_TASKS, FT_EVAL_TASKS
 from helios.internal.experiment import SubCmd
 from helios.nn.flexihelios import PoolingType
+from helios.train.callbacks.evaluator_callback import EvalMode
 
+# Linear probe learning rates to sweep over
 LP_LRs = [1e-4, 5e-4, 1e-3, 5e-3, 1e-2, 5e-2, 1e-1, 5e-1]
-Normalization_MODES = ["dataset", "pre_trained"]
-pooling_types = [PoolingType.MEAN, PoolingType.MAX]
+# Fine-tune learning rates to sweep over
+FT_LRs = [1e-5, 5e-5, 1e-4, 5e-4, 1e-3, 5e-3, 1e-2]
+
+
+class NormalizationMode(StrEnum):
+    """Normalization mode."""
+
+    PRE_TRAINED = "pre_trained"
+    DATASET = "dataset"
+
 
 logger = getLogger(__name__)
 
 
-def create_linear_probe_arg(task_name: str, field_name: str) -> str:
-    """Create a linear probe argument for a given task name."""
-    initial_str = (
-        f"--trainer.callbacks.downstream_evaluator.tasks.{task_name}.{field_name}="
-    )
-    return initial_str + "{arg}"
+def create_task_arg(task_name: str, field_name: str) -> str:
+    """Create a command line argument for a specific task and field."""
+    return f"--trainer.callbacks.downstream_evaluator.tasks.{task_name}.{field_name}={{arg}}"
 
 
+# Linear Probe & KNN args
 lr_args = " ".join(
     [
-        create_linear_probe_arg(task_name, "probe_lr")
+        create_task_arg(task_name, "probe_lr")
         for task_name, task in EVAL_TASKS.items()
-        if get_eval_mode(dataset_to_config(task.dataset).task_type) == "linear_probe"
+        if get_eval_mode(dataset_to_config(task.dataset).task_type)
+        == EvalMode.LINEAR_PROBE
     ]
 )
 
 pooling_args = " ".join(
     [" "]
     + [
-        create_linear_probe_arg(task_name, "pooling_type")
+        create_task_arg(task_name, "pooling_type")
         for task_name, task in EVAL_TASKS.items()
     ]
 )
@@ -64,12 +74,32 @@ helios_args = " ".join(
     ]
 )
 
+# Finetune args
+ft_mode_args = " ".join(
+    [
+        f"--trainer.callbacks.downstream_evaluator.tasks.{t}.eval_mode=finetune"
+        for t in FT_EVAL_TASKS.keys()
+    ]
+)
+
+ft_lr_args_template = " ".join(
+    [create_task_arg(t, "ft_lr") for t in FT_EVAL_TASKS.keys()]
+)
+
+ft_dataset_args = " ".join(
+    [" "]
+    + [
+        f"--trainer.callbacks.downstream_evaluator.tasks.{task_name}.norm_stats_from_pretrained=False"
+        for task_name in FT_EVAL_TASKS.keys()
+    ]
+)
+
 
 def loop_through_params() -> Generator[dict[str, Any], None, None]:
     """Yield a dict of the hps we are sweeping over."""
     for lr in LP_LRs:
-        for norm_mode in Normalization_MODES:
-            for pooling_type in pooling_types:
+        for norm_mode in NormalizationMode:
+            for pooling_type in PoolingType:
                 yield {
                     "lr": lr,
                     "norm_mode": norm_mode,
@@ -79,7 +109,7 @@ def loop_through_params() -> Generator[dict[str, Any], None, None]:
 
 def no_norm_sweep() -> Generator[dict[str, Any], None, None]:
     """Yield a dict of the hps we are sweeping over."""
-    for pooling_type in pooling_types:
+    for pooling_type in PoolingType:
         for lr in LP_LRs:
             yield {
                 "lr": lr,
@@ -87,78 +117,93 @@ def no_norm_sweep() -> Generator[dict[str, Any], None, None]:
             }
 
 
-def get_dino_v3_args() -> str:
+def ft_loop_through_params() -> Generator[dict[str, Any], None, None]:
+    """Yield FT sweep points (ft_lr only)."""
+    for lr in FT_LRs:
+        yield {
+            "ft_lr": lr,
+        }
+
+
+def get_dino_v3_args(args: argparse.Namespace) -> str:
     """Get the dino v3 arguments."""
+    tasks = FT_EVAL_TASKS if args.finetune else EVAL_TASKS
+    dino_v3_args = dataset_args if not args.finetune else ft_dataset_args
     # Normalization strategy is to scale with min max to 0 - 256 and then scale back to 0 - 1
     # Normalization is then applied by the eval wrapper by default
-    dino_v3_args = dataset_args
     dino_v3_args += " " + " ".join(
         [
             f"--trainer.callbacks.downstream_evaluator.tasks.{task_name}.norm_method=NormMethod.NORM_YES_CLIP_MIN_MAX_INT"
-            for task_name in EVAL_TASKS.keys()
+            for task_name in tasks.keys()
         ]
     )
     return dino_v3_args
 
 
-def get_croma_args() -> str:
+def get_croma_args(args: argparse.Namespace) -> str:
     """Get the croma arguments."""
-    croma_args = dataset_args
+    tasks = FT_EVAL_TASKS if args.finetune else EVAL_TASKS
+    croma_args = dataset_args if not args.finetune else ft_dataset_args
     croma_args += " " + " ".join(
         [
             f"--trainer.callbacks.downstream_evaluator.tasks.{task_name}.norm_method=NormMethod.NORM_YES_CLIP_2_STD"
-            for task_name in EVAL_TASKS.keys()
+            for task_name in tasks.keys()
         ]
     )
     return croma_args
 
 
-def get_tessera_args(pretrained_normalizer: bool = True) -> str:
+def get_tessera_args(
+    args: argparse.Namespace, pretrained_normalizer: bool = True
+) -> str:
     """Get the tessera arguments."""
-    tessera_args = dataset_args
+    tasks = FT_EVAL_TASKS if args.finetune else EVAL_TASKS
+    tessera_args = dataset_args if not args.finetune else ft_dataset_args
     if pretrained_normalizer:
         # To use galileo pretrained normalizer we want to leave normalization to the galileo wrapper
-        tessera_args = dataset_args
         tessera_args += " " + " ".join(
             [
                 f"--trainer.callbacks.downstream_evaluator.tasks.{task_name}.norm_method=NormMethod.NO_NORM"
-                for task_name in EVAL_TASKS.keys()
+                for task_name in tasks.keys()
             ]
         )
-
         tessera_args += " " + "--model.use_pretrained_normalizer=True"
     else:
         tessera_args += " " + "--model.use_pretrained_normalizer=False"
         tessera_args += " " + " ".join(
             [
                 f"--trainer.callbacks.downstream_evaluator.tasks.{task_name}.norm_method=NormMethod.STANDARDIZE"
-                for task_name in EVAL_TASKS.keys()
+                for task_name in tasks.keys()
             ]
         )
     return tessera_args
 
 
-def get_panopticon_args() -> str:
+def get_panopticon_args(args: argparse.Namespace) -> str:
     """Get the panopticon arguments."""
-    panopticon_args = dataset_args
+    tasks = FT_EVAL_TASKS if args.finetune else EVAL_TASKS
+    panopticon_args = dataset_args if not args.finetune else ft_dataset_args
     panopticon_args += " " + " ".join(
         [
             f"--trainer.callbacks.downstream_evaluator.tasks.{task_name}.norm_method=NormMethod.STANDARDIZE"
-            for task_name in EVAL_TASKS.keys()
+            for task_name in tasks.keys()
         ]
     )
     return panopticon_args
 
 
-def get_terramind_args(pretrained_normalizer: bool = True) -> str:
+def get_terramind_args(
+    args: argparse.Namespace, pretrained_normalizer: bool = True
+) -> str:
     """Get the terramind arguments."""
-    terramind_args = dataset_args
+    tasks = FT_EVAL_TASKS if args.finetune else EVAL_TASKS
+    terramind_args = dataset_args if not args.finetune else ft_dataset_args
     if pretrained_normalizer:
         # To use terramind pretrained normalizer we want to leave normalization to the terramind wrapper
         terramind_args += " " + " ".join(
             [
                 f"--trainer.callbacks.downstream_evaluator.tasks.{task_name}.norm_method=NormMethod.NO_NORM"
-                for task_name in EVAL_TASKS.keys()
+                for task_name in tasks.keys()
             ]
         )
         terramind_args += " " + "--model.use_pretrained_normalizer=True"
@@ -167,22 +212,23 @@ def get_terramind_args(pretrained_normalizer: bool = True) -> str:
         terramind_args += " " + " ".join(
             [
                 f"--trainer.callbacks.downstream_evaluator.tasks.{task_name}.norm_method=NormMethod.STANDARDIZE"
-                for task_name in EVAL_TASKS.keys()
+                for task_name in tasks.keys()
             ]
         )
         terramind_args += " " + "--model.use_pretrained_normalizer=False"
     return terramind_args
 
 
-def get_clay_args(pretrained_normalizer: bool = True) -> str:
+def get_clay_args(args: argparse.Namespace, pretrained_normalizer: bool = True) -> str:
     """Get the clay arguments."""
-    clay_args = dataset_args
+    tasks = FT_EVAL_TASKS if args.finetune else EVAL_TASKS
+    clay_args = dataset_args if not args.finetune else ft_dataset_args
     if pretrained_normalizer:
         # To use clay pretrained normalizer we want to leave normalization to the clay wrapper
         clay_args += " " + " ".join(
             [
                 f"--trainer.callbacks.downstream_evaluator.tasks.{task_name}.norm_method=NormMethod.NO_NORM"
-                for task_name in EVAL_TASKS.keys()
+                for task_name in tasks.keys()
             ]
         )
         clay_args += " " + "--model.use_pretrained_normalizer=True"
@@ -191,78 +237,85 @@ def get_clay_args(pretrained_normalizer: bool = True) -> str:
         clay_args += " " + " ".join(
             [
                 f"--trainer.callbacks.downstream_evaluator.tasks.{task_name}.norm_method=NormMethod.STANDARDIZE"
-                for task_name in EVAL_TASKS.keys()
+                for task_name in tasks.keys()
             ]
         )
         clay_args += " " + "--model.use_pretrained_normalizer=False"
     return clay_args
 
 
-def get_copernicusfm_args() -> str:
+def get_copernicusfm_args(args: argparse.Namespace) -> str:
     """Get the copernicusfm arguments."""
-    copernicusfm_args = dataset_args
+    tasks = FT_EVAL_TASKS if args.finetune else EVAL_TASKS
+    copernicusfm_args = dataset_args if not args.finetune else ft_dataset_args
     copernicusfm_args += " " + " ".join(
         [
             f"--trainer.callbacks.downstream_evaluator.tasks.{task_name}.norm_method=NormMethod.NORM_YES_CLIP_2_STD"
-            for task_name in EVAL_TASKS.keys()
+            for task_name in tasks.keys()
         ]
     )
     return copernicusfm_args
 
 
-def get_anysat_args() -> str:
+def get_anysat_args(args: argparse.Namespace) -> str:
     """Get the anysat arguments."""
-    anysat_args = dataset_args
+    tasks = FT_EVAL_TASKS if args.finetune else EVAL_TASKS
+    anysat_args = dataset_args if not args.finetune else ft_dataset_args
     anysat_args += " " + " ".join(
         [
             f"--trainer.callbacks.downstream_evaluator.tasks.{task_name}.norm_method=NormMethod.STANDARDIZE"
-            for task_name in EVAL_TASKS.keys()
+            for task_name in tasks.keys()
         ]
     )
     anysat_args += " " + " ".join(
         [
             f"--trainer.callbacks.downstream_evaluator.tasks.{task_name}.embedding_batch_size=4"
-            for task_name in EVAL_TASKS.keys()
+            for task_name in tasks.keys()
         ]
     )
     return anysat_args
 
 
-def get_galileo_args(pretrained_normalizer: bool = True) -> str:
+def get_galileo_args(
+    args: argparse.Namespace, pretrained_normalizer: bool = True
+) -> str:
     """Get the galileo arguments."""
-    galileo_args = dataset_args
+    tasks = FT_EVAL_TASKS if args.finetune else EVAL_TASKS
+    galileo_args = dataset_args if not args.finetune else ft_dataset_args
     if pretrained_normalizer:
         # To use galileo pretrained normalizer we want to leave normalization to the galileo wrapper
-        galileo_args = dataset_args
         galileo_args += " " + " ".join(
             [
                 f"--trainer.callbacks.downstream_evaluator.tasks.{task_name}.norm_method=NormMethod.NO_NORM"
-                for task_name in EVAL_TASKS.keys()
+                for task_name in tasks.keys()
             ]
         )
-
         galileo_args += " " + "--model.use_pretrained_normalizer=True"
     else:
         # IF we use dataset stats we want to turn off the pretrained normalizer
         galileo_args += " " + "--model.use_pretrained_normalizer=False"
+
     galileo_args += " " + " ".join(
         [
             f"--trainer.callbacks.downstream_evaluator.tasks.{task_name}.embedding_batch_size=8"
-            for task_name in EVAL_TASKS.keys()
+            for task_name in tasks.keys()
         ]
     )
     return galileo_args
 
 
-def get_satlas_args(pretrained_normalizer: bool = True) -> str:
+def get_satlas_args(
+    args: argparse.Namespace, pretrained_normalizer: bool = True
+) -> str:
     """Get the satlas arguments."""
-    satlas_args = dataset_args
+    tasks = FT_EVAL_TASKS if args.finetune else EVAL_TASKS
+    satlas_args = dataset_args if not args.finetune else ft_dataset_args
     if pretrained_normalizer:
         # To use satlas pretrained normalizer we want to leave normalization to the satlas wrapper
         satlas_args += " " + " ".join(
             [
                 f"--trainer.callbacks.downstream_evaluator.tasks.{task_name}.norm_method=NormMethod.NO_NORM"
-                for task_name in EVAL_TASKS.keys()
+                for task_name in tasks.keys()
             ]
         )
 
@@ -271,7 +324,7 @@ def get_satlas_args(pretrained_normalizer: bool = True) -> str:
         satlas_args += " " + " ".join(
             [
                 f"--trainer.callbacks.downstream_evaluator.tasks.{task_name}.norm_method=NormMethod.NORM_YES_CLIP"
-                for task_name in EVAL_TASKS.keys()
+                for task_name in tasks.keys()
             ]
         )
         # IF we use dataset stats we want to turn off the pretrained normalizer
@@ -279,16 +332,18 @@ def get_satlas_args(pretrained_normalizer: bool = True) -> str:
     return satlas_args
 
 
-def get_presto_args(pretrained_normalizer: bool = True) -> str:
+def get_presto_args(
+    args: argparse.Namespace, pretrained_normalizer: bool = True
+) -> str:
     """Get the presto arguments."""
-    presto_args = dataset_args
+    tasks = FT_EVAL_TASKS if args.finetune else EVAL_TASKS
+    presto_args = dataset_args if not args.finetune else ft_dataset_args
     if pretrained_normalizer:
         # To use presto pretrained normalizer we want to leave normalization to the presto wrapper
-        presto_args = dataset_args
         presto_args += " " + " ".join(
             [
                 f"--trainer.callbacks.downstream_evaluator.tasks.{task_name}.norm_method=NormMethod.NO_NORM"
-                for task_name in EVAL_TASKS.keys()
+                for task_name in tasks.keys()
             ]
         )
 
@@ -298,23 +353,25 @@ def get_presto_args(pretrained_normalizer: bool = True) -> str:
         presto_args += " " + " ".join(
             [
                 f"--trainer.callbacks.downstream_evaluator.tasks.{task_name}.norm_method=NormMethod.STANDARDIZE"
-                for task_name in EVAL_TASKS.keys()
+                for task_name in tasks.keys()
             ]
         )
         presto_args += " " + "--model.use_pretrained_normalizer=False"
     return presto_args
 
 
-def get_prithviv2_args(pretrained_normalizer: bool = True) -> str:
+def get_prithviv2_args(
+    args: argparse.Namespace, pretrained_normalizer: bool = True
+) -> str:
     """Get the Prithvi arguments."""
-    prithvi_args = dataset_args
+    tasks = FT_EVAL_TASKS if args.finetune else EVAL_TASKS
+    prithvi_args = dataset_args if not args.finetune else ft_dataset_args
     if pretrained_normalizer:
         # To use Prithvi pretrained normalizer we want to leave normalization to the Prithvi wrapper
-        prithvi_args = dataset_args
         prithvi_args += " " + " ".join(
             [
                 f"--trainer.callbacks.downstream_evaluator.tasks.{task_name}.norm_method=NormMethod.NO_NORM"
-                for task_name in EVAL_TASKS.keys()
+                for task_name in tasks.keys()
             ]
         )
 
@@ -323,7 +380,7 @@ def get_prithviv2_args(pretrained_normalizer: bool = True) -> str:
         prithvi_args += " " + " ".join(
             [
                 f"--trainer.callbacks.downstream_evaluator.tasks.{task_name}.norm_method=NormMethod.STANDARDIZE"
-                for task_name in EVAL_TASKS.keys()
+                for task_name in tasks.keys()
             ]
         )
         # IF we use dataset stats we want to turn off the pretrained normalizer
@@ -369,33 +426,35 @@ def _get_checkpoint_args(checkpoint_path: str) -> str:
 def _get_model_specific_args(args: argparse.Namespace) -> str:
     """Get model-specific command arguments."""
     if args.dino_v3:
-        return get_dino_v3_args()
+        return get_dino_v3_args(args)
     elif args.panopticon:
-        return get_panopticon_args()
+        return get_panopticon_args(args)
     elif args.clay:
-        return get_clay_args()
+        return get_clay_args(args)
     elif args.galileo:
-        return get_galileo_args()
+        return get_galileo_args(args)
     elif args.terramind:
-        return get_terramind_args()
+        return get_terramind_args(args)
     elif args.satlas:
-        return get_satlas_args()
+        return get_satlas_args(args)
     elif args.croma:
-        return get_croma_args()
+        return get_croma_args(args)
     elif args.copernicusfm:
-        return get_copernicusfm_args()
+        return get_copernicusfm_args(args)
     elif args.presto:
-        return get_presto_args()
+        return get_presto_args(args)
     elif args.anysat:
-        return get_anysat_args()
+        return get_anysat_args(args)
     elif args.tessera:
-        return get_tessera_args()
+        return get_tessera_args(args)
     elif args.prithvi_v2:
-        return get_prithviv2_args()
+        return get_prithviv2_args(args)
     return ""
 
 
-def _get_normalization_args(args: argparse.Namespace, norm_mode: str) -> str:
+def _get_normalization_args(
+    args: argparse.Namespace, norm_mode: NormalizationMode
+) -> str:
     """Get normalization-specific command arguments."""
     model_map = {
         "galileo": get_galileo_args,
@@ -408,10 +467,13 @@ def _get_normalization_args(args: argparse.Namespace, norm_mode: str) -> str:
     }
     for model, func in model_map.items():
         if getattr(args, model, False):
-            return func(pretrained_normalizer=(norm_mode == "pre_trained"))
-    if norm_mode == "dataset":
+            return func(
+                args,
+                pretrained_normalizer=(norm_mode == NormalizationMode.PRE_TRAINED),
+            )
+    if norm_mode == NormalizationMode.DATASET:
         return dataset_args
-    if norm_mode == "pre_trained":
+    if norm_mode == NormalizationMode.PRE_TRAINED:
         return helios_args
     return ""
 
@@ -427,8 +489,8 @@ def _build_default_command(
 ) -> str:
     """Build command for running with default hyperparameters."""
     lr = LP_LRs[0]
-    norm_mode = Normalization_MODES[0]
-    pooling_type = pooling_types[0]
+    norm_mode = NormalizationMode.DATASET
+    pooling_type = PoolingType.MEAN
     logger.info(
         f"Running defaults: {norm_mode} normalization, lr={lr}, pooling={pooling_type}"
     )
@@ -448,7 +510,7 @@ def _build_default_command(
     return (
         f"TRAIN_SCRIPT_PATH={module_path} {launch_command} helios/internal/all_evals.py "
         f"{sub_command} {run_name} {args.cluster} --launch.priority=high "
-        f"--launch.task_name=eval {checkpoint_args} --trainer.callbacks.wandb.project={project_name}{extra} {cmd_args}"
+        f"--launch.task_name=eval {checkpoint_args} --trainer.callbacks.wandb.project={project_name}{extra} {cmd_args} "
     )
 
 
@@ -464,6 +526,7 @@ def _build_hyperparameter_command(
 ) -> str:
     """Build command for running with specific hyperparameters."""
     lr = params.get("lr", None)
+    # Why using fixed and default?
     norm_mode = params.get("norm_mode", "fixed")
     pooling_type = params.get("pooling_type", "default")
 
@@ -489,6 +552,75 @@ def _build_hyperparameter_command(
         f"TRAIN_SCRIPT_PATH={args.module_path} {launch_command} helios/internal/all_evals.py "
         f"{sub_command} {run_name} {args.cluster} --launch.priority=high {cmd_args} "
         f"--launch.task_name=eval {checkpoint_args} --trainer.callbacks.wandb.project={project_name}{extra}"
+    )
+
+
+def _build_default_ft_command(
+    args: argparse.Namespace,
+    base_run_name: str,
+    sub_command: str,
+    launch_command: str,
+    checkpoint_args: str,
+    project_name: str,
+    extra: str,
+) -> str:
+    """Build command for running FT with default hyperparameters."""
+    lr = FT_LRs[0]
+    logger.info(f"Running FT defaults: lr={lr}")
+    run_name = f"{base_run_name}_FT_defaults"
+
+    cmd_args = _get_model_specific_args(args)
+    cmd_args += " " + ft_mode_args
+    cmd_args += " " + ft_lr_args_template.format(arg=lr)
+
+    module_path = (
+        args.module_path if args.module_path is not None else _get_module_path(args)
+    )
+    logger.info(f"Using module path {module_path}")
+
+    return (
+        f"TRAIN_SCRIPT_PATH={module_path} {launch_command} helios/internal/all_evals.py "
+        f"{sub_command} {run_name} {args.cluster} --launch.priority=high "
+        f"--launch.task_name=eval {checkpoint_args} --trainer.callbacks.wandb.project={project_name}{extra} {cmd_args} "
+        # We need to disable FSDP as that will create DTensor
+        "--train_module.dp_config=null"
+    )
+
+
+def _build_ft_hyperparameter_command(
+    args: argparse.Namespace,
+    params: dict,
+    base_run_name: str,
+    sub_command: str,
+    launch_command: str,
+    checkpoint_args: str,
+    project_name: str,
+    extra: str,
+) -> str:
+    """Build command for running FT with specific hyperparameters."""
+    lr = params.get("ft_lr")
+
+    logger.info(f"Running FT with lr={lr}")
+    logger.info(
+        f"Running with module path {args.module_path} on cluster {args.cluster}"
+    )
+
+    run_name = f"{base_run_name}_FT_lr{lr}"
+
+    cmd_args = ""
+    cmd_args += " " + ft_mode_args
+    cmd_args += " " + ft_lr_args_template.format(arg=lr)
+    cmd_args += " " + _get_model_specific_args(args)
+
+    module_path = (
+        args.module_path if args.module_path is not None else _get_module_path(args)
+    )
+    return (
+        f"TRAIN_SCRIPT_PATH={module_path} {launch_command} helios/internal/all_evals.py "
+        f"{sub_command} {run_name} {args.cluster} --launch.priority=high {cmd_args} "
+        f"--launch.task_name=eval {checkpoint_args} --trainer.callbacks.wandb.project={project_name}{extra} "
+        # # We need to disable FSDP as that will create DTensor
+        "--train_module.dp_config=null"
     )
 
 
@@ -528,8 +660,38 @@ def build_commands(args: argparse.Namespace, extra_cli: list[str]) -> list[str]:
     launch_command = "python3" if not sub_command == SubCmd.train else "torchrun"
     checkpoint_args = _get_checkpoint_args(args.checkpoint_path)
 
-    commands_to_run = []
+    commands_to_run: list[str] = []
 
+    # Fine-tune all tasks if specified
+    if args.finetune:
+        if args.defaults_only:
+            cmd = _build_default_ft_command(
+                args,
+                base_run_name,
+                sub_command,
+                launch_command,
+                checkpoint_args,
+                project_name,
+                extra,
+            )
+            commands_to_run.append(cmd)
+        else:
+            hp_params = ft_loop_through_params()
+            for params in hp_params:
+                cmd = _build_ft_hyperparameter_command(
+                    args,
+                    params,
+                    base_run_name,
+                    sub_command,
+                    launch_command,
+                    checkpoint_args,
+                    project_name,
+                    extra,
+                )
+                commands_to_run.append(cmd)
+        return commands_to_run
+
+    # Not-finetune (KNN or linear probe) sweep
     if args.defaults_only:
         # Just run with the first/default values
         cmd = _build_default_command(
@@ -551,7 +713,6 @@ def build_commands(args: argparse.Namespace, extra_cli: list[str]) -> list[str]:
             and not args.tessera  # Only use the dataset normalization stats for these models
             else no_norm_sweep()
         )
-
         for params in hp_params:
             cmd = _build_hyperparameter_command(
                 args,
@@ -600,10 +761,15 @@ def main() -> None:
         help="If set, only print the commands that would be run",
     )
     parser.add_argument(
+        "--finetune",
+        action="store_true",
+        help="Run fine-tuning sweeps for all tasks",
+    )
+    parser.add_argument(
         "--model_name",
         type=str,
         required=False,
-        help="If set, use this as the  base run name",
+        help="If set, use this as the base run name",
     )
     parser.add_argument(
         "--dino_v3",
@@ -667,11 +833,13 @@ def main() -> None:
     )
     args, extra_cli = parser.parse_known_args()
 
+    env = os.environ.copy()
+    if args.finetune:
+        env["FINETUNE"] = "1"
     commands_to_run = build_commands(args, extra_cli)
-
     for cmd in commands_to_run:
         logger.info(cmd)
-        subprocess.run(cmd, shell=True, check=True)  # nosec
+        subprocess.run(cmd, shell=True, check=True, env=env)  # nosec
 
 
 if __name__ == "__main__":

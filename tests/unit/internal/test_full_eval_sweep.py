@@ -9,16 +9,16 @@ import pytest
 from helios.internal.all_evals import EVAL_TASKS
 from helios.internal.full_eval_sweep import (
     LP_LRs,
-    NormalizationMode,
+    Normalization_MODES,
     build_commands,
-    create_task_arg,
+    create_linear_probe_arg,
     get_dino_v3_args,
     get_galileo_args,
     get_panopticon_args,
     loop_through_params,
     no_norm_sweep,
+    pooling_types,
 )
-from helios.nn.flexihelios import PoolingType
 
 
 # Fixtures for reusable test data
@@ -80,7 +80,7 @@ class TestCreateLinearProbeArg:
 
     def test_basic_functionality(self) -> None:
         """Test basic linear probe argument creation."""
-        result: str = create_task_arg("eurosat", "probe_lr")
+        result: str = create_linear_probe_arg("eurosat", "probe_lr")
         expected: str = (
             "--trainer.callbacks.downstream_evaluator.tasks.eurosat.probe_lr={arg}"
         )
@@ -88,13 +88,13 @@ class TestCreateLinearProbeArg:
 
     def test_different_task_names(self) -> None:
         """Test with different task names."""
-        result: str = create_task_arg("cropharvest", "pooling_type")
+        result: str = create_linear_probe_arg("cropharvest", "pooling_type")
         expected: str = "--trainer.callbacks.downstream_evaluator.tasks.cropharvest.pooling_type={arg}"
         assert result == expected
 
     def test_special_characters_in_names(self) -> None:
         """Test with special characters in task names."""
-        result: str = create_task_arg("m-eurosat", "embedding_batch_size")
+        result: str = create_linear_probe_arg("m-eurosat", "embedding_batch_size")
         expected: str = "--trainer.callbacks.downstream_evaluator.tasks.m-eurosat.embedding_batch_size={arg}"
         assert result == expected
 
@@ -106,8 +106,10 @@ class TestLoopThroughParams:
         """Test that all parameter combinations are generated."""
         params_list: list[dict[str, float | str]] = list(loop_through_params())
 
-        # Should generate len(LP_LRs) * len(NormalizationMode) * len(PoolingType) combinations
-        expected_count: int = len(LP_LRs) * len(NormalizationMode) * len(PoolingType)
+        # Should generate len(LP_LRs) * len(Normalization_MODES) * len(pooling_types) combinations
+        expected_count: int = (
+            len(LP_LRs) * len(Normalization_MODES) * len(pooling_types)
+        )
         assert len(params_list) == expected_count
 
     def test_parameter_structure(self) -> None:
@@ -119,8 +121,8 @@ class TestLoopThroughParams:
             assert "norm_mode" in params
             assert "pooling_type" in params
             assert params["lr"] in LP_LRs
-            assert params["norm_mode"] in NormalizationMode
-            assert params["pooling_type"] in PoolingType
+            assert params["norm_mode"] in Normalization_MODES
+            assert params["pooling_type"] in pooling_types
 
     def test_all_learning_rates_included(self) -> None:
         """Test that all learning rates are included in the sweep."""
@@ -136,8 +138,8 @@ class TestNoNormSweep:
         """Test that no_norm_sweep generates the right combinations."""
         params_list: list[dict[str, float | str]] = list(no_norm_sweep())
 
-        # Should generate len(PoolingType) * len(LP_LRs) combinations
-        expected_count: int = len(PoolingType) * len(LP_LRs)
+        # Should generate len(pooling_types) * len(LP_LRs) combinations
+        expected_count: int = len(pooling_types) * len(LP_LRs)
         assert len(params_list) == expected_count
 
     def test_parameter_structure(self) -> None:
@@ -149,7 +151,7 @@ class TestNoNormSweep:
             assert "pooling_type" in params
             assert "norm_mode" not in params  # Should not include norm_mode
             assert params["lr"] in LP_LRs
-            assert params["pooling_type"] in PoolingType
+            assert params["pooling_type"] in pooling_types
 
 
 class TestModelSpecificArgs:
@@ -157,7 +159,7 @@ class TestModelSpecificArgs:
 
     def test_get_dino_v3_args(self) -> None:
         """Test DinoV3 argument generation."""
-        result: str = get_dino_v3_args(args=argparse.Namespace(finetune=False))
+        result: str = get_dino_v3_args()
 
         # Should contain dataset args and norm method args
         assert "norm_stats_from_pretrained=False" in result
@@ -168,7 +170,7 @@ class TestModelSpecificArgs:
 
     def test_get_panopticon_args(self) -> None:
         """Test Panopticon argument generation."""
-        result: str = get_panopticon_args(args=argparse.Namespace(finetune=False))
+        result: str = get_panopticon_args()
 
         # Should contain dataset args and standardization
         assert "norm_stats_from_pretrained=False" in result
@@ -179,9 +181,7 @@ class TestModelSpecificArgs:
 
     def test_get_galileo_args_pretrained_normalizer(self) -> None:
         """Test Galileo args with pretrained normalizer."""
-        result: str = get_galileo_args(
-            args=argparse.Namespace(finetune=False), pretrained_normalizer=True
-        )
+        result: str = get_galileo_args(pretrained_normalizer=True)
 
         assert "norm_stats_from_pretrained=False" in result
         assert "norm_method=NormMethod.NO_NORM" in result
@@ -190,9 +190,7 @@ class TestModelSpecificArgs:
 
     def test_get_galileo_args_dataset_normalizer(self) -> None:
         """Test Galileo args with dataset normalizer."""
-        result: str = get_galileo_args(
-            args=argparse.Namespace(finetune=False), pretrained_normalizer=False
-        )
+        result: str = get_galileo_args(pretrained_normalizer=False)
 
         assert "norm_stats_from_pretrained=False" in result
         assert "use_pretrained_normalizer=False" in result
@@ -320,7 +318,9 @@ class TestBuildCommandsSweep:
                 commands: list[str] = build_commands(base_args, [])
 
         # Should generate multiple commands for parameter sweep
-        expected_count: int = len(LP_LRs) * len(NormalizationMode) * len(PoolingType)
+        expected_count: int = (
+            len(LP_LRs) * len(Normalization_MODES) * len(pooling_types)
+        )
         assert len(commands) == expected_count
 
         # Check that different parameters are included
@@ -336,7 +336,7 @@ class TestBuildCommandsSweep:
         commands: list[str] = build_commands(base_args, [])
 
         # Should use no_norm_sweep, so fewer combinations
-        expected_count: int = len(PoolingType) * len(LP_LRs)
+        expected_count: int = len(pooling_types) * len(LP_LRs)
         assert len(commands) == expected_count
 
         # All commands should have DinoV3 args
@@ -433,8 +433,8 @@ class TestParametrizedTests:
         assert expected_args in commands[0]
 
     @pytest.mark.parametrize("lr", LP_LRs)
-    @pytest.mark.parametrize("norm_mode", NormalizationMode)
-    @pytest.mark.parametrize("pooling_type", PoolingType)
+    @pytest.mark.parametrize("norm_mode", Normalization_MODES)
+    @pytest.mark.parametrize("pooling_type", pooling_types)
     def test_parameter_combinations(
         self, lr: float, norm_mode: str, pooling_type: Any
     ) -> None:
@@ -492,7 +492,9 @@ class TestIntegration:
                 )
 
         # Should generate full sweep for Galileo model
-        expected_count: int = len(LP_LRs) * len(NormalizationMode) * len(PoolingType)
+        expected_count: int = (
+            len(LP_LRs) * len(Normalization_MODES) * len(pooling_types)
+        )
         assert len(commands) == expected_count
 
         # All commands should have Galileo-specific args
