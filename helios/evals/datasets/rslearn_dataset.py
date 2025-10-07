@@ -290,6 +290,9 @@ class RslearnToHeliosDataset(Dataset):
                 raise ValueError(f"Modality {modality} not found in dataset inputs")
             num_bands = DataModality.get(modality).num_bands
             x = input_dict[modality]
+            # Turn into numpy array for compatibility with normalizer
+            if not isinstance(x, np.ndarray):
+                x = x.numpy()
             if x.ndim != 3:
                 raise ValueError(
                     f"Expected (T*C, H, W) for {modality}, got {tuple(x.shape)}"
