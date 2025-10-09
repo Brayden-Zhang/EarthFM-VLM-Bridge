@@ -1023,6 +1023,8 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
             The masked batch with the masks applied.
         """
         masked_batch_dict = masked_batch.as_dict(return_none=False)
+        num_encoded: None | torch.Tensor = None
+        num_decoded: None | torch.Tensor = None
         for modality in masked_batch.modalities:
             if modality == "timestamps":
                 continue
@@ -1102,9 +1104,43 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
                             MaskValue.TARGET_ENCODER_ONLY.value,
                             modality_mask[sample_idx, ..., bandset_idx],
                         )
-
+            # check we have more than 0 encoded and decoded tokens.
+            # this should happen very rarely (only in the S2-only ablation when
+            # the h, w is small)
+            flat_mask = torch.flatten(out_modality_mask, start_dim=1)
+            encoded_for_modality = (flat_mask == MaskValue.ONLINE_ENCODER.value).sum(
+                dim=-1
+            )
+            decoded_for_modality = (flat_mask == MaskValue.DECODER.value).sum(dim=-1)
+            if num_encoded is None:
+                num_encoded = encoded_for_modality
+            else:
+                num_encoded += encoded_for_modality
+            if num_decoded is None:
+                num_decoded = decoded_for_modality
+            else:
+                num_decoded += decoded_for_modality
             masked_batch_dict[masked_modality_name] = out_modality_mask
-
+        # Again - no_encoded_indices and no_decoded_indices should have length > 0 very rarely
+        # (so far this has only happened when we ablate S2 only, and have a small h, w), so these
+        # loops should not be entered very often.
+        no_encoded_indices = torch.argwhere(num_encoded == 0)
+        no_decoded_indices = torch.argwhere(num_decoded == 0)
+        for i in no_encoded_indices:
+            for _, val in masked_batch_dict.items():
+                modality_index = val[i]
+                # will this happen inplace?
+                modality_index[
+                    modality_index == MaskValue.TARGET_ENCODER_ONLY.value
+                ] = MaskValue.ONLINE_ENCODER.value
+        for i in no_decoded_indices:
+            for key, val in masked_batch_dict.items():
+                modality_index = val[i]
+                # will this happen inplace?
+                modality_index[
+                    modality_index == MaskValue.TARGET_ENCODER_ONLY.value
+                ] = MaskValue.DECODER.value
+                masked_batch_dict[key][i] = modality_index
         masked_batch = MaskedHeliosSample(**masked_batch_dict)
 
         return masked_batch
@@ -1123,6 +1159,7 @@ class ModalityCrossMaskingStrategy(MaskingStrategy):
         masked_sample = self.apply_bandset_mask_rules(
             masked_sample, encoded_decoded_bandsets, present_modalities_bandsets
         )
+
         return masked_sample
 
 

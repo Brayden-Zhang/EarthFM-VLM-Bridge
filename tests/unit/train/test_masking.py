@@ -1158,6 +1158,43 @@ def test_modality_cross_random_masking() -> None:
     assert (masked_sample.sentinel2_l2a_mask == expected_sentinel2_l2a_mask).all()
 
 
+def test_modality_cross_random_masking_always_gives_online_encoder_and_decoder_tokens() -> (
+    None
+):
+    """Test modality cross random masking."""
+    b, h, w, t = 4, 1, 1, 3
+
+    patch_size = 1
+
+    days = torch.randint(1, 31, (b, 1, t), dtype=torch.long)
+    months = torch.randint(1, 13, (b, 1, t), dtype=torch.long)
+    years = torch.randint(2018, 2020, (b, 1, t), dtype=torch.long)
+    timestamps = torch.cat([days, months, years], dim=1)  # Shape: (B, 3, T)
+    batch = HeliosSample(
+        sentinel2_l2a=torch.ones((b, h, w, t, Modality.SENTINEL2_L2A.num_bands)),
+        timestamps=timestamps,
+    )
+
+    masking_strategy = ModalityCrossRandomMaskingStrategy(
+        encode_ratio=0.5,
+        decode_ratio=0.5,
+        allow_encoding_decoding_same_bandset=True,
+    )
+    for i in range(100):
+        masked_sample = masking_strategy.apply_mask(batch, patch_size=patch_size)
+        logger.info(f"masked_sample: {masked_sample.sentinel2_l2a_mask}")
+        num_encoded = torch.sum(
+            masked_sample.sentinel2_l2a_mask == MaskValue.ONLINE_ENCODER.value,
+            dim=(1, 2, 3, 4),
+        )
+        num_decoded = torch.sum(
+            masked_sample.sentinel2_l2a_mask == MaskValue.DECODER.value,
+            dim=(1, 2, 3, 4),
+        )
+        assert (num_encoded > 0).all()
+        assert (num_decoded > 0).all()
+
+
 class TestModalityCrossMaskingStrategy:
     """Test class for ModalityCrossMaskingStrategy."""
 
