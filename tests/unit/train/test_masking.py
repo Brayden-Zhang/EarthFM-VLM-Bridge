@@ -1192,15 +1192,6 @@ def test_modality_cross_random_masking_has_online_encoder_and_decoder_tokens() -
             masked_sample.sentinel2_l2a_mask == MaskValue.DECODER.value,
             dim=(1, 2, 3, 4),
         )
-        print(num_encoded)
-        print(num_decoded)
-        print(
-            torch.sum(
-                masked_sample.sentinel2_l2a_mask == MaskValue.TARGET_ENCODER_ONLY.value,
-                dim=(1, 2, 3, 4),
-            )
-        )
-        assert False
         assert (num_encoded > 0).all()
         assert (num_decoded > 0).all()
 
