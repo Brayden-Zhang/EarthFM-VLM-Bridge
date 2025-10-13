@@ -266,21 +266,26 @@ class ContrastiveLatentMIMTrainModule(HeliosTrainModule):
         if dry_run:
             return
 
+        logger.info(f"Recording metrics - train/{self.total_loss_name}")
         self.trainer.record_metric(
             f"train/{self.total_loss_name}",
             total_batch_loss,
             ReduceType.mean,
         )
         if self.contrastive_loss is not None:
+            logger.info(f"Recording metrics - train/{self.contrastive_loss.name}")
             self.trainer.record_metric(
                 f"train/{self.contrastive_loss.name}",
                 total_batch_con,
                 ReduceType.mean,
             )
+        logger.info("Recording metrics - regularization")
         self.log_regularization(total_batch_reg)
 
+        logger.info("Deleting stuff")
         del batch, batch_data  # In case this helps with memory utilization.
         del masked_batch_a, masked_batch_b
+        logger.info("All done with this batch!")
 
     def model_forward(
         self, batch: MaskedHeliosSample, patch_size: int, token_exit_cfg: dict[str, int]
