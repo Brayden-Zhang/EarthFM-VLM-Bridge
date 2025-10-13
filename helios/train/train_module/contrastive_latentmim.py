@@ -1,5 +1,6 @@
 """Training and optimizer abstraction for Helios."""
 
+import os
 from dataclasses import dataclass, field
 from logging import getLogger
 from typing import Any
@@ -206,10 +207,24 @@ class ContrastiveLatentMIMTrainModule(HeliosTrainModule):
                 logger.info(
                     f"Training microbatch {microbatch_idx} of {num_microbatches} with batch size {microbatch.batch_size}"
                 )
+                rank = int(os.environ["RANK"])
+                # Deterministic seed for mask A
+                seed_a = hash((self.global_step, microbatch_idx, rank, "mask_a")) % (
+                    2**31
+                )
+                torch.manual_seed(seed_a)
+                torch.cuda.manual_seed(seed_a)
                 masked_batch_a = self.masking_strategy.apply_mask(
                     self.transform.apply(microbatch).to_device(self.device),
                     patch_size=patch_size,
                 )
+
+                # Deterministic seed for mask B
+                seed_b = hash((self.global_step, microbatch_idx, rank, "mask_b")) % (
+                    2**31
+                )
+                torch.manual_seed(seed_b)
+                torch.cuda.manual_seed(seed_b)
                 masked_batch_b = self.masking_strategy.apply_mask(
                     self.transform.apply(microbatch).to_device(self.device),
                     patch_size=patch_size,
