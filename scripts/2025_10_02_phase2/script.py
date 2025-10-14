@@ -120,24 +120,19 @@ def build_train_module_config(
         rank_microbatch_size=32,
         masking_config=MaskingConfig(
             strategy_config={
-                "type": "safe_random",
+                "type": "modality_cross_random",
                 "encode_ratio": 0.5,
                 "decode_ratio": 0.5,
+                "allow_encoding_decoding_same_bandset": True,
+                "only_decode_modalities": [
+                    "worldcover",
+                    "srtm",
+                    "openstreetmap_raster",
+                    "wri_canopy_height_map",
+                    "cdl",
+                    "worldcereal",
+                ],
             }
-            # strategy_config={
-            #     "type": "modality_cross_random",
-            #     "encode_ratio": 0.5,
-            #     "decode_ratio": 0.5,
-            #     "allow_encoding_decoding_same_bandset": True,
-            #     "only_decode_modalities": [
-            #         "worldcover",
-            #         "srtm",
-            #         "openstreetmap_raster",
-            #         "wri_canopy_height_map",
-            #         "cdl",
-            #         "worldcereal",
-            #     ],
-            # }
         ),
         loss_config=LossConfig(
             loss_config={
@@ -280,16 +275,16 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             input_layers=["sentinel1_ascending"],
             eval_interval=Duration.steps(20000),
         ),
-        "awf_landsat": DownstreamTaskConfig(
-            dataset="awf",
-            embedding_batch_size=128,
-            num_workers=0,
-            pooling_type=PoolingType.MEAN,
-            norm_stats_from_pretrained=True,
-            input_modalities=[Modality.LANDSAT.name],
-            input_layers=["landsat"],
-            eval_interval=Duration.steps(20000),
-        ),
+        # "awf_landsat": DownstreamTaskConfig(
+        #     dataset="awf",
+        #     embedding_batch_size=128,
+        #     num_workers=0,
+        #     pooling_type=PoolingType.MEAN,
+        #     norm_stats_from_pretrained=True,
+        #     input_modalities=[Modality.LANDSAT.name],
+        #     input_layers=["landsat"],
+        #     eval_interval=Duration.steps(20000),
+        # ),
     }
     trainer_config = (
         TrainerConfig(
