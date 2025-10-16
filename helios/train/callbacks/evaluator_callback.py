@@ -286,7 +286,9 @@ class DownstreamEvaluatorCallback(Callback):
         if hasattr(self.trainer.train_module.model, "supported_modalities"):
             return self.trainer.train_module.model.supported_modalities
         elif hasattr(self.trainer.train_module.model, "encoder"):
-            if hasattr(self.trainer.train_module.model.encoder, "supported_modalities"):
+            if hasattr(
+                self.trainer.train_module.model.encoder, "supported_modality_names"
+            ):
                 return self.trainer.train_module.model.encoder.supported_modality_names
         else:
             logger.info(
