@@ -283,7 +283,7 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
             norm_stats_from_pretrained=True,
             input_modalities=[Modality.LANDSAT.name],
             input_layers=["landsat"],
-            eval_interval=Duration.steps(20000),
+            eval_interval=Duration.steps(10),
         ),
     }
     trainer_config = (
