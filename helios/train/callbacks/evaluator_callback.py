@@ -283,10 +283,18 @@ class DownstreamEvaluatorCallback(Callback):
     @property
     def model_supported_modalities(self) -> list[str]:
         """Get the supported modalities for the model."""
+        logger.info("Collecting model supported modalities.")
         if hasattr(self.trainer.train_module.model, "supported_modalities"):
+            logger.info(
+                f"model has supported_modalities: {self.trainer.train_module.model.supported_modalities}"
+            )
             return self.trainer.train_module.model.supported_modalities
         elif hasattr(self.trainer.train_module.model, "encoder"):
+            logger.info("model has encoder")
             if hasattr(self.trainer.train_module.model.encoder, "supported_modalities"):
+                logger.info(
+                    f"encoder has supported_modalities: {self.trainer.train_module.model.encoder.supported_modalities}"
+                )
                 return self.trainer.train_module.model.encoder.supported_modalities
         else:
             print(self.trainer.train_module.model)
