@@ -14,6 +14,7 @@ from olmo_core.config import Config
 
 from olmoearth_pretrain.data.constants import MISSING_VALUE, Modality, ModalitySpec
 from olmoearth_pretrain.data.dataset import OlmoEarthSample
+from olmoearth_pretrain.decorators import experimental
 from olmoearth_pretrain.types import ArrayTensor
 
 logger = logging.getLogger(__name__)
@@ -501,6 +502,9 @@ class TimeMaskingStrategy(MaskingStrategy):
         return MaskedOlmoEarthSample(**output_dict)
 
 
+@experimental(
+    "This masking strategy is experimental and may not work with all combinations of modalities"
+)
 @MASKING_STRATEGY_REGISTRY.register("space")
 class SpaceMaskingStrategy(MaskingStrategy):
     """Spatially structured random masking of the input data."""
@@ -1282,6 +1286,9 @@ class ModalityCrossSpaceMaskingStrategy(ModalityCrossMaskingStrategy):
         return not modality_spec.is_spatial
 
 
+@experimental(
+    "This masking strategy is experimental and may not work with all combinations of modalities"
+)
 @MASKING_STRATEGY_REGISTRY.register("modality_cross_time")
 class ModalityCrossTimeMaskingStrategy(ModalityCrossMaskingStrategy):
     """Randomly select a modality and apply time masking to it."""
