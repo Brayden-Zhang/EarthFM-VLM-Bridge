@@ -247,6 +247,7 @@ def _format_launch_command(
         run_name,
         cluster,
         "--launch.priority=urgent",
+        "--launch.num_gpus=1",
         "--launch.preemptible=True",
         "--launch.task_name=eval",
     ]
