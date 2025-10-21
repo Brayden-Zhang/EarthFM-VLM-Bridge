@@ -1,31 +1,15 @@
 """Trying to prototype fitting everything into olmo core."""
 
 import logging
-import sys
-from pathlib import Path
 
-try:
-    from script import (
-        build_dataloader_config,
-        build_dataset_config,
-        build_model_config,
-        build_train_module_config,
-        build_trainer_config,
-        build_visualize_config,
-    )
-except ModuleNotFoundError as exc:
-    if exc.name != "script":
-        raise
-    script_dir = Path(__file__).resolve().parent
-    sys.path.append(str(script_dir))
-    from script import (
-        build_dataloader_config,
-        build_dataset_config,
-        build_model_config,
-        build_train_module_config,
-        build_trainer_config,
-        build_visualize_config,
-    )
+from script import (
+    build_dataloader_config,
+    build_dataset_config,
+    build_model_config,
+    build_train_module_config,
+    build_trainer_config,
+    build_visualize_config,
+)
 
 from helios.data.constants import Modality
 from helios.internal.common import build_common_components
