@@ -593,13 +593,6 @@ def _get_module_path(model: BaselineModelName | None) -> str:
     return get_launch_script_path(model)
 
 
-def _get_size_args(args: argparse.Namespace) -> str:
-    """Get the size arguments."""
-    if args.size is not None:
-        return f" --model.size={args.size}"
-    return ""
-
-
 def build_commands(args: argparse.Namespace, extra_cli: list[str]) -> list[str]:
     """Build the commands for the sweep."""
     project_name = args.project_name or "helios_in_loop_evals"
