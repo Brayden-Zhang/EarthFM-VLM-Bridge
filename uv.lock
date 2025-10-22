@@ -3639,7 +3639,6 @@ eval = [
 
 [package.metadata]
 requires-dist = [
-    { name = "ai2-olmo-core" },
     { name = "ai2-olmo-core", specifier = "==2.3.0" },
     { name = "albumentations", specifier = ">=1.4.10" },
     { name = "cartopy", specifier = ">=0.25.0" },
