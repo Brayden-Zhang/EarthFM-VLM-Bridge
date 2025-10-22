@@ -165,9 +165,10 @@ def build_launch_config(
             # so that we can use uv tools
             'export PATH="/root/.local/bin:$PATH" ',
             "uv sync --locked --all-groups",
-            "alias python='uv run python'",
-            # lets see if that worked
-            "alias",
+            # activate the uv venv
+            "venv_path=$(uv run python -c 'import sys; print(sys.executable)')",
+            'source "${venv_path%python3}activate"',
+            # check this worked
             'uv run python -c "import sys; print(sys.executable)"',
             'python -c "import sys; print(sys.executable)"',
         ],
