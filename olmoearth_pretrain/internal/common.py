@@ -156,9 +156,8 @@ def build_launch_config(
             'echo "$GCP_CREDENTIALS" > $GOOGLE_APPLICATION_CREDENTIALS',
             # Clone private repo.
             "uv tool install gh",
-            # assumes that uv is installed, which will be
-            # true for our beaker images once https://github.com/allenai/olmoearth_pretrain/pull/393
-            # is merged
+            # assumes that uv is installed which is true for
+            # olmo core beaker images
             "gh auth status",
             "gh repo clone $REPO_URL .",
             'git checkout "$GIT_REF"',
