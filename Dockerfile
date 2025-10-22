@@ -18,8 +18,6 @@ RUN uv sync --all-groups --no-install-project
 
 # Copy the folder `scripts` to `scripts/`
 # You might need multiple of these statements to copy all the folders you need for your experiment.
-COPY helios/ /stage/helios/
-COPY scripts/latent_mim.py /stage/latent_mim.py
-COPY scripts/galileo.py /stage/galileo.py
+COPY olmoearth_pretrain/ /stage/olmoearth_pretrain/
 ENV PYTHONPATH="${PYTHONPATH}:/stage/"
 RUN uv sync --all-groups --locked
