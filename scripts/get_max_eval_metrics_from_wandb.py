@@ -12,11 +12,11 @@ from olmoearth_pretrain.evals.models import (
     MODELS_WITH_MULTIPLE_SIZES,
     BaselineModelName,
 )
-from olmoearth_pretrain.internal.all_evals import EVAL_TASKS
+from olmoearth_pretrain.internal.all_evals import FT_EVAL_TASKS
 from olmoearth_pretrain.train.callbacks.evaluator_callback import EvalMode
 
 WANDB_ENTITY = "eai-ai2"
-METRICS = EVAL_TASKS.keys()
+METRICS = FT_EVAL_TASKS.keys()
 
 # Dataset partitions to consider (excluding default)
 PARTITIONS = [
