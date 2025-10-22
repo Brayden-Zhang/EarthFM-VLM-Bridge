@@ -155,14 +155,15 @@ def build_launch_config(
             # Write GCP credentials.
             'echo "$GCP_CREDENTIALS" > $GOOGLE_APPLICATION_CREDENTIALS',
             # Clone private repo.
-            "pip install uv",
-            # so that we can use uv tools
-            'export PATH="/root/.local/bin:$PATH" ',
-            "uv tool install gh",
+            "conda install gh --channel conda-forge",
+            # assumes that conda is installed, which is true for our beaker images.
             "gh auth status",
             "gh repo clone $REPO_URL .",
             'git checkout "$GIT_REF"',
             "git submodule update --init --recursive",
+            "pip install uv",
+            # so that we can use uv tools
+            'export PATH="/root/.local/bin:$PATH" ',
             "uv sync --locked --all-groups",
         ],
     )
