@@ -3681,7 +3681,7 @@ dataset-creation = [
     { name = "pytest", specifier = ">=8.4.2" },
     { name = "rasterio", specifier = ">=1.4.3" },
     { name = "rioxarray", specifier = ">=0.19.0" },
-    { name = "rslearn", git = "https://github.com/allenai/rslearn.git?rev=master" },
+    { name = "rslearn", specifier = "==0.0.11" },
     { name = "torch", specifier = ">=2.5" },
     { name = "universal-pathlib", specifier = ">=0.2.5" },
     { name = "wandb", specifier = ">=0.19.0" },
@@ -3704,7 +3704,7 @@ eval = [
     { name = "pytorch-lightning", specifier = "==2.5.5" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "rioxarray", specifier = ">=0.19.0" },
-    { name = "rslearn", git = "https://github.com/allenai/rslearn.git?rev=master" },
+    { name = "rslearn", specifier = "==0.0.11" },
     { name = "satlaspretrain-models", specifier = ">=0.3.1" },
     { name = "scikit-learn", specifier = ">=1.7.2" },
     { name = "terratorch", specifier = "==1.1" },
@@ -5242,7 +5242,7 @@ wheels = [
 [[package]]
 name = "rslearn"
 version = "0.0.11"
-source = { git = "https://github.com/allenai/rslearn.git?rev=master#08497f5910427968e5a0f75b80b81aa63774194a" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "boto3" },
     { name = "fiona" },
@@ -5259,6 +5259,10 @@ dependencies = [
     { name = "torchvision" },
     { name = "tqdm" },
     { name = "universal-pathlib" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ec/5a/ba5fa4cd23ca3193b2e099c09ed45c2d650066b97f0f507eeaac7a7380b8/rslearn-0.0.11.tar.gz", hash = "sha256:371f0124245c32a812549563e5023fba7eb5183bf9e1483982da5d064312285d", size = 323265, upload-time = "2025-10-20T18:35:29.907Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1c/e7/3ed5c3fd65e405014fd9d0ff557bea86785638b69378bbadf609b1063597/rslearn-0.0.11-py3-none-any.whl", hash = "sha256:157ca7992f1807b6399efedcdccb7170d2941059891d8904266265de23629b3f", size = 400371, upload-time = "2025-10-20T18:35:28.275Z" },
 ]
 
 [[package]]
