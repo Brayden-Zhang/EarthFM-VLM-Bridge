@@ -19,28 +19,8 @@ Now we can use the `olmoearth_pretrain` library to initialize the model in pytor
 Below, we initialize the OlmoEarth-v1-Base model.
 
 ```python
-# TBD, I'm assuming we will have model IDs or something like that to easily initialize
-# the model.
-import json
-from pathlib import Path
-
-import torch
-
-from olmo_core.config import Config
-from olmo_core.distributed.checkpoint import load_model_and_optim_state
-
-checkpoint_path = Path("/weka/dfive-default/helios/checkpoints/joer/phase2.0_base_lr0.0001_wd0.02/step667200")
-with (checkpoint_path / "config.json").open() as f:
-    config_dict = json.load(f)
-    model_config = Config.from_dict(config_dict["model"])
-
-model = model_config.build()
-
-train_module_dir = checkpoint_path / "model_and_optim"
-load_model_and_optim_state(str(train_module_dir), model)
-
-device = torch.device("cuda")
-model.to(device)
+from olmoearth_pretrain.model_loader import ModelID, load_model
+model = load_model(ModelID.OLMOEARTH_V1_BASE)
 ```
 
 ## Obtain Satellite Imagery
@@ -141,7 +121,11 @@ Now we can apply the model on the image. We recommend applying it on inputs betw
 generally perform better, but require more GPU time.
 
 ```python
+import torch
 from olmoearth_pretrain.train.masking import MaskedOlmoEarthSample, MaskValue
+
+device = torch.device("cuda")
+model.to(device)
 
 # Run the model on the topleft 64x64 of the image.
 sample = MaskedOlmoEarthSample(
