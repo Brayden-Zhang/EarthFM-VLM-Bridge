@@ -43,6 +43,7 @@ class BackboneWithHead(nn.Module):
             pooling_type=pooling_type,
             concat_features=False,
             use_pooled_tokens=use_pooled_tokens,
+            # Set this to False to avoid downsampling embeddings and labels for AnySat
             is_train=False,
         )
         self.task_type = task_type
@@ -68,8 +69,6 @@ class BackboneWithHead(nn.Module):
     ) -> torch.Tensor:
         """Forward pass through the model and head."""
         dev = next(self.wrapper.parameters()).device
-        # The wrapper requires both batch and labels as input, mainly for model
-        # like AnySat that modify the shape of labels during training
         emb, labels = self.wrapper(batch, labels)
         emb = cast(torch.Tensor, emb)
         emb_dim = emb.shape[-1]
@@ -276,7 +275,6 @@ def run_finetune_eval(
                 max_lr=lr,
                 min_lr=1.0e-6,
             )
-            # torch.nn.utils.clip_grad_norm_(ft.parameters(), 1.0)
             opt.step()
             opt.zero_grad()
 
