@@ -400,30 +400,30 @@ EVAL_TASKS = {
 }
 
 FT_EVAL_TASKS = {
-    # "m_eurosat": DownstreamTaskConfig(
-    #     dataset="m-eurosat",
-    #     ft_batch_size=64,
-    #     num_workers=0,
-    #     pooling_type=PoolingType.MEAN,
-    #     norm_stats_from_pretrained=True,
-    #     epochs=50,
-    # ),
-    # "m_bigearthnet": DownstreamTaskConfig(
-    #     dataset="m-bigearthnet",
-    #     ft_batch_size=16,
-    #     num_workers=4,
-    #     pooling_type=PoolingType.MEAN,
-    #     norm_stats_from_pretrained=True,
-    #     epochs=50,
-    # ),
-    # "m_so2sat": DownstreamTaskConfig(
-    #     dataset="m-so2sat",
-    #     ft_batch_size=32,
-    #     num_workers=4,
-    #     pooling_type=PoolingType.MEAN,
-    #     norm_stats_from_pretrained=True,
-    #     epochs=50,
-    # ),
+    "m_eurosat": DownstreamTaskConfig(
+        dataset="m-eurosat",
+        ft_batch_size=64,
+        num_workers=0,
+        pooling_type=PoolingType.MEAN,
+        norm_stats_from_pretrained=True,
+        epochs=50,
+    ),
+    "m_bigearthnet": DownstreamTaskConfig(
+        dataset="m-bigearthnet",
+        ft_batch_size=16,
+        num_workers=4,
+        pooling_type=PoolingType.MEAN,
+        norm_stats_from_pretrained=True,
+        epochs=50,
+    ),
+    "m_so2sat": DownstreamTaskConfig(
+        dataset="m-so2sat",
+        ft_batch_size=32,
+        num_workers=4,
+        pooling_type=PoolingType.MEAN,
+        norm_stats_from_pretrained=True,
+        epochs=50,
+    ),
     # 8 for large
     "m_sa_crop_type": DownstreamTaskConfig(
         dataset="m-sa-crop-type",
