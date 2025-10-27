@@ -12,11 +12,10 @@ from olmoearth_pretrain.evals.models import (
     MODELS_WITH_MULTIPLE_SIZES,
     BaselineModelName,
 )
-from olmoearth_pretrain.internal.all_evals import EVAL_TASKS
+from olmoearth_pretrain.internal.all_evals import EVAL_TASKS, FT_EVAL_TASKS
 from olmoearth_pretrain.train.callbacks.evaluator_callback import EvalMode
 
 WANDB_ENTITY = "eai-ai2"
-METRICS = EVAL_TASKS.keys()
 
 # Dataset partitions to consider (excluding default)
 PARTITIONS = [
@@ -375,12 +374,18 @@ if __name__ == "__main__":
         help="Aggregate metrics per dataset partition instead of grouping by '_step'",
     )
     parser.add_argument(
+        "--finetune",
+        action="store_true",
+        help="Use finetune evaluation tasks when determining metrics",
+    )
+    parser.add_argument(
         "--get_test_metrics",
         action="store_true",
         help="Report test metrics based on the configuration of the validation results witht the highest score",
     )
 
     args = parser.parse_args()
+    metrics = list(FT_EVAL_TASKS.keys()) if args.finetune else list(EVAL_TASKS.keys())
 
     if args.per_partition:
         if not args.run_prefix:
@@ -395,7 +400,7 @@ if __name__ == "__main__":
         for partition in PARTITIONS:
             if partition in partition_metrics:
                 print(f"\n{partition}:")
-                for metric in METRICS:
+                for metric in metrics:
                     # Try original name
                     key = f"eval/{metric}"
                     val = partition_metrics[partition].get(key)
@@ -436,7 +441,7 @@ if __name__ == "__main__":
         print("\nFinal Results:")
         for group_name, metrics in group_metrics.items():
             print(f"\n{group_name}:")
-            for metric in METRICS:
+            for metric in metrics:
                 try:
                     k = f"eval/{metric}"
                     print(f"  {metric}: {metrics[k]}")
@@ -451,7 +456,7 @@ if __name__ == "__main__":
             print("\nFinal Test Results:")
             for group_name, metrics in group_test_metrics.items():
                 print(f"\n{group_name}:")
-                for metric in METRICS:
+                for metric in metrics:
                     try:
                         k = f"eval/test/{metric}"
                         print(f"  {metric}: {metrics[k]}")
