@@ -241,7 +241,7 @@ python -m olmoearth_pretrain.dataset_creation.scripts.sentinel2_l1c.launch_jobs 
 Now convert the data from the rslearn dataset to OlmoEarth format.
 
 ```
-export OLMOEARTH_PATH=/path/to/your/dataset
+export OLMOEARTH_PATH=./olmoearth_dataset
 python -m olmoearth_pretrain.dataset_creation.rslearn_to_olmoearth.cdl --ds_path $DATASET_PATH --olmoearth_path $OLMOEARTH_PATH
 python -m olmoearth_pretrain.dataset_creation.rslearn_to_olmoearth.era5_10 --ds_path $DATASET_PATH --olmoearth_path $OLMOEARTH_PATH
 python -m olmoearth_pretrain.dataset_creation.rslearn_to_olmoearth.landsat --ds_path $DATASET_PATH --olmoearth_path $OLMOEARTH_PATH
@@ -290,10 +290,18 @@ python -m olmoearth_pretrain.dataset_creation.make_meta_summary --olmoearth_path
 python -m olmoearth_pretrain.dataset_creation.make_meta_summary --olmoearth_path $OLMOEARTH_PATH --modality sentinel2 --time_span year
 ```
 
-## Create H5s
-
-TODO: we need to see whether this should be documented here or somewhere else.
+We use a rasterized version of the OpenStreetMap vector data for pre-training, produced
+by this script:
 
 ```
-python -m olmoearth_pretrain.internal.run_h5_conversion --tile_path=$OLMOEARTH_PATH --supported_modality_names='[sentinel2_l2a,sentinel1,worldcover,srtm,landsat,openstreetmap_raster,gse,cdl,worldpop]' --compression=zstd --compression_opts=3 --tile_size=128
+python -m olmoearth_pretrain.dataset_creation.rslearn_to_olmoearth.rasterize_openstreetmap --olmoearth_path $OLMOEARTH_PATH
+```
+
+## Create H5s
+
+We can now create the H5 files used during training from the OlmoEarth dataset. Note
+that here we split up each 256x256 example in the dataset into four 128x128 examples.
+
+```
+python -m olmoearth_pretrain.internal.run_h5_conversion --tile_path=$OLMOEARTH_PATH --supported_modality_names='[cdl,era5_10,landsat,naip_10,openstreetmap_raster,sentinel1,sentinel2_l2a,srtm,worldcereal,worldcover,wri_canopy_height_map]' --compression=zstd --compression_opts=3 --tile_size=128
 ```
