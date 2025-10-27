@@ -418,13 +418,12 @@ FT_EVAL_TASKS = {
     ),
     "m_so2sat": DownstreamTaskConfig(
         dataset="m-so2sat",
-        ft_batch_size=32,
+        ft_batch_size=16,
         num_workers=4,
         pooling_type=PoolingType.MEAN,
         norm_stats_from_pretrained=True,
         epochs=50,
     ),
-    # 8 for large
     "m_sa_crop_type": DownstreamTaskConfig(
         dataset="m-sa-crop-type",
         ft_batch_size=8,
@@ -468,20 +467,18 @@ FT_EVAL_TASKS = {
         norm_stats_from_pretrained=True,
         epochs=50,
     ),
-    # 8 for large, 16 for base
     "m_cashew_plant": DownstreamTaskConfig(
         dataset="m-cashew-plant",
-        ft_batch_size=16,
+        ft_batch_size=8,
         num_workers=4,
         pooling_type=PoolingType.MEAN,
         norm_stats_from_pretrained=False,
         norm_method=NormMethod.NORM_NO_CLIP_2_STD,
         epochs=50,
     ),
-    # 8 for large, 16 for base
     "m_forestnet": DownstreamTaskConfig(
         dataset="m-forestnet",
-        ft_batch_size=16,
+        ft_batch_size=8,
         num_workers=4,
         pooling_type=PoolingType.MEAN,
         norm_stats_from_pretrained=False,

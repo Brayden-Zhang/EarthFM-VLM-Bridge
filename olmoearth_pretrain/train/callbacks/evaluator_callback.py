@@ -66,6 +66,7 @@ class DownstreamTaskConfig:
     # FT
     ft_lr: float | None = None
     ft_batch_size: int = 32
+    finetune_seed: int = 42
     # LP / FT
     epochs: int = 50
     # LP / KNN / FT
@@ -116,6 +117,7 @@ class DownstreamEvaluator:
         self.probe_batch_size = task.probe_batch_size
         self.ft_lr = task.ft_lr
         self.ft_batch_size = task.ft_batch_size
+        self.finetune_seed = task.finetune_seed
         self.epochs = task.epochs
         self.linear_probe_eval_interval = task.linear_probe_eval_interval
         self.patch_size = task.patch_size
@@ -324,6 +326,7 @@ class DownstreamEvaluator:
             )
 
         val_result, test_result = run_finetune_eval(
+            task_name=self.evaluation_name,
             task_config=self.config,
             model=model,
             device=self.device or self.trainer.device,
@@ -335,6 +338,8 @@ class DownstreamEvaluator:
             train_loader=train_loader,
             val_loader=val_loader,
             test_loader=test_loader,
+            seed=self.finetune_seed,
+            save_folder=self.trainer.save_folder,
         )
         logger.info(
             f"Downstream evaluator {self.evaluation_name} val score: {val_result}, test score: {test_result}"

@@ -23,7 +23,6 @@ from olmoearth_pretrain.internal.experiment import SubCmd
 logger = getLogger(__name__)
 
 # Learning rates to sweep over.
-# FT_LRS = [1e-6, 5e-6, 1e-5, 5e-5, 1e-4, 5e-4, 1e-3]
 FT_LRS = [1e-4, 5e-4, 1e-3]
 
 TASK_ARG_PREFIX = "--trainer.callbacks.downstream_evaluator.tasks"
@@ -249,6 +248,7 @@ def _format_launch_command(
     extra_cli: Iterable[str],
     model_args: list[str],
     lr: float,
+    seed_args: Iterable[str],
 ) -> str:
     """Format the launch command."""
     parts = [
@@ -272,11 +272,15 @@ def _format_launch_command(
     parts.extend(model_args)
     parts.extend(FT_MODE_ARGS)
     parts.extend(_format_ft_lr_args(lr))
+    parts.extend(seed_args)
     parts.append("--train_module.dp_config=null")
     return " ".join(parts)
 
 
-def build_commands(args: argparse.Namespace, extra_cli: list[str]) -> list[str]:
+def build_commands(
+    args: argparse.Namespace,
+    extra_cli: list[str],
+) -> list[str]:
     """Build the commands for the sweep."""
     project_name = args.project_name or EVAL_WANDB_PROJECT
     sub_command = _get_sub_command(args)
@@ -297,20 +301,27 @@ def build_commands(args: argparse.Namespace, extra_cli: list[str]) -> list[str]:
         if args.sweep_normalizer and preset.supports_pretrained_normalizer:
             normalizer_options = [False, True]
 
+    # Seed sweep
+    seed_args: list[str] = []
+    if args.finetune_seed is not None:
+        seed_args.extend(_format_per_task_args({"finetune_seed": args.finetune_seed}))
     commands: list[str] = []
     for lr in lrs:
         for norm_val in normalizer_options:
             if args.defaults_only:
                 run_suffix = "FT_defaults"
             elif args.checkpoint_path:
-                run_suffix = f"FT_lr{lr}_freezeunfreeze"
+                run_suffix = f"FT_lr{lr}"
             else:
                 if norm_val is True:
-                    run_suffix = f"FT_lr{lr}_norm_pretrained_True_freezeunfreeze"
+                    run_suffix = f"FT_lr{lr}_norm_pretrained_True"
                 else:
-                    run_suffix = f"FT_lr{lr}_norm_pretrained_False_freezeunfreeze"
+                    run_suffix = f"FT_lr{lr}_norm_pretrained_False"
 
-            run_name = f"{base_run_name}_{run_suffix}"
+            seed_suffix = (
+                f"_seed{args.finetune_seed}" if args.finetune_seed is not None else ""
+            )
+            run_name = f"{base_run_name}_{run_suffix}{seed_suffix}"
             model_args = _build_model_args(selected_preset, norm_val)
 
             commands.append(
@@ -325,6 +336,7 @@ def build_commands(args: argparse.Namespace, extra_cli: list[str]) -> list[str]:
                     extra_cli=extra_cli,
                     model_args=model_args,
                     lr=lr,
+                    seed_args=seed_args,
                 )
             )
     return commands
@@ -373,6 +385,12 @@ def main() -> None:
         "--sweep_normalizer",
         action="store_true",
         help="Sweep normalization methods (pretrained and dataset stats).",
+    )
+    parser.add_argument(
+        "--finetune_seed",
+        type=int,
+        default=None,
+        help="Base random seed applied to every finetune task (optional).",
     )
 
     args, extra_cli = parser.parse_known_args()

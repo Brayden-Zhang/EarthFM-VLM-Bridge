@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import math
+import os
+import random
 from logging import getLogger
 from typing import cast
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -188,6 +191,7 @@ def _set_backbone_trainable(backbone: nn.Module, requires_grad: bool) -> None:
 
 
 def run_finetune_eval(
+    task_name: str,
     task_config: EvalDatasetConfig,
     model: nn.Module,
     device: torch.device,
@@ -199,8 +203,18 @@ def run_finetune_eval(
     train_loader: DataLoader,
     val_loader: DataLoader,
     test_loader: DataLoader | None,
+    seed: int | None = None,
+    save_folder: str | None = None,
 ) -> tuple[float, float]:
     """Finetune the model on a downstream task and evaluate."""
+    if seed is not None:
+        logger.info(f"Setting finetune random seed to {seed}")
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+
     ft = BackboneWithHead(
         model=model,
         task_type=task_config.task_type,
@@ -336,6 +350,10 @@ def run_finetune_eval(
             )
 
     ft.load_state_dict(best_state)
+    if save_folder is not None:
+        checkpoint_path = os.path.join(save_folder, task_name, f"lr{lr}", "best.ckpt")
+        torch.save(best_state, checkpoint_path)
+        logger.info(f"Saved best checkpoint to {checkpoint_path}")
 
     if task_config.task_type == TaskType.CLASSIFICATION:
         val_acc = best_val_metric
