@@ -491,6 +491,9 @@ class DownstreamEvaluatorCallback(Callback):
                 for callback in self.trainer._iter_callbacks()
                 if isinstance(callback, OlmoEarthWandBCallback)
             )
+            if wandb_callback.enabled:
+                wandb_callback.define_metrics("finetune/*", step_metric="finetune_step")
+                wandb_callback.wandb.log({"finetune_step": 0})
 
             for evaluator in self.evaluators:
                 if not self._check_supported_modalities(evaluator):
