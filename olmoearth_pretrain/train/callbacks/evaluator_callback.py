@@ -507,17 +507,19 @@ class DownstreamEvaluatorCallback(Callback):
                     )
                     continue
                 val_result, test_result, eval_time = self._perform_eval(evaluator)
-                if wandb_callback.enabled:
-                    wandb_callback.wandb.log(
-                        {"eval/" + evaluator.evaluation_name: val_result}
-                    )
-                    wandb_callback.wandb.log(
-                        {"eval_time/" + evaluator.evaluation_name: eval_time}
-                    )
-                    if self.run_on_test:
+                # Only logging valid results to wandb
+                if val_result > 0 and test_result > 0:
+                    if wandb_callback.enabled:
                         wandb_callback.wandb.log(
-                            {"eval/test/" + evaluator.evaluation_name: test_result}
+                            {"eval/" + evaluator.evaluation_name: val_result}
                         )
+                        wandb_callback.wandb.log(
+                            {"eval_time/" + evaluator.evaluation_name: eval_time}
+                        )
+                        if self.run_on_test:
+                            wandb_callback.wandb.log(
+                                {"eval/test/" + evaluator.evaluation_name: test_result}
+                            )
 
         if self.cancel_after_first_eval:
             self.trainer.cancel_run(
