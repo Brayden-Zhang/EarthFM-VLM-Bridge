@@ -311,7 +311,7 @@ def build_commands(
         if args.defaults_only:
             run_suffix = "FT_defaults"
         elif args.checkpoint_path:
-            run_suffix = f"FT_lr{lr}_other_tasks"
+            run_suffix = f"FT_lr{lr}"
         else:
             norm_suffix = ""
             if normalizer_value is not None:
@@ -320,7 +320,7 @@ def build_commands(
                     if normalizer_value
                     else "_norm_pretrained_False"
                 )
-            run_suffix = f"FT_lr{lr}{norm_suffix}"
+            run_suffix = f"FT_lr{lr}{norm_suffix}_add_tasks"
 
         seed_suffix = (
             f"_seed{args.finetune_seed}" if args.finetune_seed is not None else ""

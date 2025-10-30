@@ -2,7 +2,7 @@
 set -euo pipefail
 
 PROJECT_NAME="2025_10_26_olmoearth_finetune"
-CLUSTER="ai2/ceres"
+CLUSTER="ai2/titan"
 SCRIPT="python olmoearth_pretrain/internal/full_eval_sweep_finetune.py"
 
 # Dinov3
