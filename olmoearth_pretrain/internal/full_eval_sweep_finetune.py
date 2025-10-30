@@ -131,7 +131,7 @@ MODEL_PRESETS: dict[str, ModelPreset] = {
     "satlas": ModelPreset(
         per_task_overrides={"norm_method": "NormMethod.NORM_YES_CLIP"},
         task_specific_overrides={
-            "pastis_sentinel2": {"ft_batch_size": 4},
+            # "pastis_sentinel2": {"ft_batch_size": 4},
         },
         launch_script_key="satlas",
         supports_pretrained_normalizer=True,
@@ -311,7 +311,7 @@ def build_commands(
         if args.defaults_only:
             run_suffix = "FT_defaults"
         elif args.checkpoint_path:
-            run_suffix = f"FT_lr{lr}_ps8"
+            run_suffix = f"FT_lr{lr}"
         else:
             norm_suffix = ""
             if normalizer_value is not None:

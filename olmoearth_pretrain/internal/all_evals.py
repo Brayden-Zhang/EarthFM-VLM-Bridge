@@ -459,14 +459,14 @@ FT_EVAL_TASKS = {
     #     norm_stats_from_pretrained=True,
     #     epochs=50,
     # ),
-    # "sen1floods11": DownstreamTaskConfig(
-    #     dataset="sen1floods11",
-    #     ft_batch_size=32,
-    #     num_workers=4,
-    #     pooling_type=PoolingType.MEAN,
-    #     norm_stats_from_pretrained=True,
-    #     epochs=50,
-    # ),
+    "sen1floods11": DownstreamTaskConfig(
+        dataset="sen1floods11",
+        ft_batch_size=32,
+        num_workers=4,
+        pooling_type=PoolingType.MEAN,
+        norm_stats_from_pretrained=True,
+        epochs=50,
+    ),
     # "m_cashew_plant": DownstreamTaskConfig(
     #     dataset="m-cashew-plant",
     #     ft_batch_size=4,
@@ -476,16 +476,16 @@ FT_EVAL_TASKS = {
     #     norm_method=NormMethod.NORM_NO_CLIP_2_STD,
     #     epochs=50,
     # ),
-    "m_forestnet": DownstreamTaskConfig(
-        dataset="m-forestnet",
-        ft_batch_size=4,
-        num_workers=4,
-        pooling_type=PoolingType.MEAN,
-        norm_stats_from_pretrained=False,
-        norm_method=NormMethod.NORM_NO_CLIP_2_STD,
-        epochs=50,
-        patch_size=8,
-    ),
+    # "m_forestnet": DownstreamTaskConfig(
+    #     dataset="m-forestnet",
+    #     ft_batch_size=4,
+    #     num_workers=4,
+    #     pooling_type=PoolingType.MEAN,
+    #     norm_stats_from_pretrained=False,
+    #     norm_method=NormMethod.NORM_NO_CLIP_2_STD,
+    #     epochs=50,
+    #     patch_size=8,
+    # ),
 }
 
 
