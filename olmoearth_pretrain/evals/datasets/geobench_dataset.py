@@ -5,14 +5,13 @@ import os
 from pathlib import Path
 from types import MethodType
 
-import geobench
 import matplotlib.pyplot as plt
 import numpy as np
 import torch.multiprocessing
 from einops import repeat
 from geobench.dataset import Stats
+from geobench.task import load_task_specs
 from torch.utils.data import Dataset
-from upath import UPath
 
 from olmoearth_pretrain.data.constants import Modality
 from olmoearth_pretrain.data.dataset import OlmoEarthSample
@@ -30,8 +29,6 @@ from .normalize import impute_normalization_stats, normalize_bands
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 logger = logging.getLogger(__name__)
-
-GEOBENCH_DIR = UPath("/weka/dfive-default/presto-geobench/dataset/geobench")
 
 
 def _landsathelios2geobench_name(band_name: str) -> str:
@@ -105,20 +102,15 @@ class GeobenchDataset(Dataset):
             from olmoearth_pretrain.data.normalize import Normalizer, Strategy
 
             self.normalizer_computed = Normalizer(Strategy.COMPUTED)
-
-        for task in geobench.task_iterator(
-            # e.g. "classification_v1.0"
-            benchmark_name=f"{config.task_type.value}_v1.0",
-            benchmark_dir=geobench_dir / f"{config.task_type.value}_v1.0",
-        ):
-            if task.dataset_name == dataset:
-                break
-        self.is_landsat = task.bands_info[0].__class__.__name__ == "Landsat8"
+        # GEOBENCH cannot handle remote upath objects
+        dataset_dir = geobench_dir / f"{config.task_type.value}_v1.0" / dataset
+        task = load_task_specs(dataset_dir)  # Note: Cannot handle remote paths
         # hack: https://github.com/ServiceNow/geo-bench/issues/22
         task.get_dataset_dir = MethodType(
             lambda self: geobench_dir / f"{config.task_type.value}_v1.0" / dataset,
             task,
         )
+        self.is_landsat = task.bands_info[0].__class__.__name__ == "Landsat8"
 
         self.dataset = task.get_dataset(split=self.split, partition_name=self.partition)
 

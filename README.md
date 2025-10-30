@@ -7,71 +7,13 @@ Earth system foundation model: data, training, and evaluation
 launching training runs on beaker
 ## General Setup
 
-1. Create a virtual environment in prefered directory with python 3.12 `python3.12 -m venv .venv-olmoearth_pretrain`
-2. Activate the virtual environment `source .venv-olmoearth_pretrain/bin/activate`
-3. Navigate to root directory of this repo and run `pip install -e .`
-4. Run `pip install pre-commit`
-5. Run `pre-commit install`
+**Requirements:** Python 3.11 or higher (Python 3.12 recommended)
 
-## Training Setup
-1. Create a Github Token that is able to clone this repo on beaker. You can generate a token [here](https://github.com/settings/tokens) Following permissions are sufficient
-    - repo
-    - read:packages
-    - read:org
-    - write:org
-    - read:project
+1. Install uv: `curl -LsSf https://astral.sh/uv/install.sh | sh` (other ways to do it are documented [here](https://docs.astral.sh/uv/getting-started/installation/))
+2. Navigate to root directory of this repo and run `uv sync --locked --all-groups --python 3.12`
+3. Install the pre-commit tool `uv tool install pre-commit --with pre-commit-uv --force-reinstall`
+4. uv installs everything into a venv, so to keep using `python` commands you can activate uv's venv: `source .venv/bin/activate`. Otherwise, swap to `uv run python`.
 
-    Authorize this token for the allenai org. by clicking on the Configure SSO drop down in [here](https://github.com/settings/tokens) for the token you created.
-2. Set your default Beaker workspace and budget:
-    `beaker config set default_workspace ai2/earth-systems`
-    `beaker workspace set-budget ai2/earth-systems ai2/d5`
-3. Set the following Beaker Secrets:
-    - `beaker secret write <your_beaker_username>_WANDB_API_KEY <your_key>`
-    - `beaker secret write <your_beaker_username>_BEAKER_TOKEN <your_token>`
-    - `beaker secret write <your_beaker_username>_GITHUB_TOKEN <your_key>`
-
-4. Create a script based on scripts/latent_mim.py and configure your experiment (you can override specific changes)
-
-
-## Launch
-
-### Pre-emptible Jobs
-
-To launch pre-emptible jobs, we will use the main entrypoint in [olmoearth_pretrain/internal/experiment.py](olmoearth_pretrain/internal/experiment.py) and write python configuration files that use it like [scripts/latent_mim.py](scripts/latent_mim.py). Depednign on your experiment it might make sense to write a new script with different builders or to just overide as needed for an existing one.
-Before launching your script **MAKE SURE YOUR CODE IS COMMITED AND PUSHED** as we are cloning the code on top of a docker image when we launch the job.
-
-We can launch a script as follows:
-
-`python3 scripts/base_debug_scripts/latent_mim.py launch test_run ai2/saturn-cirrascale`
-
-This will launch a beaker job and stream the logs to your console until you cancel.
-Add additional overides as needed.
-
-### Sessions
-
-[VSCODE/Cursor workflow setup](https://docs.google.com/document/d/1ydiCqIn45xlbrIcfPi8bILn_y00adTAHhIY1MPh9szE/edit?tab=t.0#heading=h.wua78h35aq1n) \
-Be sure your session creation has included the following args
- - `  --secret-env WANDB_API_KEY=<your_beaker_username>_WANDB_API_KEY
-    --secret-env BEAKER_TOKEN=<your_beaker_username>__BEAKER_TOKEN `
-
-Note: In order to use flash attention in a session, use `"beaker://petew/olmo-core-tch270cu128"` as your base beaker image.
-Then, set up a conda environment so you can use the flash attention code saved in the base image.
-1. `conda init`
-2. `exec bash`
-3. `conda shell.bash activate base`
-4. `pip install -e '.[all]'`
-
-When launching runs in Sessions for debugging, use the following command,
-
-`torchrun scripts/base_debug_scripts/latent_mim.py train test_run local`
-
-Add additional overides as needed.
-
-## Beaker Information
-
-budget: `ai2/es-platform` \
-workspace: `ai2/earth-systems` \
-weka: `weka://dfive-default`
 
 ## OlmoEarth Pretrain Dataset
 

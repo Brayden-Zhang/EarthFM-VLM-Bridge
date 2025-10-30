@@ -12,8 +12,6 @@ from olmoearth_pretrain.train.masking import (
     MaskValue,
     ModalityCrossRandomMaskingStrategy,
     ModalityCrossSpaceMaskingStrategy,
-    ModalityMaskingStrategy,
-    ModalitySpaceTimeMaskingStrategy,
     RandomMaskingStrategy,
     RandomRangeMaskingStrategy,
     SpaceMaskingStrategy,
@@ -296,63 +294,6 @@ def test_time_with_missing_timesteps_structure_masking_and_unmask() -> None:
             mask = getattr(unmasked_sample, modality_name)
             if mask is not None:
                 assert (mask == 0).all()
-
-
-def test_modality_space_time_masking_and_unmask() -> None:
-    """Test time structure masking ratios."""
-    b, h, w, t = 100, 16, 16, 8
-
-    patch_size = 4
-
-    days = torch.randint(1, 31, (b, 1, t), dtype=torch.long)
-    months = torch.randint(1, 13, (b, 1, t), dtype=torch.long)
-    years = torch.randint(2018, 2020, (b, 1, t), dtype=torch.long)
-    timestamps = torch.cat([days, months, years], dim=1)  # Shape: (B, 3, T)
-    sentinel2_l2a_num_bands = Modality.SENTINEL2_L2A.num_bands
-    latlon_num_bands = Modality.LATLON.num_bands
-    worldcover_num_bands = Modality.WORLDCOVER.num_bands
-    batch = OlmoEarthSample(
-        sentinel2_l2a=torch.ones((b, h, w, t, sentinel2_l2a_num_bands)),
-        latlon=torch.ones((b, latlon_num_bands)),
-        timestamps=timestamps,
-        worldcover=torch.ones((b, h, w, worldcover_num_bands)),
-    )
-    encode_ratio, decode_ratio = 0.5, 0.5
-    strategy = ModalitySpaceTimeMaskingStrategy(
-        encode_ratio=encode_ratio,
-        decode_ratio=decode_ratio,
-    )
-    # Run random masking a few times just to make sure it works
-    for i in range(10):
-        masked_sample = strategy.apply_mask(
-            batch,
-            patch_size=patch_size,
-        )
-        for modality_name in masked_sample._fields:
-            if modality_name.endswith("mask"):
-                unmasked_modality_name = masked_sample.get_unmasked_modality_name(
-                    modality_name
-                )
-                modality = Modality.get(unmasked_modality_name)
-                mask = getattr(masked_sample, modality_name)
-                data = getattr(masked_sample, unmasked_modality_name)
-                logger.info(f"Mask name: {modality_name}")
-                if mask is None:
-                    continue
-                # TODO check ratios depending on masking strategy?
-                assert mask.shape[:-1] == data.shape[:-1], (
-                    f"{modality_name} has incorrect shape"
-                )
-                assert mask.shape[-1] == modality.num_band_sets, (
-                    f"{modality_name} has incorrect num band sets {mask.shape} {modality.num_band_sets}"
-                )
-
-        unmasked_sample = masked_sample.unmask()
-        for modality_name in unmasked_sample._fields:
-            if modality_name.endswith("mask"):
-                mask = getattr(unmasked_sample, modality_name)
-                if mask is not None:
-                    assert (mask == 0).all()
 
 
 def test_create_random_mask_with_missing_mask() -> None:
@@ -759,81 +700,6 @@ def test_random_masking_with_missing_modality_mask() -> None:
         )
 
 
-def test_modality_mask_and_unmask() -> None:
-    """Test modality structure masking ratios."""
-    b, h, w, t = 100, 16, 16, 8
-
-    days = torch.randint(1, 31, (b, 1, t), dtype=torch.long)
-    months = torch.randint(1, 13, (b, 1, t), dtype=torch.long)
-    years = torch.randint(2018, 2020, (b, 1, t), dtype=torch.long)
-    timestamps = torch.cat([days, months, years], dim=1)  # Shape: (B, 3, T)
-
-    sentinel2_l2a_num_bands = Modality.SENTINEL2_L2A.num_bands
-    latlon_num_bands = Modality.LATLON.num_bands
-    worldcover_num_bands = Modality.WORLDCOVER.num_bands
-    batch = OlmoEarthSample(
-        sentinel2_l2a=torch.ones((b, h, w, t, sentinel2_l2a_num_bands)),
-        latlon=torch.ones((b, latlon_num_bands)),
-        timestamps=timestamps,
-        worldcover=torch.ones((b, h, w, worldcover_num_bands)),
-    )
-    # count all modalities except timestamps
-    total_modalities = len(batch.modalities) - 1
-    encode_ratio, decode_ratio = 0.25, 0.5
-    masked_sample = ModalityMaskingStrategy(
-        encode_ratio=encode_ratio,
-        decode_ratio=decode_ratio,
-    ).apply_mask(
-        batch,
-    )
-
-    mask_per_modality: list[torch.Tensor] = []  # each tensor will have shape [b, 1]
-    for modality_name in masked_sample._fields:
-        logger.info(f"Modality name: {modality_name}")
-        if modality_name.endswith("mask"):
-            unmasked_modality_name = masked_sample.get_unmasked_modality_name(
-                modality_name
-            )
-            modality = Modality.get(unmasked_modality_name)
-            mask = getattr(masked_sample, modality_name)
-            data = getattr(masked_sample, unmasked_modality_name)
-            logger.info(f"Mask name: {modality_name}")
-            if mask is None:
-                continue
-
-            # check all elements in the mask are the same, per instance in
-            # the batch
-            flat_mask = torch.flatten(mask, start_dim=1)
-            unique_per_instance = torch.unique(flat_mask, dim=1)
-            assert unique_per_instance.size(1) == 1
-            mask_per_modality.append(unique_per_instance)
-
-            assert mask.shape[:-1] == data.shape[:-1], (
-                f"{modality_name} has incorrect shape"
-            )
-            assert mask.shape[-1] == modality.num_band_sets, (
-                f"{modality_name} has incorrect num band sets"
-            )
-
-    # shape [b, num_modalities]
-    total_mask = torch.concat(mask_per_modality, dim=-1)
-    total_elements = total_mask.numel()
-    num_encoder = len(total_mask[total_mask == MaskValue.ONLINE_ENCODER.value])
-    num_decoder = len(total_mask[total_mask == MaskValue.DECODER.value])
-
-    expected_encoded_modalities = max(1, int(total_modalities * encode_ratio))
-    expected_decoded_modalities = max(1, int(total_modalities * decode_ratio))
-
-    expected_encode_ratio = expected_encoded_modalities / total_modalities
-    expected_decode_ratio = expected_decoded_modalities / total_modalities
-    assert (num_encoder / total_elements) == expected_encode_ratio, (
-        "Incorrect encode mask ratio"
-    )
-    assert (num_decoder / total_elements) == expected_decode_ratio, (
-        "Incorrect decode mask ratio"
-    )
-
-
 def test_random_range_masking() -> None:
     """Test random range masking."""
     b, h, w, t = 100, 16, 16, 8
@@ -1198,6 +1064,50 @@ def test_modality_cross_random_masking_has_online_encoder_and_decoder_tokens_man
         )
         assert (num_encoded > 0).all()
         assert (num_decoded > 0).all()
+
+
+def test_cross_random_masking_with_encode_and_decode_modalities_and_hw_1() -> None:
+    """Test cross random masking with encode and decode modalities and hw 1."""
+    masking_strategy = ModalityCrossRandomMaskingStrategy(
+        encode_ratio=0.5,
+        decode_ratio=0.5,
+        allow_encoding_decoding_same_bandset=True,
+        only_decode_modalities=[
+            Modality.WORLDCOVER.name,
+            Modality.SRTM.name,
+            Modality.OPENSTREETMAP_RASTER.name,
+            Modality.WRI_CANOPY_HEIGHT_MAP.name,
+            Modality.CDL.name,
+            Modality.WORLDCEREAL.name,
+        ],
+    )
+    batch = OlmoEarthSample(
+        sentinel1=torch.ones((1, 1, 1, 1, Modality.SENTINEL1.num_bands)),
+        worldcover=torch.ones((1, 1, 1, 1, Modality.WORLDCOVER.num_bands)),
+        srtm=torch.ones((1, 1, 1, 1, Modality.SRTM.num_bands)),
+        openstreetmap_raster=torch.ones(
+            (1, 1, 1, 1, Modality.OPENSTREETMAP_RASTER.num_bands)
+        ),
+        wri_canopy_height_map=torch.ones(
+            (1, 1, 1, 1, Modality.WRI_CANOPY_HEIGHT_MAP.num_bands)
+        ),
+        cdl=torch.ones((1, 1, 1, 1, Modality.CDL.num_bands)),
+        worldcereal=torch.ones((1, 1, 1, 1, Modality.WORLDCEREAL.num_bands)),
+        timestamps=torch.ones((1, 3, 1), dtype=torch.long),
+    )
+    masked_sample = masking_strategy.apply_mask(batch, patch_size=1)
+    # Ensure we never encode decode only modalities in this case
+    assert (masked_sample.sentinel1_mask == MaskValue.ONLINE_ENCODER.value).sum() > 0  # type: ignore
+    assert (masked_sample.worldcover_mask == MaskValue.ONLINE_ENCODER.value).sum() == 0  # type: ignore
+    assert (masked_sample.srtm_mask == MaskValue.ONLINE_ENCODER.value).sum() == 0  # type: ignore
+    assert (
+        masked_sample.openstreetmap_raster_mask == MaskValue.ONLINE_ENCODER.value
+    ).sum() == 0  # type: ignore
+    assert (
+        masked_sample.wri_canopy_height_map_mask == MaskValue.ONLINE_ENCODER.value
+    ).sum() == 0  # type: ignore
+    assert (masked_sample.cdl_mask == MaskValue.ONLINE_ENCODER.value).sum() == 0  # type: ignore
+    assert (masked_sample.worldcereal_mask == MaskValue.ONLINE_ENCODER.value).sum() == 0  # type: ignore
 
 
 def test_mask_when_most_samples_are_missing() -> None:

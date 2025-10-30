@@ -7,10 +7,9 @@ from dataclasses import dataclass
 from typing import cast
 
 import numpy as np
-from beaker import ExperimentSpec
 from olmo_core.config import Config, StrEnum
 from olmo_core.distributed.utils import get_local_rank
-from olmo_core.launch.beaker import BeakerLaunchConfig
+from olmo_core.launch.beaker import BeakerLaunchConfig, ExperimentSpec
 from olmo_core.train import (
     TrainerConfig,
     prepare_training_environment,
@@ -73,8 +72,8 @@ class CommonComponents(Config):
 
     run_name: str
     save_folder: str
-    launch: OlmoEarthBeakerLaunchConfig
     training_modalities: list[str]
+    launch: OlmoEarthBeakerLaunchConfig | None = None
     nccl_debug: bool = False
     # callbacks: dict[str, Callback]
 
@@ -111,12 +110,12 @@ class OlmoEarthExperimentConfig(Config):
     """Configuration for a OlmoEarth Pretrain experiment."""
 
     run_name: str
-    launch: OlmoEarthBeakerLaunchConfig
     model: Config
     dataset: Config  # will likely be fixed for us
     data_loader: OlmoEarthDataLoaderConfig  # will likely be fixed for us
     train_module: OlmoEarthTrainModuleConfig
     trainer: TrainerConfig
+    launch: OlmoEarthBeakerLaunchConfig | None = None
     visualize: OlmoEarthVisualizeConfig | None = None
     init_seed: int = 12536
 
@@ -131,8 +130,8 @@ HeliosExperimentConfig = _deprecated_class_alias(
 class BenchmarkExperimentConfig(Config):
     """Configuration for a throughput benchmarking run."""
 
-    launch: OlmoEarthBeakerLaunchConfig
     benchmark: ThroughputBenchmarkRunnerConfig
+    launch: OlmoEarthBeakerLaunchConfig | None = None
 
 
 def split_common_overrides(overrides: list[str]) -> tuple[list[str], list[str]]:
@@ -218,6 +217,7 @@ def benchmark(config: BenchmarkExperimentConfig) -> None:
 
 def launch_benchmark(config: BenchmarkExperimentConfig) -> None:
     """Launch a throughput benchmarking run."""
+    assert config.launch is not None
     config.launch.launch(follow=False, torchrun=False)
 
 
@@ -275,7 +275,9 @@ def launch(config: OlmoEarthExperimentConfig) -> None:
     logger.info("Launching the experiment")
     logger.info(config)
     # Set follow=False if you don't want to stream the logs to the terminal
-    config.launch.launch(follow=False)
+    assert config.launch is not None
+    # Default to enabling torchrun so we can run multi gpu scripts on single gpu
+    config.launch.launch(follow=False, torchrun=True)
 
 
 def prep(config: OlmoEarthExperimentConfig) -> None:
@@ -437,7 +439,6 @@ If running command on a local machine ie from a session, you can use the [b]loca
         sys.exit(1)
 
     script, cmd, run_name, cluster, *overrides = sys.argv
-    # TODO: we should probably have a single common components builder that can be used for all experiments
     common = common_components_builder(script, cmd, run_name, cluster, overrides)
 
     cmd = SubCmd(cmd)

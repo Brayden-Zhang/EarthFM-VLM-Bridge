@@ -10,6 +10,7 @@ from olmo_core.launch.beaker import (
     BeakerPriority,
     BeakerWekaBucket,
     OLMoCoreBeakerImage,
+    is_running_in_beaker,
 )
 from olmo_core.utils import generate_uuid
 from upath import UPath
@@ -41,6 +42,9 @@ WEKA_CLUSTER_NAMES = [
     "rhea",
 ]
 
+LOCAL_CLUSTER_NAME = "local"
+ANONYMOUS_USER = "anonymous"
+
 
 def build_visualize_config(common: CommonComponents) -> OlmoEarthVisualizeConfig:
     """Build the visualize config for an experiment."""
@@ -66,11 +70,41 @@ def get_root_dir(cluster: str) -> str:
         # should work but it is not meant to be used like this, it is just meant to be
         # a placeholder.
         root_dir = f"/unused/{PROJECT_NAME}"
-    elif "local" in cluster:
+    elif LOCAL_CLUSTER_NAME in cluster:
         root_dir = "./local_output"
     else:
         raise ValueError(f"Cluster {cluster} is not supported")
     return root_dir
+
+
+def extract_nccl_debug_from_overrides(overrides: list[str]) -> bool:
+    """Extract the nccl_debug flag from the overrides."""
+    for override in overrides:
+        if override.startswith("--common.nccl_debug="):
+            return override.split("=")[1].lower() in ("true", "1", "yes")
+    return False
+
+
+def set_nccl_debug_env_vars(
+    nccl_debug: bool, local: bool = False
+) -> list[BeakerEnvVar] | None:
+    """Set the NCCL debug environment variables.
+
+    If on_beaker is True, returns a list of BeakerEnvVar for use in a Beaker launch config.
+    Otherwise, sets these variables in the local environment and returns None.
+    """
+    nccl_settings = {
+        "NCCL_DEBUG": "DETAIL" if nccl_debug else "WARN",
+        "TORCH_NCCL_TRACE_BUFFER_SIZE": "1000000000" if nccl_debug else "0",
+        "TORCH_NCCL_BLOCKING_WAIT": "1" if nccl_debug else "0",
+    }
+
+    if not local:
+        return [BeakerEnvVar(name=k, value=v) for k, v in nccl_settings.items()]
+    else:
+        for k, v in nccl_settings.items():
+            os.environ[k] = v
+        return None
 
 
 def build_launch_config(
@@ -95,7 +129,6 @@ def build_launch_config(
     # We just check if the first cluster is Augusta here since we assume users
     # targeting Augusta won't target any other cluster.
     weka_buckets = [DEFAULT_OLMOEARTH_PRETRAIN_WEKA_BUCKET]
-    pytorch_upgrade: str = ""
     for c in clusters:
         if "augusta" in c:
             if len(clusters) > 1:
@@ -103,27 +136,17 @@ def build_launch_config(
                     "Jobs targeting Augusta should not target other clusters since Weka will not be mounted"
                 )
             weka_buckets = []
-        if "titan" in c:
-            pass
-            # if len(clusters) > 1:
-            #    raise ValueError(
-            #        "Jobs targeting Titan should not target other clusters since Titan uses pytorch 2.7"
-            #    )
-            # pytorch_upgrade = "pip install --upgrade --pre --no-cache-dir torch==2.8.0.dev20250528+cu128 torchvision==0.22.0.dev20250528+cu128 --index-url https://download.pytorch.org/whl/nightly/cu128"
 
     beaker_user = get_beaker_username()
     # Propagate the train module path to the experiment if set
     env_vars = [
-        BeakerEnvVar(name="NCCL_DEBUG", value="DETAIL" if nccl_debug else "WARN"),
-        BeakerEnvVar(
-            name="TORCH_NCCL_TRACE_BUFFER_SIZE",
-            value="1000000000" if nccl_debug else "0",
-        ),
-        BeakerEnvVar(name="NCCL_BLOCKING_WAIT", value="1" if nccl_debug else "0"),
         BeakerEnvVar(
             name="GOOGLE_APPLICATION_CREDENTIALS", value="/etc/gcp_credentials.json"
         ),
     ]
+    nccl_debug_env_vars = set_nccl_debug_env_vars(nccl_debug=nccl_debug)
+    if nccl_debug_env_vars is not None:
+        env_vars.extend(nccl_debug_env_vars)
     # Propagate the train module path to the experiment if set
     train_script_path = os.environ.get("TRAIN_SCRIPT_PATH")
     if train_script_path is not None:
@@ -169,16 +192,13 @@ def build_launch_config(
             "gh repo clone $REPO_URL .",
             'git checkout "$GIT_REF"',
             "git submodule update --init --recursive",
-            # Setup python environment.
-            "conda shell.bash activate base",
-            # Install torch==2.7 if we're targetting titan
-            "pip install -e '.[all]'",
-            # Don't auto upgrade beaker-py, there's conflict with olmo-core
-            # "pip install --upgrade beaker-py",
-            # Quickly try a new version of PyTorch like this
-            #  "pip install --upgrade --pre torch==2.6.0.dev20241112+cu121 --index-url https://download.pytorch.org/whl/nightly/cu121",
-            pytorch_upgrade,
-            "pip freeze",
+            "pip install uv",
+            # so that we can use uv tools
+            'export PATH="/root/.local/bin:$PATH" ',
+            "uv sync --locked --all-groups",
+            # activate the uv venv
+            "venv_path=$(uv run python -c 'import sys; print(sys.executable)')",
+            'source "$(dirname "$venv_path")/activate"',
         ],
     )
 
@@ -202,31 +222,34 @@ def build_common_components(
         # Modality.NAIP_10.name,
         # Modality.ERA5_10.name,
     ]
-    cmd_to_launch = SubCmd.train
-    if cmd == SubCmd.launch_prep:
+    if cmd == SubCmd.launch:
+        cmd_to_launch = SubCmd.train
+    elif cmd == SubCmd.launch_prep:
         cmd_to_launch = SubCmd.prep
-
-    if cmd == SubCmd.launch_benchmark:
+    elif cmd == SubCmd.launch_benchmark:
         cmd_to_launch = SubCmd.benchmark
+    else:
+        cmd_to_launch = cmd
 
     # Extract nccl_debug from overrides if present
-    nccl_debug = False
-    for override in overrides:
-        if override.startswith("--common.nccl_debug="):
-            logger.info(f"Setting nccl_debug to {override}")
-            nccl_debug = override.split("=")[1].lower() in ("true", "1", "yes")
-            break
-    launch_config = build_launch_config(
-        name=f"{run_name}-{cmd_to_launch}",
-        cmd=[script, cmd_to_launch, run_name, cluster, *overrides],
-        clusters=cluster,
-        nccl_debug=nccl_debug,
-    )
+    nccl_debug = extract_nccl_debug_from_overrides(overrides)
+    # If we are running on a local cluster, we don't need to build a launch config as we may not have beaker access
+    if local := cluster == LOCAL_CLUSTER_NAME:
+        set_nccl_debug_env_vars(nccl_debug=nccl_debug, local=local)
+        launch_config = None
+    else:
+        launch_config = build_launch_config(
+            name=f"{run_name}-{cmd_to_launch}",
+            cmd=[script, cmd_to_launch, run_name, cluster, *overrides],
+            clusters=cluster,
+            nccl_debug=nccl_debug,
+        )
     root_dir = get_root_dir(cluster)
-    beaker_user = get_beaker_username()
-    if beaker_user is None:
+
+    beaker_user = get_beaker_username() or ANONYMOUS_USER
+    if is_running_in_beaker() and beaker_user is None:
         raise ValueError(
-            "Failed to get Beaker username. Make sure you are authenticated with Beaker."
+            "Failed to get Beaker username. Make sure you are authenticated with Beaker if you are not running on a local cluster."
         )
     return CommonComponents(
         run_name=run_name,
