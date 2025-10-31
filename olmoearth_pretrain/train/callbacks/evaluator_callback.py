@@ -351,14 +351,14 @@ class DownstreamEvaluator:
             logger.info(
                 f"Using patch size {max(self.patch_size, model.patch_size)} for {self.dataset} with model patch size {model.patch_size} and task patch size {self.patch_size}"
             )
-            # For sa_crop_type, though Galileo patch size is 4, we can only use 8
+            # Use the max patch size of the model and the task
             self.patch_size = max(self.patch_size, model.patch_size)
         else:
             logger.info(
                 f"No patch size found for {self.dataset}, using patch size {self.patch_size}"
             )
 
-        # Check if best checkpoint already exists
+        # Skip task if best checkpoint path already exists
         best_checkpoint_path = os.path.join(
             self.trainer.save_folder,
             self.evaluation_name,
@@ -366,17 +366,10 @@ class DownstreamEvaluator:
             "best.ckpt",
         )
         if os.path.exists(best_checkpoint_path):
-            logger.info(
-                f"Best checkpoint already exists for {self.evaluation_name}, skipping finetuning"
-            )
+            logger.info("Best checkpoint already exists, skipping finetuning")
             return 0.0, 0.0
         else:
-            logger.info(
-                f"Best checkpoint does not exist for {self.evaluation_name}, running finetuning"
-            )
-
-        try:
-            # Save the original global step
+            logger.info("Best checkpoint does not exist, running finetuning")
             val_result, test_result = run_finetune_eval(
                 task_name=self.evaluation_name,
                 task_config=self.config,
@@ -392,21 +385,20 @@ class DownstreamEvaluator:
                 val_loader=val_loader,
                 test_loader=test_loader,
                 seed=self.finetune_seed,
-                save_folder=self.trainer.save_folder,
+                best_checkpoint_path=best_checkpoint_path,
             )
             logger.info(
                 f"Downstream evaluator {self.evaluation_name} val score: {val_result}, test score: {test_result}"
             )
-        finally:
             model.load_state_dict(original_state)
             if original_training_mode:
                 model.train()
             else:
                 model.eval()
 
-        torch.cuda.empty_cache()
-        gc.collect()
-        return val_result, test_result
+            torch.cuda.empty_cache()
+            gc.collect()
+            return val_result, test_result
 
     def val(self) -> tuple[float, float]:
         """Validate the model on the downstream task."""
@@ -491,11 +483,6 @@ class DownstreamEvaluatorCallback(Callback):
                 for callback in self.trainer._iter_callbacks()
                 if isinstance(callback, OlmoEarthWandBCallback)
             )
-            if wandb_callback.enabled:
-                wandb_callback.wandb.define_metric(
-                    "finetune/*", step_metric="finetune_step"
-                )
-                wandb_callback.wandb.log({"finetune_step": 0})
 
             for evaluator in self.evaluators:
                 if not self._check_supported_modalities(evaluator):
@@ -508,6 +495,18 @@ class DownstreamEvaluatorCallback(Callback):
                         f"Skipping {evaluator.evaluation_name} because it doesn't match input requirements of the model"
                     )
                     continue
+
+                # Separate finetune step metric per task
+                if evaluator.eval_mode == EvalMode.FINETUNE:
+                    if wandb_callback.enabled:
+                        wandb_callback.wandb.define_metric(
+                            f"finetune/{evaluator.evaluation_name}/*",
+                            step_metric=f"{evaluator.evaluation_name}_step",
+                        )
+                        wandb_callback.wandb.log(
+                            {f"{evaluator.evaluation_name}_step": 0}
+                        )
+
                 val_result, test_result, eval_time = self._perform_eval(evaluator)
                 # Only logging valid results to wandb
                 if val_result > 0 and test_result > 0:

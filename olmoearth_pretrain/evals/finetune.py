@@ -215,7 +215,7 @@ def run_finetune_eval(
     val_loader: DataLoader,
     test_loader: DataLoader | None,
     seed: int | None = None,
-    save_folder: str | None = None,
+    best_checkpoint_path: str | None = None,
 ) -> tuple[float, float]:
     """Finetune the model on a downstream task and evaluate."""
     if seed is not None:
@@ -282,10 +282,6 @@ def run_finetune_eval(
     ft.train()
     wandb_logger = _get_wandb_logger(trainer)
     num_batches = len(train_loader)
-    if wandb_logger is None:
-        logger.debug(
-            "No active OlmoEarthWandBCallback; finetune metrics will not be logged to Weights & Biases."
-        )
 
     for epoch in range(epochs):
         # Reset epoch and global step
@@ -327,11 +323,10 @@ def run_finetune_eval(
                             align_corners=True,
                         )
                 loss = loss_fn(logits, label)
-                finetune_step = epoch * num_batches + i
                 if wandb_logger is not None:
                     wandb_logger.log(
                         {
-                            "finetune_step": finetune_step,
+                            f"{task_name}_step": epoch * num_batches + i,
                             f"finetune/{task_name}/train_loss": loss.item(),
                         }
                     )
@@ -355,7 +350,7 @@ def run_finetune_eval(
         if wandb_logger is not None:
             wandb_logger.log(
                 {
-                    "finetune_step": (epoch + 1) * num_batches,
+                    f"{task_name}_step": (epoch + 1) * num_batches,
                     f"finetune/{task_name}/val_metric": val_metric,
                 }
             )
@@ -387,13 +382,12 @@ def run_finetune_eval(
             )
 
     ft.load_state_dict(best_state)
-    if save_folder is not None:
-        checkpoint_path = os.path.join(save_folder, task_name, f"lr{lr}", "best.ckpt")
-        os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
-        torch.save(best_state, checkpoint_path)
-        logger.info(f"Saved best checkpoint to {checkpoint_path}")
+    if best_checkpoint_path is not None:
+        os.makedirs(os.path.dirname(best_checkpoint_path), exist_ok=True)
+        torch.save(best_state, best_checkpoint_path)
+        logger.info(f"Saved best checkpoint to {best_checkpoint_path}")
     else:
-        logger.info("No save folder provided, skipping saving best checkpoint")
+        logger.info("No best checkpoint path provided, skipping saving best checkpoint")
 
     if task_config.task_type == TaskType.CLASSIFICATION:
         val_acc = best_val_metric
