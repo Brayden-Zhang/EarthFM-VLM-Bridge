@@ -55,6 +55,9 @@ $SCRIPT --checkpoint_path /weka/dfive-default/helios/checkpoints/joer/nano_lr0.0
 $SCRIPT --checkpoint_path /weka/dfive-default/helios/checkpoints/joer/nano_lr0.001_wd0.002/step370000 --project_name $PROJECT_NAME --module_path scripts/2025_10_02_phase2/nano.py --cluster $CLUSTER --finetune_seed 42
 $SCRIPT --checkpoint_path /weka/dfive-default/helios/checkpoints/joer/nano_lr0.001_wd0.002/step370000 --project_name $PROJECT_NAME --module_path scripts/2025_10_02_phase2/nano.py --cluster $CLUSTER --finetune_seed 1234
 
+# Test local evaluation
+python olmoearth_pretrain/internal/full_eval_sweep_finetune.py --checkpoint_path /weka/dfive-default/helios/checkpoints/joer/nano_lr0.001_wd0.002/step370000 --project_name 2025_11_01_test_local_evaluation --module_path scripts/2025_10_02_phase2/nano.py --cluster local
+
 # Satlas
 $SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/satlas/satlas_launch.py --cluster $CLUSTER --model satlas --finetune_seed 1234
 $SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/satlas/satlas_launch.py --cluster $CLUSTER --model satlas --finetune_seed 42

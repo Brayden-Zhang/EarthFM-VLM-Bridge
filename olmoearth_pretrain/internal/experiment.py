@@ -8,6 +8,7 @@ from typing import cast
 
 import numpy as np
 from olmo_core.config import Config, StrEnum
+from olmo_core.data.data_loader import DataLoaderBase
 from olmo_core.distributed.utils import get_local_rank
 from olmo_core.launch.beaker import BeakerLaunchConfig, ExperimentSpec
 from olmo_core.train import (
@@ -241,6 +242,31 @@ def train(config: OlmoEarthExperimentConfig) -> None:
     )
     trainer = config.trainer.build(train_module, data_loader)
 
+    # Record the config to W&B/Comet and each checkpoint dir.
+    config_dict = config.as_config_dict()
+    cast(WandBCallback, trainer.callbacks["wandb"]).config = config_dict
+    cast(ConfigSaverCallback, trainer.callbacks["config_saver"]).config = config_dict
+    trainer.fit()
+
+
+def evaluate(config: OlmoEarthExperimentConfig) -> None:
+    """Evaluate a checkpoint or model on downstream tasks."""
+    # Set RNG states on all devices. Also, done in prepare_training_environment
+    seed_all(config.init_seed)
+
+    # Build components.
+    # TODO: Setup init device arg and allow the model to be inited on device of our choice rather than moved over allowing for meta
+    model = config.model.build()
+    device = get_default_device()
+    model = model.to(device)
+    train_module = config.train_module.build(model)
+    # Pass a mock data loader here
+    data_loader = DataLoaderBase(
+        work_dir="./",
+        global_batch_size=1,
+    )
+
+    trainer = config.trainer.build(train_module, data_loader)
     # Record the config to W&B/Comet and each checkpoint dir.
     config_dict = config.as_config_dict()
     cast(WandBCallback, trainer.callbacks["wandb"]).config = config_dict

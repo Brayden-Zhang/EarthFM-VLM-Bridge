@@ -235,7 +235,7 @@ def _get_sub_command(args: argparse.Namespace) -> str:
     if args.dry_run:
         return SubCmd.dry_run
     if args.cluster == "local":
-        return SubCmd.train
+        return SubCmd.evaluate
     return SubCmd.launch
 
 
