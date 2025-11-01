@@ -354,9 +354,9 @@ class SubCmd(StrEnum):
             SubCmd.launch_benchmark,
         ):
             prepare_cli_environment()
-        elif self == SubCmd.train:
+        elif self == SubCmd.train or self == SubCmd.evaluate:
             prepare_training_environment()
-        elif self == SubCmd.train_single or self == SubCmd.evaluate:
+        elif self == SubCmd.train_single:
             prepare_training_environment(backend=None)
         else:
             raise NotImplementedError(self)
