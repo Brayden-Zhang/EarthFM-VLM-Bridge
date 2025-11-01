@@ -404,6 +404,8 @@ def build_trainer_config(common: CommonComponents) -> TrainerConfig:
         project=EVAL_WANDB_PROJECT,
         entity=WANDB_ENTITY,
         enabled=True,  # set to False to avoid wandb errors
+        upload_dataset_distribution_pre_train=False,
+        upload_modality_data_band_distribution_pre_train=False,
     )
     # Safe to collect everys tep for now
     garbage_collector_callback = GarbageCollectorCallback(gc_interval=1)
