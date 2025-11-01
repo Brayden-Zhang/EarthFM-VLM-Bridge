@@ -69,8 +69,8 @@ $SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/mode
 
 # Galileo, dataset norm
 $SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/galileo/galileo_launch.py --cluster $CLUSTER --model galileo_ps16 --finetune_seed 1234 --use_dataset_normalizer --launch.preemptible=False
-$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/galileo/galileo_launch.py --cluster $CLUSTER --model galileo_ps16 --finetune_seed 42 --use_dataset_normalizer --launch.preemptible=False
-$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/galileo/galileo_launch.py --cluster $CLUSTER --model galileo_ps16 --finetune_seed 0 --use_dataset_normalizer --launch.preemptible=False
+$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/galileo/galileo_launch.py --cluster $CLUSTER --model galileo_ps16 --finetune_seed 42 --use_dataset_normalizer
+$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/galileo/galileo_launch.py --cluster $CLUSTER --model galileo_ps16 --finetune_seed 0 --use_dataset_normalizer
 
 # Clay
 $SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/clay/clay_launch.py --cluster $CLUSTER --model clay --finetune_seed 1234 --launch.priority=high
@@ -87,7 +87,7 @@ $SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/mode
 $SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/prithviv2/prithviv2_launch.py --cluster $CLUSTER --model prithvi_v2 --finetune_seed 42 --launch.priority=high
 $SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/prithviv2/prithviv2_launch.py --cluster $CLUSTER --model prithvi_v2 --finetune_seed 0 --launch.priority=high
 
-# Prithvi V2
+# Prithvi V2, dataset norm
 $SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/prithviv2/prithviv2_launch.py --cluster $CLUSTER --model prithvi_v2 --finetune_seed 1234 --use_dataset_normalizer  --launch.preemptible=False
 $SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/prithviv2/prithviv2_launch.py --cluster $CLUSTER --model prithvi_v2 --finetune_seed 42 --use_dataset_normalizer --launch.preemptible=False
 $SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/prithviv2/prithviv2_launch.py --cluster $CLUSTER --model prithvi_v2 --finetune_seed 0 --use_dataset_normalizer --launch.preemptible=False
@@ -146,3 +146,6 @@ python scripts/get_max_eval_metrics_from_wandb.py --project_name 2025_10_26_olmo
 python scripts/get_max_eval_metrics_from_wandb.py --project_name 2025_10_26_olmoearth_finetune --run_prefix prithvi_v2_seed --finetune --get_test_metrics
 python scripts/get_max_eval_metrics_from_wandb.py --project_name 2025_10_26_olmoearth_finetune --run_prefix terramind_seed --finetune --get_test_metrics
 python scripts/get_max_eval_metrics_from_wandb.py --project_name 2025_10_26_olmoearth_finetune --run_prefix terramind_large_seed --finetune --get_test_metrics
+
+# Galileo ps16
+python scripts/get_max_eval_metrics_from_wandb.py --project_name 2025_10_26_olmoearth_finetune --run_prefix galileo_ps16_seed --finetune --get_test_metrics
