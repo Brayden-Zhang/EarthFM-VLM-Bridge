@@ -43,11 +43,12 @@ Every launch ultimately calls the new evaluation subcommands in `experiment.py`:
 - `evaluate`: Executes the job locally (`--cluster=local`).
 - `launch_evaluate`: Submits to Beaker for any other cluster name.
 
-The sweep scripts set `TRAIN_SCRIPT_PATH` and choose `python3` for local execution, `torchrun` for Beaker launches.
+The sweep scripts set `TRAIN_SCRIPT_PATH` and choose `torchrun` for local execution, `python3` for Beaker launches.
 
 ### Prerequisites
 
 - Python environment configured as described in [Pretraining.md](Pretraining.md#environment-setup).
+- One 80 GB GPU (A100 or H100 recommended). If you see OOM errors, lower the batch size can help.
 - W&B API key (`WANDB_API_KEY`) if you want metrics to stream automatically.
 
 ### Supported Models
@@ -88,7 +89,7 @@ source .venv-olmoearth_pretrain/bin/activate
 ```bash
 python -m olmoearth_pretrain.internal.full_eval_sweep \
   --cluster=local \
-  --checkpoint_path=/path/to/checkpoint/step123000 \
+  --checkpoint_path=~/Downloads/OlmoEarth-v1-Base \
   --defaults_only \
   --dry_run
 ```
@@ -104,12 +105,10 @@ Remove `--dry_run` once the command looks correct. The helper picks the right su
   ```bash
   python -m olmoearth_pretrain.internal.full_eval_sweep \
     --cluster=local \
-    --checkpoint_path=/data/checkpoints/phase2_base/step667200 \
+    --checkpoint_path=~/Downloads/OlmoEarth-v1-Base \
     --module_path=scripts/2025_10_02_phase2/base.py \
     --defaults_only
   ```
-
-  Runs `python3 olmoearth_pretrain/internal/experiment.py evaluate ...`.
 
 - **Beaker (`--cluster=<ai2 cluster>`)**
 
@@ -121,16 +120,6 @@ Remove `--dry_run` once the command looks correct. The helper picks the right su
     --lr_only
   ```
 
-  Submits via `torchrun ... launch_evaluate ...` with the usual Beaker launch flags.
-
-Want to debug a single job manually? You can call `olmoearth_pretrain/internal/experiment.py` directly:
-
-```bash
-TRAIN_SCRIPT_PATH=scripts/2025_10_02_phase2/base.py \
-python3 olmoearth_pretrain/internal/experiment.py dry_run_evaluate demo local \
-  --trainer.callbacks.wandb.project=test_eval
-```
-
 ---
 
 ## KNN / Linear Probing
@@ -141,7 +130,7 @@ Use this script for KNN and linear probing evaluations. Invoke it either through
 
 - `--cluster`: Cluster identifier (`local` for on-box runs).
 - Exactly one of:
-  - `--checkpoint_path=/path/to/checkpoint/stepXXXX`: Evaluate an OlmoEarth checkpoint.
+  - `--checkpoint_path=~/Downloads/OlmoEarth-v1-Base`: Evaluate an OlmoEarth checkpoint.
   - `--model=<baseline_name>` or `--model=all`: Evaluate published baseline models defined in [`evals/models`](../olmoearth_pretrain/evals/models).
 
 ### Common optional flags
@@ -168,14 +157,15 @@ Use `olmoearth_pretrain/internal/full_eval_sweep_finetune.py` for downstream fin
 
 - `--cluster`: Cluster identifier.
 - One of:
-  - `--checkpoint_path=/path/to/olmoearth/stepXXXX`: Fine-tune an OlmoEarth checkpoint.
+  - `--checkpoint_path=~/Downloads/OlmoEarth-v1-Base`: Fine-tune an OlmoEarth checkpoint.
   - `--model=<preset_key>`: Use a baseline preset (choices listed in the script’s help).
 
 ### Fine-tune specific flags
 
 - `--defaults_only`: Run only the first learning rate in `FT_LRS`.
-- `--sweep_normalizer`: For models with pretrained normalizers, run both dataset stats and pretrained normalizer variants.
 - `--module_path`: Override the launch script (defaults to the preset’s launcher).
+- `--use_dataset_normalizer`: Force dataset statistics even when a preset ships its own pretrained normalizer. Leave unset to keep the pretrained normalizer.
+- `--finetune_seed`: Apply a single base seed across every downstream task (otherwise each task chooses its own default).
 - Extra CLI arguments append to every command (e.g. `--trainer.max_duration.value=50000`).
 - `--dry_run`: Preview commands (`dry_run_evaluate`).
 
@@ -183,23 +173,38 @@ The script sets `FINETUNE=1` in the environment before launching so downstream c
 
 Launch behavior mirrors the linear-probe sweep: `--cluster=local` runs `evaluate`, any other cluster uses `launch_evaluate`.
 
-### Example: OlmoEarth checkpoint fine-tune sweep (Beaker)
+### Example: Local OlmoEarth sanity check
+
+```bash
+python -m olmoearth_pretrain.internal.full_eval_sweep_finetune \
+  --cluster=local \
+  --checkpoint_path=~/Downloads/OlmoEarth-v1-Base \
+  --module_path=scripts/2025_10_02_phase2/base.py \
+  --project_name=2025_11_15_local_sanity \
+  --defaults_only \
+  --dry_run
+```
+
+### Example: Beaker run with seeding
 
 ```bash
 python -m olmoearth_pretrain.internal.full_eval_sweep_finetune \
   --cluster=ai2/titan \
-  --checkpoint_path=/weka/.../phase2.0_base_lr0.0001_wd0.02/step667200 \
-  --project_name=2025_10_08_phase2_finetune \
-  --defaults_only
+  --checkpoint_path=~/Downloads/OlmoEarth-v1-Base \
+  --module_path=scripts/2025_10_02_phase2/base.py \
+  --project_name=2025_11_15_phase2_finetune \
+  --finetune_seed=42
 ```
 
-### Example: Baseline fine-tune with normalizer sweep
+### Example: Terramind preset with dataset stats
 
 ```bash
 python -m olmoearth_pretrain.internal.full_eval_sweep_finetune \
   --cluster=ai2/saturn-cirrascale \
-  --model=galileo \
-  --sweep_normalizer
+  --model=terramind \
+  --project_name=2025_11_15_baseline_comparison \
+  --use_dataset_normalizer \
+  --defaults_only
 ```
 
 For a local sanity check, add `--cluster=local --dry_run` first, then drop `--dry_run` to execute on your workstation.
