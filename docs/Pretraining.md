@@ -148,15 +148,13 @@ Evaluation datasets have default paths set in [`olmoearth_pretrain/evals/dataset
 
 **For external users:** These defaults point to AI2 internal infrastructure. To use evaluations:
 
-1. Download/prepare the evaluation datasets locally
-
-Geobench is on HuggingFace and can be downloaded directly (https://huggingface.co/datasets/recursix/geo-bench-1.0)
-Use this script: https://github.com/ServiceNow/geo-bench/blob/main/geobench/geobench_download.py
-CropHarvest: https://zenodo.org/records/10251170 (confirm with Gabi, is this the latest version?)
-Breizhcrop: https://github.com/dl4sits/BreizhCrops/blob/master/breizhcrops/datasets/breizhcrops.py, test script here!
-MADOS: https://zenodo.org/records/10664073, need processor
-Flood: https://github.com/cloudtostreet/Sen1Floods11
-PASTIS-R: https://zenodo.org/records/5735646
+1. **Download the evaluation datasets locally.** Sync the processed copies from `gs://ai2-olmoearth-projects-public-data/research_benchmarks` (e.g., `gsutil -m rsync`). Original references:
+   - GeoBench: [`recursix/geo-bench-1.0`](https://huggingface.co/datasets/recursix/geo-bench-1.0) and the [official downloader](https://github.com/ServiceNow/geo-bench/blob/main/geobench/geobench_download.py).
+   - CropHarvest: [Zenodo 10251170](https://zenodo.org/records/10251170).
+   - BreizhCrops: [`dl4sits/BreizhCrops`](https://github.com/dl4sits/BreizhCrops/blob/master/breizhcrops/datasets/breizhcrops.py).
+   - MADOS: [Zenodo 10664073](https://zenodo.org/records/10664073).
+   - Sen1Floods11: [`cloudtostreet/Sen1Floods11`](https://github.com/cloudtostreet/Sen1Floods11).
+   - PASTIS-R: [Zenodo 5735646](https://zenodo.org/records/5735646).
 
 
 2. Set environment variables for each dataset path to override defaults in [`olmoearth_pretrain/evals/datasets/paths.py`](../olmoearth_pretrain/evals/datasets/paths.py)
