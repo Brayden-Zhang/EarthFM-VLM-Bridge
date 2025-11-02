@@ -82,7 +82,7 @@ def group_runs_by_run_prefix_and_step(
     for run in api.runs(wandb_path, lazy=False):
         if run_prefix and not run.name.startswith(run_prefix):
             continue
-        group_name = get_run_group_name(run.name)
+        group_name = get_run_group_name(run.name) if "step" in run.name else run_prefix
         grouped_runs[group_name].append(run)
         print(f"Found run {run.name} ({run.id}) -> group: {group_name}")
     return grouped_runs
@@ -426,7 +426,9 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    metrics = list(FT_EVAL_TASKS.keys()) if args.finetune else list(EVAL_TASKS.keys())
+    all_metrics = (
+        list(FT_EVAL_TASKS.keys()) if args.finetune else list(EVAL_TASKS.keys())
+    )
 
     if args.per_partition:
         if not args.run_prefix:
@@ -441,7 +443,7 @@ if __name__ == "__main__":
         for partition in PARTITIONS:
             if partition in partition_metrics:
                 print(f"\n{partition}:")
-                for metric in metrics:
+                for metric in all_metrics:
                     # Try original name
                     key = f"eval/{metric}"
                     val = partition_metrics[partition].get(key)
@@ -485,7 +487,7 @@ if __name__ == "__main__":
         print("\nFinal Results:")
         for group_name, metrics in group_metrics.items():
             print(f"\n{group_name}:")
-            for metric in metrics:
+            for metric in all_metrics:
                 try:
                     k = f"eval/{metric}"
                     print(f"  {metric}: {metrics[k]}")
@@ -500,7 +502,7 @@ if __name__ == "__main__":
             print("\nFinal Test Results:")
             for group_name, metrics in group_test_metrics.items():
                 print(f"\n{group_name}:")
-                for metric in metrics:
+                for metric in all_metrics:
                     try:
                         k = f"eval/test/{metric}"
                         print(f"  {metric}: {metrics[k]}")
