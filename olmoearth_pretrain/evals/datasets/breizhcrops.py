@@ -80,10 +80,6 @@ class BreizhCropsDataset(Dataset):
             norm_method: Normalization method to use, only when norm_stats_from_pretrained is False
             monthly_average: Whether to compute a monthly average of the timesteps
         """
-        if not self.is_active():
-            # breizhcrops==0.0.4.1 must be explictly imported
-            # for this eval to run.
-            return None
         try:
             from breizhcrops import BreizhCrops
             from breizhcrops.datasets.breizhcrops import SELECTED_BANDS
@@ -151,19 +147,6 @@ class BreizhCropsDataset(Dataset):
             from olmoearth_pretrain.data.normalize import Normalizer, Strategy
 
             self.normalizer_computed = Normalizer(Strategy.COMPUTED)
-
-    @staticmethod
-    def is_active() -> bool:
-        """Check if the breizhcrops package is present in the environment."""
-        try:
-            import breizhcrops  # noqa
-
-            return True
-        except ImportError:
-            logger.info(
-                "breizhcrops package not available. The Breizhcrops eval will be skipped."
-            )
-            return False
 
     @staticmethod
     def _get_norm_stats(
