@@ -157,7 +157,6 @@ Evaluation datasets have default paths set in [`olmoearth_pretrain/evals/dataset
    export MADOS_DIR="/your/path/to/mados"
    export FLOODS_DIR="/your/path/to/floods"
    export PASTIS_DIR="/your/path/to/pastis"
-   export SICKLE_DIR="/your/path/to/sickle"
    export NANDI_DIR="/your/path/to/nandi"
    export AWF_DIR="/your/path/to/awf"
    ```

@@ -94,9 +94,6 @@ MODEL_PRESETS: dict[str, ModelPreset] = {
         global_args=("--model.size=large",),
         launch_script_key="croma",
     ),
-    "copernicusfm": ModelPreset(
-        per_task_overrides={"norm_method": "NormMethod.NORM_YES_CLIP_2_STD"},
-    ),
     # by default, AnySat uses patch size of 4
     "anysat": ModelPreset(
         per_task_overrides={"norm_method": "NormMethod.STANDARDIZE"},

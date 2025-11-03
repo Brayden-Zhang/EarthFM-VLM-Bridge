@@ -128,6 +128,3 @@ eval = [
     "torchmetrics==1.7.1",
     "xarray>=2025.10.1",
 ]
-
-[tool.ruff.lint.per-file-ignores]
-"olmoearth_pretrain/evals/models/copernicusfm/src/*" = ["D", "UP", "E", "F"]

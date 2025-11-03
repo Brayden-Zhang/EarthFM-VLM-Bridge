@@ -38,11 +38,6 @@ $SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/mode
 $SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/croma/croma_launch.py --cluster $CLUSTER --model croma_large --finetune_seed 42 --launch.priority=high
 $SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/croma/croma_launch.py --cluster $CLUSTER --model croma_large --finetune_seed 1234 --launch.priority=high
 
-# CopernicusFM
-$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/copernicusfm/copernicusfm_launch.py --cluster $CLUSTER --model copernicusfm --finetune_seed 0 --launch.priority=high
-$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/copernicusfm/copernicusfm_launch.py --cluster $CLUSTER --model copernicusfm --finetune_seed 42 --launch.priority=high
-$SCRIPT --project_name $PROJECT_NAME --module_path olmoearth_pretrain/evals/models/copernicusfm/copernicusfm_launch.py --cluster $CLUSTER --model copernicusfm --finetune_seed 1234 --launch.priority=high
-
 # OlmoEarth Large / Base / Tiny / Nano from checkpoints (final piece to RUN, on jupiter!!)
 $SCRIPT --checkpoint_path /weka/dfive-default/helios/checkpoints/joer/phase2.0_large_lr0.0001_wd0.002/step560000 --project_name $PROJECT_NAME --module_path scripts/2025_10_02_phase2/large.py --cluster $CLUSTER --finetune_seed 0 --launch.priority=high
 $SCRIPT --checkpoint_path /weka/dfive-default/helios/checkpoints/joer/phase2.0_large_lr0.0001_wd0.002/step560000 --project_name $PROJECT_NAME --module_path scripts/2025_10_02_phase2/large.py --cluster $CLUSTER --finetune_seed 42 --launch.priority=high
@@ -134,7 +129,6 @@ python scripts/get_max_eval_metrics_from_wandb.py --project_name 2025_10_26_phas
 python scripts/get_max_eval_metrics_from_wandb.py --project_name 2025_10_26_phase2_finetune --run_prefix panopticon_seed --finetune --get_test_metrics
 python scripts/get_max_eval_metrics_from_wandb.py --project_name 2025_10_26_phase2_finetune --run_prefix croma_seed --finetune --get_test_metrics
 python scripts/get_max_eval_metrics_from_wandb.py --project_name 2025_10_26_phase2_finetune --run_prefix croma_large_seed --finetune --get_test_metrics
-python scripts/get_max_eval_metrics_from_wandb.py --project_name 2025_10_26_phase2_finetune --run_prefix copernicusfm_seed --finetune --get_test_metrics
 python scripts/get_max_eval_metrics_from_wandb.py --project_name 2025_10_26_phase2_finetune --run_prefix prithvi_v2_seed --finetune --get_test_metrics
 python scripts/get_max_eval_metrics_from_wandb.py --project_name 2025_10_26_phase2_finetune --run_prefix galileo_seed --finetune --get_test_metrics
 
@@ -145,7 +139,6 @@ python scripts/get_max_eval_metrics_from_wandb.py --project_name 2025_10_26_olmo
 
 python scripts/get_max_eval_metrics_from_wandb.py --project_name 2025_10_26_olmoearth_finetune --run_prefix anysat_seed --finetune --get_test_metrics
 python scripts/get_max_eval_metrics_from_wandb.py --project_name 2025_10_26_olmoearth_finetune --run_prefix clay_seed --finetune --get_test_metrics
-python scripts/get_max_eval_metrics_from_wandb.py --project_name 2025_10_26_olmoearth_finetune --run_prefix copernicusfm_seed --finetune --get_test_metrics
 python scripts/get_max_eval_metrics_from_wandb.py --project_name 2025_10_26_olmoearth_finetune --run_prefix croma_seed --finetune --get_test_metrics
 
 python scripts/get_max_eval_metrics_from_wandb.py --project_name 2025_10_26_olmoearth_finetune --run_prefix croma_large_seed --finetune --get_test_metrics
