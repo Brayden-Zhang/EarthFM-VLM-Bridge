@@ -30,14 +30,6 @@ class EvalDatasetPartition(StrEnum):
     TRAIN_050X = "0.50x_train"
 
 
-def is_dataset_active(eval_dataset: str) -> bool:
-    """Check if the dataset is active (can be run)."""
-    if eval_dataset == "breizhcrops":
-        return BreizhCropsDataset.is_active()
-    else:
-        return True
-
-
 def get_eval_dataset(
     eval_dataset: str,
     split: str,

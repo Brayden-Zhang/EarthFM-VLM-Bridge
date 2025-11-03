@@ -20,7 +20,6 @@ from olmoearth_pretrain.data.constants import Modality
 from olmoearth_pretrain.evals.datasets import (
     EvalDatasetPartition,
     get_eval_dataset,
-    is_dataset_active,
 )
 from olmoearth_pretrain.evals.datasets.configs import (
     EvalDatasetConfig,
@@ -119,7 +118,6 @@ class DownstreamEvaluator:
         self.device = device
         # Add all task attributes to self
         self.dataset = task.dataset
-        self.is_dataset_active = is_dataset_active(self.dataset)
         self.embedding_batch_size = task.embedding_batch_size
         self.num_workers = task.num_workers
         self.pooling_type = task.pooling_type
@@ -500,12 +498,6 @@ class DownstreamEvaluatorCallback(Callback):
                     )
                     continue
 
-                if not evaluator.is_dataset_active:
-                    logger.info(
-                        f"Skipping {evaluator.evaluation_name} because the dataset is not active"
-                    )
-                    continue
-
                 # Separate finetune step metric per task
                 if evaluator.eval_mode == EvalMode.FINETUNE:
                     if wandb_callback.enabled:
@@ -549,11 +541,6 @@ class DownstreamEvaluatorCallback(Callback):
             if not self._check_supported_modalities(evaluator):
                 logger.info(
                     f"Skipping {evaluator.evaluation_name} because it requires a modality that is not supported by the model"
-                )
-                continue
-            if not evaluator.is_dataset_active:
-                logger.info(
-                    f"Skipping {evaluator.evaluation_name} because the dataset is not active"
                 )
                 continue
             self._perform_eval(evaluator)

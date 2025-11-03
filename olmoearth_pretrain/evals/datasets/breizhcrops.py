@@ -84,9 +84,15 @@ class BreizhCropsDataset(Dataset):
             # breizhcrops==0.0.4.1 must be explictly imported
             # for this eval to run.
             return None
-
-        from breizhcrops import BreizhCrops
-        from breizhcrops.datasets.breizhcrops import SELECTED_BANDS
+        try:
+            from breizhcrops import BreizhCrops
+            from breizhcrops.datasets.breizhcrops import SELECTED_BANDS
+        except ImportError:
+            raise RuntimeError(
+                "breizhcrops package must be explicitly installed "
+                "(`uv pip install breizhcrops==0.0.4.1`) for the "
+                "Breizhcrops eval to run."
+            )
 
         self.bc_selected_bands = SELECTED_BANDS
 
