@@ -25,11 +25,11 @@ The weights are converted to pth file from distributed checkpoint like this:
 import json
 from enum import StrEnum
 from os import PathLike
-from pathlib import Path
 
 import torch
 from huggingface_hub import hf_hub_download
 from olmo_core.config import Config
+from upath import UPath
 
 CONFIG_FILENAME = "config.json"
 WEIGHTS_FILENAME = "weights.pth"
@@ -41,6 +41,7 @@ class ModelID(StrEnum):
     OLMOEARTH_V1_NANO = "OlmoEarth-v1-Nano"
     OLMOEARTH_V1_TINY = "OlmoEarth-v1-Tiny"
     OLMOEARTH_V1_BASE = "OlmoEarth-v1-Base"
+    OLMOEARTH_V1_LARGE = "OlmoEarth-v1-Large"
 
     def repo_id(self) -> str:
         """Return the Hugging Face repo ID for this model."""
@@ -69,7 +70,7 @@ def load_model_from_id(model_id: ModelID, load_weights: bool = True) -> torch.nn
 
 
 def load_model_from_path(
-    model_path: PathLike, load_weights: bool = True
+    model_path: PathLike | str, load_weights: bool = True
 ) -> torch.nn.Module:
     """Initialize and load the weights for the specified model from a path.
 
@@ -90,25 +91,28 @@ def load_model_from_path(
     return model
 
 
-def _resolve_artifact_path(model_id_or_path: ModelID | PathLike, filename: str) -> Path:
+def _resolve_artifact_path(
+    model_id_or_path: ModelID | PathLike | str, filename: str
+) -> UPath:
     """Resolve the artifact file path for the specified model ID or path, downloading it from Hugging Face if necessary."""
     if isinstance(model_id_or_path, ModelID):
-        return Path(
+        return UPath(
             hf_hub_download(repo_id=model_id_or_path.repo_id(), filename=filename)  # nosec
         )
-    else:
-        return Path(model_id_or_path) / filename
+    base = UPath(model_id_or_path)
+    return base / filename
 
 
-def _load_model_from_config(path: PathLike) -> torch.nn.Module:
+def _load_model_from_config(path: UPath) -> torch.nn.Module:
     """Load the model config from the specified path."""
-    with open(path) as f:
+    with path.open() as f:
         config_dict = json.load(f)
         model_config = Config.from_dict(config_dict["model"])
     return model_config.build()
 
 
-def _load_state_dict(path: PathLike) -> dict[str, torch.Tensor]:
+def _load_state_dict(path: UPath) -> dict[str, torch.Tensor]:
     """Load the model state dict from the specified path."""
-    state_dict = torch.load(path, map_location="cpu")
+    with path.open("rb") as f:
+        state_dict = torch.load(f, map_location="cpu")
     return state_dict

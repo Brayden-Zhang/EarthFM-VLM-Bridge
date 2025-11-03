@@ -18,9 +18,9 @@ from .configs import dataset_to_config
 from .constants import (
     EVAL_S1_BAND_NAMES,
     EVAL_S2_BAND_NAMES,
-    EVAL_TO_HELIOS_S1_BANDS,
-    EVAL_TO_HELIOS_S2_BANDS,
-    EVAL_TO_HELIOS_SRTM_BANDS,
+    EVAL_TO_OLMOEARTH_S1_BANDS,
+    EVAL_TO_OLMOEARTH_S2_BANDS,
+    EVAL_TO_OLMOEARTH_SRTM_BANDS,
 )
 from .cropharvest_package.bands import BANDS
 from .cropharvest_package.datasets import CropHarvest
@@ -152,7 +152,7 @@ X_MAX = np.array(
 )
 
 
-def _s2helios2ch_name(band_name: str) -> str:
+def _s2olmoearth2ch_name(band_name: str) -> str:
     """Transform OlmoEarth Pretrain S2 band name to CropHarvest (and Breizhcrops) S2 band name."""
     band_number = band_name.split(" ")[0]
     if band_number.startswith("0"):
@@ -160,22 +160,22 @@ def _s2helios2ch_name(band_name: str) -> str:
     return f"B{band_number}"
 
 
-def _s1helios2ch_name(band_name: str) -> str:
+def _s1olmoearth2ch_name(band_name: str) -> str:
     """Transform OlmoEarth Pretrain S1 band name to CropHarvest (and Breizhcrops) S2 band name."""
     return band_name.upper()
 
 
 S2_INPUT_TO_OUTPUT_BAND_MAPPING = [
-    BANDS.index(_s2helios2ch_name(b))
+    BANDS.index(_s2olmoearth2ch_name(b))
     for b in EVAL_S2_BAND_NAMES
-    if _s2helios2ch_name(b) in BANDS
+    if _s2olmoearth2ch_name(b) in BANDS
 ]
 S2_EVAL_BANDS_BEFORE_IMPUTATION = [
-    b for b in EVAL_S2_BAND_NAMES if _s2helios2ch_name(b) in BANDS
+    b for b in EVAL_S2_BAND_NAMES if _s2olmoearth2ch_name(b) in BANDS
 ]
 
 S1_INPUT_TO_OUTPUT_BAND_MAPPING = [
-    BANDS.index(_s1helios2ch_name(b)) for b in EVAL_S1_BAND_NAMES
+    BANDS.index(_s1olmoearth2ch_name(b)) for b in EVAL_S1_BAND_NAMES
 ]
 
 # we don't support slope
@@ -342,14 +342,14 @@ class CropHarvestDataset(Dataset):
             self.config.imputes,
         )
 
-        s2 = s2[:, :, :, EVAL_TO_HELIOS_S2_BANDS]
+        s2 = s2[:, :, :, EVAL_TO_OLMOEARTH_S2_BANDS]
         s1 = x_hw[:, :, : self.timesteps, S1_INPUT_TO_OUTPUT_BAND_MAPPING][
-            :, :, :, EVAL_TO_HELIOS_S1_BANDS
+            :, :, :, EVAL_TO_OLMOEARTH_S1_BANDS
         ]
 
         # srtm is only one timestep
         srtm = x_hw[:, :, :1, SRTM_TO_OUTPUT_BAND_MAPPING][
-            :, :, :, EVAL_TO_HELIOS_SRTM_BANDS
+            :, :, :, EVAL_TO_OLMOEARTH_SRTM_BANDS
         ]
 
         months = torch.tensor(
