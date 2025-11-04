@@ -38,7 +38,7 @@ OlmoEarth is built using [OLMo-core](https://github.com/allenai/OLMo-core.git). 
 
 ## Model Summary
 
-<img src="assets/model.jpg" alt="Mode Architecture Diagram" style="width: 700px; margin-left:'auto' margin-right:'auto' display:'block'"/>
+<img src="assets/model.jpg" alt="Model Architecture Diagram" style="width: 700px; margin-left:'auto' margin-right:'auto' display:'block'"/>
 
 The OlmoEarth models are trained on three satellite modalities (Sentinel 2, Sentinel 1 and Landsat) and six derived maps (OpenStreetMap, WorldCover).
 | Model Size | Weights | Encoder Params | Decoder Params |
@@ -72,4 +72,4 @@ Detailed instructions on how to pretrain your own OlmoEarth model are available 
 
 ## Evaluations
 
-Detailed instructions on how to replicate our evaluations is available in #TODO.
+Detailed instructions on how to replicate our evaluations is available in [Evaluation.md](docs/Evaluation.md).
