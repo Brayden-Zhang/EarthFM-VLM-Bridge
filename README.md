@@ -55,7 +55,7 @@ OlmoEarth model and apply it on a satellite image.
 
 We also have several more in-depth tutorials for computing OlmoEarth embeddings and fine-tuning OlmoEarth on downstream tasks:
 
-- [Fine-tuning OlmoEarth for Segmentation](docs/tutorials/FinetuneOlmoEarthSegmentation.md)
+- [Fine-tuning OlmoEarth for Segmentation](https://github.com/allenai/olmoearth_projects/blob/main/docs/tutorials/FinetuneOlmoEarthSegmentation.md)
 - [Computing Embeddings using OlmoEarth](https://github.com/allenai/rslearn/blob/master/docs/examples/OlmoEarthEmbeddings.md)
 - [Fine-tuning OlmoEarth in rslearn](https://github.com/allenai/rslearn/blob/master/docs/examples/FinetuneOlmoEarth.md)
 
