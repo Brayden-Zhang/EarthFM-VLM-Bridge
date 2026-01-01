@@ -1,3 +1,13 @@
+
+# specific folders to ignore
+/chatearthnet_data/
+/results/logs
+/deploy-scripts
+/streamlit_apps
+/clip_search_index
+/.streamlit
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

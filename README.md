@@ -1,89 +1,135 @@
-<div align="center">
-  <img src="https://raw.githubusercontent.com/allenai/olmoearth_pretrain/main/assets/OlmoEarth-logo.png" alt="OlmoEarth Logo" style="width: 600px; margin-left:'auto' margin-right:'auto' display:'block'"/>
-  <br>
-  <br>
-</div>
-<p align="center">
-  <a href="https://github.com/allenai/olmoearth_pretrain/blob/main/LICENSE">
-    <img alt="GitHub License" src="https://img.shields.io/badge/license-OlmoEarth-green">
-  </a>
-  <a href="https://huggingface.co/collections/allenai/olmoearth">
-    <img alt="Model Checkpoints" src="https://img.shields.io/badge/%F0%9F%A4%97%20HF-Models-yellow">
-  </a>
-  <a href="https://allenai.org/papers/olmoearth">
-    <img alt="Paper PDF" src="https://img.shields.io/badge/OlmoEarth-pdf-blue">
-  </a>
-</p>
+# EarthFM VLM Bridge
 
-The OlmoEarth models are a flexible, multi-modal, spatio-temporal family of foundation models for Earth Observations.
+This codebase integrates OlmoEarth's pretrained geospatial foundation model with the Moondream2 Vision-Language Model (VLM) to enable text generation and semantic search on satellite imagery.
 
-The OlmoEarth models exist as part of the [OlmoEarth platform](https://olmoearth.allenai.org/). The OlmoEarth Platform is an end-to-end solution for scalable planetary intelligence, providing everything needed to go from raw data through R&D, to fine-tuning and production deployment.
+## Demo
+Video of the Streamlit Web App working with Chat + Semantic Search functionalities of the trained VLM Model over the entire ChatEarthNet dataset:  
 
-## Installation
+[![OlmoEarth VLM Bridge Demo](https://img.youtube.com/vi/fxNoTQz3XdU/maxresdefault.jpg)](https://www.youtube.com/watch?v=fxNoTQz3XdU)
 
-We recommend Python 3.12, and recommend using [uv](https://docs.astral.sh/uv/getting-started/installation/).
-To install dependencies with uv, run:
+
+
+
+## Setup
+
+- Python 3.12
+- Install the project in editable mode with dependencies:
+  - `pip install -e .`
+  - Optionally add dev extras you already use in this repo (for general development, `pip install -e .[dev]`).
+- Make sure the ChatEarthNet data is available under `./chatearthnet_data` (or point `--data_dir` to your path when training).
+    - install it by running the `tools/installing/install_chatearthnet_dataset.py`
+- download OlmoEarth checkpoints using `tools/installing/download_checkpoint.py`
+
+## Main Components
+
+### Core Architecture
+
+**olmoearth_vlm_bridge.py**
+
+- **GeospatialQueryEncoder**
+  - Inputs: OlmoEarth features of shape $[B, N, D_\text{olmo}]$.
+  - Outputs: A set of learnable geospatial queries of shape $[B, Q, D_\text{text}]$.
+  - Uses multi-head attention plus an FFN block (Perceiver-style) to let queries attend over OlmoEarth tokens.
+
+- **OlmoEarthVLMBridge**
+  - Wraps three parts:
+    - OlmoEarth encoder (loaded via `ModelID`, e.g. `OLMOEARTH_V1_NANO`).
+    - GeospatialQueryEncoder fusion module.
+    - Moondream2 VLM text model (`vikhyatk/moondream2` by default).
+  - Projects OlmoEarth latent tokens into the Moondream2 text embedding space and conditions generation on them.
+
+Key init arguments (see code for full details):
+
+- `olmoearth_model_id` (default: `ModelID.OLMOEARTH_V1_NANO`)
+  - Controls which OlmoEarth backbone is used (NANO/TINY/BASE/LARGE).
+- `vlm_model_id` (default: `"vikhyatk/moondream2"`)
+  - Hugging Face model id for the VLM.
+- `freeze_olmoearth` (default: `True`)
+  - If `True`, OlmoEarth encoder is kept frozen; only fusion + VLM parameters train.
+- `freeze_vlm_vision` (default: `False`)
+  - Optionally freeze the VLM vision encoder.
+- `use_lora` (default: `True`)
+  - Enables LoRA adapters on key attention/MLP layers of the language model.
+- `lora_r`, `lora_alpha` (defaults: `16`, `32`)
+  - LoRA rank and scaling factor.
+- `num_geo_queries` (default: `32`)
+  - Number of geospatial query tokens used to represent the scene.
+- `device` (default: `"cuda"` if available)
+  - Device where the model is instantiated.
+
+Additional behavior:
+
+- OlmoEarth features are extracted at patch size 8 (for the nano model), reshaped to token sequences, and passed into the fusion module.
+- the bridge projects OlmoEarth tokens into the text embedding space of the Phi-based language model.
+- If LoRA is enabled, only LoRA and unfrozen parameters are optimized during training.
+
+## Inference
+
+**inference/inference_olmoearth_vlm.py**
+
+Script to generate text descriptions for satellite images using a trained bridge model.
+
+Main CLI arguments:
+
+- `--model_path` (required): Path to a saved OlmoEarthVLMBridge checkpoint directory.
+- `--image_path` (required): Path to the satellite RGB image.
+- `--prompt`: Text prompt to steer the description (default is a generic "describe this image").
+- `--max_length`, `--temperature`, `--top_p`, `--top_k`: Standard decoding parameters.
+- `--device`: `cuda` or `cpu` (defaults to `cuda` if available).
+
+Example:
 
 ```bash
-git clone git@github.com:allenai/olmoearth_pretrain.git
-cd olmoearth_pretrain
-uv sync --locked --all-groups --python 3.12
-# only necessary for development
-uv tool install pre-commit --with pre-commit-uv --force-reinstall
+python -m vlm.inference.inference_olmoearth_vlm \
+  --model_path vlm_full_checkpoints/best_model \
+  --image_path path/to/image.png \
+  --prompt "Describe the land use and vegetation in this scene."
 ```
 
-uv installs everything into a venv, so to keep using python commands you can activate uv's venv: `source .venv/bin/activate`. Otherwise, swap to `uv run python`.
+If `model_path` does not contain a `config.json`, the script will instantiate a fresh `OlmoEarthVLMBridge` with default settings.
 
-OlmoEarth is built using [OLMo-core](https://github.com/allenai/OLMo-core.git). OLMo-core's published [Docker images](https://github.com/orgs/allenai/packages?repo_name=OLMo-core) contain all core and optional dependencies.
+## Training
 
-## Model Summary
+**training/train_olmoearth_vlm.py**
 
-<img src="https://raw.githubusercontent.com/allenai/olmoearth_pretrain/main/assets/model.png" alt="Model Architecture Diagram" style="width: 800px; margin-left:'auto' margin-right:'auto' display:'block'"/>
+Training script for the bridge model on the ChatEarthNet dataset.
 
-The OlmoEarth models are trained on three satellite modalities (Sentinel 2, Sentinel 1 and Landsat) and six derived maps (OpenStreetMap, WorldCover, USDA Cropland Data Layer, SRTM DEM, WRI Canopy Height Map, and WorldCereal).
-| Model Size | Weights | Encoder Params | Decoder Params |
-| --- | --- | --- | --- |
-| Nano | [link](https://huggingface.co/allenai/OlmoEarth-v1-Nano) | 1.4M | 800K |
-| Tiny | [link](https://huggingface.co/allenai/OlmoEarth-v1-Tiny) | 6.2M | 1.9M |
-| Base | [link](https://huggingface.co/allenai/OlmoEarth-v1-Base) | 89M | 30M |
-| Large | [link](https://huggingface.co/allenai/OlmoEarth-v1-Large) | 308M | 53M |
+Important model arguments:
 
-## Using OlmoEarth
+- `--olmoearth_model`: One of `OLMOEARTH_V1_NANO`, `OLMOEARTH_V1_TINY`, `OLMOEARTH_V1_BASE`, `OLMOEARTH_V1_LARGE`.
+- `--vlm_model`: VLM model id (default `vikhyatk/moondream2`).
+- `--fusion_type`: Fusion module type (set to `geospatial_queries`)
+- `--num_geo_queries`: Number of geospatial query tokens (default 32).
+- `--freeze_olmoearth`: Freeze OlmoEarth encoder (on by default).
+- `--freeze_vlm_vision`: Freeze the VLM vision tower.
+- `--use_lora`, `--lora_r`, `--lora_alpha`: Control lora settings
 
-[InferenceQuickstart](docs/Inference-Quickstart.md) shows how to initialize the
-OlmoEarth model and apply it on a satellite image.
+Important training arguments:
 
-We also have several more in-depth tutorials for computing OlmoEarth embeddings and fine-tuning OlmoEarth on downstream tasks:
+- `--data_dir`: Path to ChatEarthNet data (default `./chatearthnet_data`).
+- `--output_dir`: Directory for checkpoints (default `./olmoearth_vlm_checkpoints`).
+- `--batch_size`, `--accumulation_steps`
+- `--num_epochs`, `--learning_rate`, `--warmup_steps`, `--weight_decay`.
+- `--save_every`, `--validate_every`: Steps between checkpointing and validation.
+- `--device`: `cuda` or `cpu`.
 
-- [Fine-tuning OlmoEarth for Segmentation](https://github.com/allenai/olmoearth_projects/blob/main/docs/tutorials/FinetuneOlmoEarthSegmentation.md)
-- [Computing Embeddings using OlmoEarth](https://github.com/allenai/rslearn/blob/master/docs/examples/OlmoEarthEmbeddings.md)
-- [Fine-tuning OlmoEarth in rslearn](https://github.com/allenai/rslearn/blob/master/docs/examples/FinetuneOlmoEarth.md)
+Example (single GPU):
 
-Additionally, [`olmoearth_projects`](https://github.com/allenai/olmoearth_projects) has several examples of active OlmoEarth deployments.
+```bash
+python -m vlm.training.train_olmoearth_vlm \
+  --data_dir ./chatearthnet_data \
+  --output_dir ./olmoearth_vlm_checkpoints \
+  --olmoearth_model OLMOEARTH_V1_NANO \
+  --vlm_model vikhyatk/moondream2 \
+  --batch_size 4 \
+  --accumulation_steps 4 \
+  --num_epochs 2 \
+  --use_lora --freeze_olmoearth
+```
 
-## Data Summary
+**training/launch_olmoearth_vlm_training.sh** for shell script to launch training with a pre-defined set of hyperparameters and environment flags.
 
-Our pretraining dataset contains 285,288 samples from around the world of 2.56km×2.56km regions, although many samples contain only a subset of the timesteps and modalities.
 
-The distribution of the samples is available below:
+## References
 
-<img src="https://raw.githubusercontent.com/allenai/olmoearth_pretrain/main/assets/datamap.png" alt="Training sample distribution" style="width: 500px; margin-left:'auto' margin-right:'auto' display:'block'"/>
-
-The dataset can be downloaded [here](https://huggingface.co/datasets/allenai/olmoearth_pretrain_dataset).
-
-Detailed instructions on how to make your own pretraining dataset are available in [the dataset README](docs/Dataset-Creation.md).
-
-## Training scripts
-
-Detailed instructions on how to pretrain your own OlmoEarth model are available in [Pretraining.md](docs/Pretraining.md).
-
-## Evaluations
-
-Detailed instructions on how to replicate our evaluations is available here:
-
-- [Evaluations on Research Benchmarks](docs/Evaluation.md)
-- [Evaluations on Partner Tasks](https://github.com/allenai/rslearn_projects/blob/master/rslp/olmoearth_evals/README.md)
-
-## License
-
-This code is licensed under the [OlmoEarth Artifact License](LICENSE).
+Many thanks to the original authors of [OlmoEarth](https://github.com/allenai/olmoearth_pretrain), [Moondream2](https://github.com/vikhyatk/moondream2), and [ChatEarthNet](https://github.com/zhu-xlab/ChatEarthNet) for their foundational work.
